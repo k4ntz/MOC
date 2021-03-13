@@ -102,8 +102,8 @@ def bbox_in_one(x, z_pres, z_where_scale, z_where_shift, gbox=gbox):
     B, _, *img_shape = x.size()
     B, N, _ = z_pres.size()
     z_pres = z_pres.view(-1, 1, 1, 1)
-    z_scale = z_where_scale.view(-1, 2)
-    z_shift = z_where_shift.view(-1, 2)
+    z_scale = z_where_scale.reshape(-1, 2)
+    z_shift = z_where_shift.reshape(-1, 2)
     # argmax_cluster = argmax_cluster.view(-1, 1, 1, 1)
     # kbox = boxes[argmax_cluster.view(-1)]
     bbox = spatial_transform(z_pres * gbox,  # + (1 - z_pres) * rbox,
@@ -117,5 +117,3 @@ def bbox_in_one(x, z_pres, z_where_scale, z_where_shift, gbox=gbox):
 
 # Times 10 to prevent index out of bound.
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 10
-
-

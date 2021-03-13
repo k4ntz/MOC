@@ -14,5 +14,3 @@ if __name__ == '__main__':
     cfg, task = get_config()
     assert task in task_dict
     task_dict[task](cfg)
-
-
