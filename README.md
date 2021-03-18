@@ -62,6 +62,12 @@ sh scripts/show_atari_spaceinvaders.sh 'cuda:0'  # if you have a GPU
 sh scripts/show_atari_spaceinvaders.sh 'cpu'  # otherwise
 ```
 
+## :space_invader: AIML SCRIPTS :space_invader:
+
+We have our own scripts:
+* To extract images for a game: <br/>
+`python3 extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
+
 ## Training and Evaluation
 
 **First, `cd src`.  Make sure you are in the `src` directory for all commands in this section. All paths referred to are also relative to `src`**.

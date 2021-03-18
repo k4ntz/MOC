@@ -10,6 +10,9 @@ import numpy as np
 from torch import nn
 from torch.nn import functional as F
 from model.space.utils import spatial_transform
+from PIL import Image
+import torchvision.transforms.functional as TF
+from torchvision.utils import save_image as Simage
 
 class Checkpointer:
     def __init__(self, checkpointdir, max_num):
@@ -176,3 +179,40 @@ class MetricLogger:
 
     def __setitem__(self, key, item):
         self.values[key].update(item)
+
+
+def open_image(path):
+    image = Image.open(path)
+    image = TF.to_tensor(image).unsqueeze_(0)
+    return image
+
+
+def show_image(image):
+    import matplotlib.pyplot as plt
+    plt.imshow(np.moveaxis(image.detach().cpu().numpy(), (0, 1, 2), (2, 0, 1)))
+    plt.show()
+
+
+def save_image(image, path, number=None):
+    path = path.replace("data", "extracted_images")
+    folder = "/".join(path.split("/")[:-1])
+    os.makedirs(folder, exist_ok=True)
+    image_name = path.split("/")[-1]
+    name, ext = image_name.split(".")
+    if number is not None:
+        new_name = name + f"_{number}.png" # saved as png to avoid loosing
+    try:
+        Simage(image/255, f"{folder}/{new_name}")
+    except ValueError:
+        print(f"Couldn't save {new_name}, continuing...")
+
+
+def corners_to_wh(bbox):
+    """
+    To convert 2 corners to 1 corner + width and height
+    xmin, ymin, xmax, ymax -> top, left, height, width
+    """
+    xmin, ymin, xmax, ymax = bbox.to(torch.int)
+    xmin += 1; ymin += 1
+    height, width = (ymax - ymin), (xmax - xmin)
+    return ymin, xmin, height, width

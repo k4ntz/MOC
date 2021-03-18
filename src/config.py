@@ -6,7 +6,7 @@ cfg = CfgNode({
     'seed': 8848,
     'exp_name': '',
     'model': 'SPACE',
-    
+
     # Resume training or not
     'resume': True,
     # If resume is true, then we load this checkpoint. If '', we load the last checkpoint
@@ -20,16 +20,16 @@ cfg = CfgNode({
     'checkpointdir': '../output/checkpoints/',
     'evaldir': '../output/eval/',
     'demodir': '../output/demo/',
-    
+
     # Dataset to use
     'dataset': 'OBJ3D_LARGE',
-    
+
     'dataset_roots': {
         'ATARI': '../data/ATARI',
         'OBJ3D_LARGE': '../data/OBJ3D_LARGE',
         'OBJ3D_SMALL': '../data/OBJ3D_SMALL',
     },
-    
+
     # For Atari
     'gamelist': [
         'Atlantis-v0',
@@ -43,24 +43,24 @@ cfg = CfgNode({
         'Qbert-v0',
         'SpaceInvaders-v0',
     ],
-    
-    
+
+
     # For engine.train
     'train': {
         'batch_size': 16,
         'max_epochs': 1000,
         'max_steps': 1000000,
-        
+
         'num_workers': 4,
         # Gradient clipping. If 0.0 we don't clip
         'clip_norm': 1.0,
         'max_ckpt': 5,
-        
+
         'print_every': 500,
         'save_every': 1000,
         'eval_on': True,
         'eval_every': 1000,
-        
+
         'solver': {
             'fg': {
                 'optim': 'RMSprop',
@@ -72,7 +72,7 @@ cfg = CfgNode({
             }
         },
     },
-    
+
     # For engine.eval
     'eval': {
         # One of 'best', 'last'
@@ -80,13 +80,13 @@ cfg = CfgNode({
         # Either 'ap_dot5' or 'ap_avg'
         'metric': 'ap_avg'
     },
-    
+
     # For engine.show_images
     'show': {
         # Either 'val' or 'test'
         'mode': 'val',
         # Indices into the dataset
-        'indices': [0, 1, 2, 3]
+        'indices': [0]
     }
 })
 
