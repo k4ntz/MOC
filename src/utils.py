@@ -11,8 +11,16 @@ from torch import nn
 from torch.nn import functional as F
 from model.space.utils import spatial_transform
 from PIL import Image
+from torchvision.utils import draw_bounding_boxes
 import torchvision.transforms.functional as TF
 from torchvision.utils import save_image as Simage
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
+
+colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
+          (0, 255, 255), (255, 100, 100), (100, 100, 100), (100, 100, 255), (100, 200, 100)] * 10
+
 
 class Checkpointer:
     def __init__(self, checkpointdir, max_num):
@@ -188,7 +196,6 @@ def open_image(path):
 
 
 def show_image(image):
-    import matplotlib.pyplot as plt
     plt.imshow(np.moveaxis(image.detach().cpu().numpy(), (0, 1, 2), (2, 0, 1)))
     plt.show()
 
@@ -216,3 +223,25 @@ def corners_to_wh(bbox):
     xmin += 1; ymin += 1
     height, width = (ymax - ymin), (xmax - xmin)
     return ymin, xmin, height, width
+
+
+def image_pca(image, bbox, z_what, row_color=True):
+    """
+    Draw the image next to a plot of PCA(zwat), reduced to dim=2
+    if row_color, then one color is used per row
+    """
+    pca = PCA(n_components=2)
+    z_what_emb = pca.fit_transform(z_what.detach().cpu().numpy())
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    selected_colors = np.array(colors[:len(z_what)])/255
+    if row_color:
+        for b, box in enumerate(bbox):
+            row_group = int(box[1] / 10)
+            image = draw_bounding_boxes(image.to("cpu"), torch.tensor(box).unsqueeze_(0), colors=[colors[row_group]])
+            ax2.scatter(z_what_emb[:, 0][b], z_what_emb[:, 1][b], c=selected_colors[row_group])
+        ax1.imshow(np.moveaxis(image.detach().cpu().numpy(), (0, 1, 2), (2, 0, 1)))
+    else:
+        image = draw_bounding_boxes(image.to("cpu"), torch.tensor(bbox), colors=colors)
+        ax1.imshow(np.moveaxis(image.detach().cpu().numpy(), (0, 1, 2), (2, 0, 1)))
+        ax2.scatter(z_what_emb[:, 0], z_what_emb[:, 1], c=selected_colors)
+    plt.show()

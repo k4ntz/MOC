@@ -8,7 +8,8 @@ from engine.show import show
 from model import get_model
 from vis import get_vislogger
 from dataset import get_dataset, get_dataloader
-from utils import Checkpointer, open_image, show_image, save_image, corners_to_wh
+from utils import Checkpointer, open_image, show_image, save_image, \
+    corners_to_wh, colors
 import os
 import os.path as osp
 from torch import nn
@@ -23,7 +24,6 @@ cfg, task = get_config()
 
 model = get_model(cfg)
 model = model.to(cfg.device)
-model.eval()
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
 use_cpu = 'cpu' in cfg.device
 if cfg.resume_ckpt:
@@ -50,8 +50,6 @@ for i in tqdm(range(300)):
 
 
     image = (image[0] * 255).round().to(torch.uint8) # for draw_bounding_boxes
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
-              (0, 255, 255), (255, 100, 100), (100, 100, 100), (100, 100, 255), (100, 200, 100)] * 10
     bb = (boxes_batch[0][:,:-1] * 128).round()
     bb[:,[0, 1, 2, 3]] = bb[:,[2, 0, 3, 1]] # swapping xmin <-> ymax ... etc
     image = draw_bounding_boxes(image.to("cpu"), torch.tensor(bb), colors=colors)
