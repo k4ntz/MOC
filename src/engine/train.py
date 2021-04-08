@@ -11,7 +11,7 @@ from vis import get_vislogger
 import time
 from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
-
+from rtpt import RTPT
 
 
 def train(cfg):
@@ -59,6 +59,8 @@ def train(cfg):
 
     print('Start training')
     end_flag = False
+    rtpt = RTPT(name_initials='QD', experiment_name=cfg.exp_name,
+                max_iterations=cfg.train.max_epochs)
     for epoch in range(start_epoch, cfg.train.max_epochs):
         if end_flag:
             break
@@ -123,6 +125,7 @@ def train(cfg):
                 start = time.perf_counter()
                 global_step += 1
                 pbar.update(1)
+                rtpt.step()
                 if global_step > cfg.train.max_steps:
                     end_flag = True
                     break
