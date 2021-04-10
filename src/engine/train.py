@@ -55,7 +55,7 @@ def train(cfg):
 
     writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
-    metric_logger =  MetricLogger()
+    metric_logger = MetricLogger()
 
     print('Start training')
     end_flag = False
@@ -125,7 +125,7 @@ def train(cfg):
                 start = time.perf_counter()
                 global_step += 1
                 pbar.update(1)
-                rtpt.step()
                 if global_step > cfg.train.max_steps:
                     end_flag = True
                     break
+        rtpt.step()

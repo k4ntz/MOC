@@ -30,7 +30,8 @@ if cfg.resume_ckpt:
     checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
 
 for i in tqdm(range(300)):
-    img_path = f"../data/ATARI/SpaceInvaders-v0/train/{i:05}.jpg"
+    # img_path = f"../data/ATARI/SpaceInvaders-v0/train/{i:05}.jpg"
+    img_path = f"../aiml_atari_data/space_like/MsPacman-v0/train/{i:05}.png"
     image = open_image(img_path).to(cfg.device)
 
     # TODO: treat global_step in a more elegant way
@@ -54,6 +55,7 @@ for i in tqdm(range(300)):
     bb[:,[0, 1, 2, 3]] = bb[:,[2, 0, 3, 1]] # swapping xmin <-> ymax ... etc
     image = draw_bounding_boxes(image.to("cpu"), torch.tensor(bb), colors=colors)
     # show_image(image)
+    # exit()
     for j, bbox in enumerate(torch.tensor(bb)):
         top, left, height, width = corners_to_wh(bbox)
         cropped = crop(image.to("cpu"), top, left, height, width)

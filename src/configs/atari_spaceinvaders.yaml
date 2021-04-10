@@ -1,4 +1,4 @@
-seed: 1
+seedseed: 1
 model: 'SPACE'
 resume: true
 resume_ckpt: ''
@@ -17,7 +17,7 @@ dataset_roots:
 
 
 train:
-  batch_size: 8
+  batch_size: 12
   max_epochs: 1000
   max_steps: 100000
   print_every: 500
@@ -73,4 +73,3 @@ gamelist: [
     'SpaceInvaders-v0',
 #    'Riverraid-v0',
     ]
-

@@ -1,10 +1,10 @@
 seed: 1
 model: 'SPACE'
-resume: false
+resume: true
 resume_ckpt: ''
-parallel: true
-device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
-device: 'cuda:0'
+parallel: false
+device_ids: [2, 3]
+device: 'cuda:2'
 logdir: '../output/logs'
 checkpointdir: '../output/checkpoints'
 evaldir: '../output/eval'
@@ -13,11 +13,11 @@ dataset: 'ATARI'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data/space_like'
+  ATARI: '../data/ATARI'
 
 
 train:
-  batch_size: 32
+  batch_size: 12
   max_epochs: 1000
   max_steps: 100000
   print_every: 500
@@ -67,9 +67,9 @@ gamelist: [
 #    'DoubleDunk-v0',
 #    'Kangaroo-v0',
 #    'MontezumaRevenge-v0',
-    'MsPacman-v0',
+   'MsPacman-v0',
 #    'Pooyan-v0',
 #    'Qbert-v0',
-    #'SpaceInvaders-v0',
+    # 'SpaceInvaders-v0',
 #    'Riverraid-v0',
     ]
