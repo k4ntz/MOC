@@ -1,4 +1,4 @@
-seedseed: 1
+seed: 1
 model: 'SPACE'
 resume: true
 resume_ckpt: ''

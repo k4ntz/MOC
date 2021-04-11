@@ -31,19 +31,21 @@ if cfg.resume_ckpt:
 
 for i in tqdm(range(300)):
     # img_path = f"../data/ATARI/SpaceInvaders-v0/train/{i:05}.jpg"
-    img_path = f"../aiml_atari_data/space_like/MsPacman-v0/train/{i:05}.png"
+    img_path = f"../data/ATARI/MsPacman-v0/train/{i:05}.jpg"
+    # img_path = f"../aiml_atari_data/space_like/MsPacman-v0/train/{i:05}.png"
     image = open_image(img_path).to(cfg.device)
 
     # TODO: treat global_step in a more elegant way
     loss, log = model(image, global_step=100000000)
-
     # (B, N, 4), (B, N, 1), (B, N, D)
     z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
     # (B, N, 4), (B, N), (B, N)
     z_where = z_where.detach().cpu()
 
     z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-    z_pres = z_pres_prob > 0.5
+    z_pres = z_pres_prob > 0.01013
+    import ipdb; ipdb.set_trace()
+
 
     z_what_pres = z_what[z_pres.unsqueeze(0)]
 
@@ -53,9 +55,10 @@ for i in tqdm(range(300)):
     image = (image[0] * 255).round().to(torch.uint8) # for draw_bounding_boxes
     bb = (boxes_batch[0][:,:-1] * 128).round()
     bb[:,[0, 1, 2, 3]] = bb[:,[2, 0, 3, 1]] # swapping xmin <-> ymax ... etc
+    # import ipdb; ipdb.set_trace()
     image = draw_bounding_boxes(image.to("cpu"), torch.tensor(bb), colors=colors)
-    # show_image(image)
-    # exit()
+    show_image(image)
+    exit()
     for j, bbox in enumerate(torch.tensor(bb)):
         top, left, height, width = corners_to_wh(bbox)
         cropped = crop(image.to("cpu"), top, left, height, width)
