@@ -37,7 +37,16 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
-    checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
+    if len(cfg.gamelist) == 10:
+        print("Training on every game")
+        suffix = 'all'
+    elif len(cfg.gamelist) == 1:
+        suffix = cfg.gamelist[0]
+        print(f"Training on {suffix}")
+    else:
+        print("Can't train")
+        exit(1)
+    checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), max_num=cfg.train.max_ckpt)
     model.train()
 
     optimizer_fg, optimizer_bg = get_optimizers(cfg, model)
@@ -53,7 +62,7 @@ def train(cfg):
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
+    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed)), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
 
