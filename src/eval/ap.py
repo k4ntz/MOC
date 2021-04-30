@@ -30,7 +30,7 @@ def compute_counts(boxes_pred, boxes_gt):
     return np.mean(error_rates), perfect, overcount, undercount
 
 
-def convert_to_boxes(z_where, z_pres, z_pres_prob):
+def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
     """
 
     All inputs should be tensors
@@ -42,6 +42,7 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob):
     """
     B, N, _ = z_where.size()
     z_pres = z_pres.bool()
+    # import ipdb; ipdb.set_trace()
 
     # each (B, N, 1)
     width, height, center_x, center_y = torch.split(z_where, 1, dim=-1)
@@ -60,14 +61,14 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob):
         # (N, 4), (N,) -> (M, 4), where M is the number of z_pres == 1
         box = pos[b][z_pres[b]]
         # (N,) -> (M, 1)
-        conf = z_pres_prob[b][z_pres[b]][:, None]
-        # (M, 5)
-        box = torch.cat([box, conf], dim=1)
+        if with_conf:
+            conf = z_pres_prob[b][z_pres[b]][:, None]
+            # (M, 5)
+            box = torch.cat([box, conf], dim=1)
         box = box.detach().cpu().numpy()
         boxes.append(box)
 
     return boxes
-
 
 def read_boxes(path, size):
     """

@@ -68,6 +68,9 @@ We have our own scripts:
 * To extract images for a game: <br/>
 `python3 extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
 
+* To create a PCA (or tsne) and visualize in a plot: (only available for MsPacman) <br/>
+`python3 classify_z_what.py show -method pca -dim 2`
+
 ## Training and Evaluation
 
 **First, `cd src`.  Make sure you are in the `src` directory for all commands in this section. All paths referred to are also relative to `src`**.
