@@ -70,6 +70,7 @@ We have our own scripts:
 
 * To create a PCA (or tsne) and visualize in a plot: (only available for MsPacman) <br/>
 `python3 classify_z_what.py show -method pca -dim 2`
+(This needs labeled generated data, contact Quentin to get the arxiv)
 
 ## Training and Evaluation
 
