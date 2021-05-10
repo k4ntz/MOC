@@ -2,14 +2,17 @@ from torch.utils.tensorboard import SummaryWriter
 import imageio
 import numpy as np
 import torch
+
+import matplotlib
+matplotlib.use('TkAgg')
+
 from utils import spatial_transform
 from .utils import bbox_in_one, colored_bbox_in_one_image
 from attrdict import AttrDict
 from torchvision.utils import make_grid
 from torch.utils.data import Subset, DataLoader
 import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('TkAgg')
+
 
 class SpaceVis:
     def __init__(self):
