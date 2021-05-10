@@ -42,6 +42,8 @@ cfg = CfgNode({
         'Pooyan-v0',
         'Qbert-v0',
         'SpaceInvaders-v0',
+        'Pong-v0',
+        'Tennis-v0',
     ],
 
 
