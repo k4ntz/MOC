@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 
 from utils import spatial_transform
 from .utils import bbox_in_one, colored_bbox_in_one_image
