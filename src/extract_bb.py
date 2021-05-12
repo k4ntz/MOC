@@ -44,15 +44,13 @@ if cfg.resume_ckpt:
     checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
 
 
-table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.exp_name}/{folder}_labels.csv")
+table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}_labels.csv")
 # print(colored("Please change number of images !", "red"))
 all_z_what = []
 all_labels = []
 for i in tqdm(range(nb_images)):
-    # img_path = f"../data/ATARI/SpaceInvaders-v0/train/{i:05}.jpg"
-    # img_path = f"../data/ATARI/MsPacman-v0/train/{i:05}.jpg"
-    img_path = f"../aiml_atari_data/space_like/{cfg.exp_name}/{folder}/{i:05}.png"
-    img_path_fs = f"../aiml_atari_data/rgb/{cfg.exp_name}/{folder}/{i:05}.png"
+    img_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/{folder}/{i:05}.png"
+    img_path_fs = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/{i:05}.png"
     image = open_image(img_path).to(cfg.device)
     image_fs = open_image(img_path_fs).to(cfg.device)
 
