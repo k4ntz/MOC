@@ -68,8 +68,9 @@ def train(cfg):
 
     print('Start training')
     end_flag = False
-    rtpt = RTPT(name_initials='QD', experiment_name=cfg.exp_name,
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                 max_iterations=cfg.train.max_epochs)
+    rtpt.start()
     for epoch in range(start_epoch, cfg.train.max_epochs):
         if end_flag:
             break
