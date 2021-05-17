@@ -37,7 +37,7 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
-    if len(cfg.gamelist) == 10:
+    if len(cfg.gamelist) >= 10:
         print("Training on every game")
         suffix = 'all'
     elif len(cfg.gamelist) == 1:
