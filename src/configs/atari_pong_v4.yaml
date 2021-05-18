@@ -38,23 +38,23 @@ arch:
   G: 16
   fg_sigma: 0.20
 
-  z_pres_start_step: 10000
-  z_pres_end_step: 15000
+  z_pres_start_step: 4000
+  z_pres_end_step: 10000
   z_pres_start_value: 0.1
-  z_pres_end_value: 1e-10
+  z_pres_end_value: 0.01
 
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
-  z_scale_mean_start_value: -2.0
+  z_scale_mean_start_value: -1.5
   z_scale_mean_end_value: -2.5
 
   tau_start_step: 0
-  tau_end_step: 10000
+  tau_end_step: 20000
   tau_start_value: 2.5
-  tau_end_value: 1.0
+  tau_end_value: 0.5
 
   fix_alpha_steps: 4000
-  fix_alpha_value: 0.1
+  fix_alpha_value: 0.2
 
   K: 3
   bg_sigma: 0.10
