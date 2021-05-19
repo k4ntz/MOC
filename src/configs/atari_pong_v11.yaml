@@ -53,8 +53,8 @@ arch:
   tau_start_value: 2.5
   tau_end_value: 0.5
 
-  fix_alpha_steps: 0
-  fix_alpha_value: 0.1
+  fix_alpha_steps: 6000
+  fix_alpha_value: 0.2
 
   K: 3
   bg_sigma: 0.10
