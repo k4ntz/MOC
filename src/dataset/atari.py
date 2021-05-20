@@ -26,7 +26,7 @@ class Atari(Dataset):
         pil_img = Image.open(os.path.join(self.image_path, fn)).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
         # convert image to opencv
-        opencv_img = np.asarray(pil_img)
+        opencv_img = np.asarray(pil_img).copy()
         # get most dominant color
         colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
         most_dominant_color = colors[count.argmax()]
