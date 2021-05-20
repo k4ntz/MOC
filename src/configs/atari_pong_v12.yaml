@@ -40,8 +40,8 @@ arch:
 
   z_pres_start_step: 5000
   z_pres_end_step: 15000
-  z_pres_start_value: 0.9
-  z_pres_end_value: 0.2
+  z_pres_start_value: 0.8
+  z_pres_end_value: 0.1
 
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
