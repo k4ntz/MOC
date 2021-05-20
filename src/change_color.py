@@ -2,6 +2,8 @@ import cv2
 import os
 import time
 
+import numpy as np
+
 from os import listdir
 from os.path import isfile, join
 
@@ -10,8 +12,7 @@ path = "/data/ATARI/"
 game = "Pong-v0"
 #game = "Tennis-v0"
 
-file_suffix = ".jpg"
-suffix = "-grey"
+suffix = "-black"
 
 # folders inside game folder
 folders = ["train/" , "test/", "validation/"]
@@ -25,15 +26,22 @@ for folder in folders:
         # looping over every image inside this folder
         img_path = join(mypath,onlyfiles[n])
         tmp_img = cv2.imread(img_path)
-        # make grey
-        gray_img = cv2.cvtColor(tmp_img, cv2.COLOR_BGR2GRAY)
+        # get most dominant color
+        colors, count = np.unique(tmp_img.reshape(-1,tmp_img.shape[-1]), axis=0, return_counts=True)
+        most_dominant_color = colors[count.argmax()]
+        # create the mask and use it to change the colors
+        bounds_size = 20
+        lower = most_dominant_color - [bounds_size, bounds_size, bounds_size]
+        upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
+        mask = cv2.inRange(tmp_img, lower, upper)
+        tmp_img[mask != 0] = [0,0,0]
         # show image
-        #cv2.imshow("Gray image", gray_img)
+        #cv2.imshow("Changed image", tmp_img)
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
         # save in new folder
         saving_img_path = img_path.replace(game, game + suffix)
-        cv2.imwrite(saving_img_path, gray_img)
+        cv2.imwrite(saving_img_path, tmp_img)
     elapsed_time_fl = (time.time() - start) 
     print("Copying took " + str(elapsed_time_fl) + " sec.")
 
