@@ -38,8 +38,8 @@ arch:
   G: 16
   fg_sigma: 0.20
 
-  z_pres_start_step: 5000
-  z_pres_end_step: 15000
+  z_pres_start_step: 10000
+  z_pres_end_step: 20000
   z_pres_start_value: 0.8
   z_pres_end_value: 0.1
 
@@ -51,13 +51,13 @@ arch:
   tau_start_step: 0
   tau_end_step: 20000
   tau_start_value: 2.5
-  tau_end_value: 0.5
+  tau_end_value: 0.1
 
   fix_alpha_steps: 4000
   fix_alpha_value: 0.1
 
   K: 3
-  bg_sigma: 0.10
+  bg_sigma: 0.15
   boundary_loss: false
 gamelist: [
 #    'Atlantis-v0',
