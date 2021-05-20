@@ -45,8 +45,8 @@ arch:
 
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
-  z_scale_mean_start_value: -4.0
-  z_scale_mean_end_value: -6.0
+  z_scale_mean_start_value: -3.0
+  z_scale_mean_end_value: -4.0
 
   tau_start_step: 0
   tau_end_step: 20000
