@@ -1,6 +1,7 @@
 import os
 import sys
 import torch
+import cv2
 import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
@@ -24,10 +25,19 @@ class Atari(Dataset):
 
         pil_img = Image.open(os.path.join(self.image_path, fn)).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
-
-        image = np.array(pil_img)
-
-        image_t = torch.from_numpy(image / 255).permute(2, 0, 1).float()
+        # convert image to opencv
+        opencv_img = np.asarray(pil_img)
+        # get most dominant color
+        colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
+        most_dominant_color = colors[count.argmax()]
+        # create the mask and use it to change the colors
+        bounds_size = 20
+        lower = most_dominant_color - [bounds_size, bounds_size, bounds_size]
+        upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
+        mask = cv2.inRange(opencv_img, lower, upper)
+        opencv_img[mask != 0] = [0,0,0]
+        # convert to tensor
+        image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
 
         return image_t
 
