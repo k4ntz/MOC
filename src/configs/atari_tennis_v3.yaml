@@ -45,18 +45,19 @@ arch:
 
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
-  z_scale_mean_start_value: -2.5
-  z_scale_mean_end_value: -3.0
+  z_scale_mean_start_value: -2.2
+  z_scale_mean_end_value: -2.5
+  z_scale_std_value: 0.2
 
   tau_start_step: 0
   tau_end_step: 20000
   tau_start_value: 2.5
   tau_end_value: 0.1
 
-  fix_alpha_steps: 4000
-  fix_alpha_value: 0.05
+  fix_alpha_steps: 2000
+  fix_alpha_value: 0.2
 
-  K: 4
+  K: 3
   bg_sigma: 0.10
   boundary_loss: false
 gamelist: [
