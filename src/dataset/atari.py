@@ -36,8 +36,11 @@ class Atari(Dataset):
         upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
         mask = cv2.inRange(opencv_img, lower, upper)
         opencv_img[mask != 0] = [0,0,0]
+        # dilation 
+        kernel = np.ones((3,3), np.uint8)
+        img_dilation = cv2.dilate(opencv_img, kernel, iterations=1)
         # convert to tensor
-        image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
+        image_t = torch.from_numpy(img_dilation / 255).permute(2, 0, 1).float()
 
         return image_t
 

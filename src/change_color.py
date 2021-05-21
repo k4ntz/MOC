@@ -35,13 +35,16 @@ for folder in folders:
         upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
         mask = cv2.inRange(tmp_img, lower, upper)
         tmp_img[mask != 0] = [0,0,0]
+        # dilation 
+        kernel = np.ones((3,3), np.uint8)
+        img_dilation = cv2.dilate(tmp_img, kernel, iterations=1)
         # show image
-        #cv2.imshow("Changed image", tmp_img)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
+        cv2.imshow("Changed image", img_dilation)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         # save in new folder
         saving_img_path = img_path.replace(game, game + suffix)
-        cv2.imwrite(saving_img_path, tmp_img)
+        cv2.imwrite(saving_img_path, ttmp_img)
     elapsed_time_fl = (time.time() - start) 
     print("Copying took " + str(elapsed_time_fl) + " sec.")
 
