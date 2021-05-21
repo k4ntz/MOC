@@ -43,6 +43,9 @@ def train(cfg):
     elif len(cfg.gamelist) == 1:
         suffix = cfg.gamelist[0]
         print(f"Training on {suffix}")
+    elif len(cfg.gamelist) == 2:
+        suffix = cfg.gamelist[0] + "_" + cfg.gamelist[1]
+        print(f"Training on {suffix}")
     else:
         print("Can't train")
         exit(1)
