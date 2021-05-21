@@ -33,6 +33,8 @@ train:
     bg:
       optim: 'Adam'
       lr: 1e-3
+  black_background: true  
+  dilation: true
 
 arch:
   G: 16

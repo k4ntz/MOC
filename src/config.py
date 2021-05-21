@@ -73,6 +73,8 @@ cfg = CfgNode({
                 'lr': 1e-3,
             }
         },
+        'black_background': False,  
+        'dilation': False,
     },
 
     # For engine.eval
