@@ -21,9 +21,16 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-from dqn import DQN
+from dqn.dqn import DQN
+
+# space stuff
+from model import get_model
+from engine.utils import get_config
+
+cfg, task = get_config()
 
 
+# init env
 env = gym.make('Pong-v0')
 env.reset()
 
