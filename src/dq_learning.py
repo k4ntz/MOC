@@ -26,6 +26,8 @@ import torchvision.transforms as T
 
 from dqn.dqn import DQN
 
+import argparse
+
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -70,7 +72,9 @@ else:
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), max_num=cfg.train.max_ckpt)
 use_cpu = 'cpu' in cfg.device
 if cfg.resume:
-   checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
+    checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
+if cfg.parallel:
+    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
 
 # init env
@@ -86,7 +90,7 @@ plt.ion()
 
 ### replay memory stuff
 Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+                        ('z_where_state', 'z_what_state', 'action', 'next_z_where_state', 'next_z_what_state', 'reward'))
 
 
 class ReplayMemory(object):
@@ -120,6 +124,7 @@ def get_screen():
     pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
     # convert image to opencv
     opencv_img = np.asarray(pil_img).copy()
+    opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2BGR)
     if black_bg:
         # get most dominant color
         colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
@@ -138,9 +143,19 @@ def get_screen():
     image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
     return image_t.unsqueeze(0)
 
+def get_z_stuff(model):
+    image = get_screen()
+    # TODO: treat global_step in a more elegant way
+    loss, log = model(image, global_step=100000000)
+    # (B, N, 4), (B, N, 1), (B, N, D)
+    z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
+    return z_where, z_what
+
 env.reset()
 
 ### TRAINING
+
+# get some other args
 
 # some hyperparameters
 
@@ -161,8 +176,8 @@ _, _, screen_height, screen_width = init_screen.shape
 # Get number of actions from gym action space
 n_actions = env.action_space.n
 
-policy_net = DQN(screen_height, screen_width, n_actions).to(device)
-target_net = DQN(screen_height, screen_width, n_actions).to(device)
+policy_net = DQN(n_actions).to(device)
+target_net = DQN(n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
@@ -172,7 +187,7 @@ memory = ReplayMemory(10000)
 
 steps_done = 0
 
-def select_action(state):
+def select_action(z_where_state, z_what_state):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
@@ -183,7 +198,7 @@ def select_action(state):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            return policy_net(state).max(1)[1].view(1, 1)
+            return policy_net(z_where_state, z_what_state).max(1)[1].view(1, 1)
     else:
         return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 
@@ -235,18 +250,24 @@ def optimize_model():
 
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state
+    tuple1 = tuple(map(lambda s: s is not None,batch.next_z_where_state))
+    tuple2 = tuple(map(lambda s: s is not None,batch.next_z_what_state))
+    tuple_mask = tuple1 and tuple2
+    non_final_mask = torch.tensor(tuple_mask, device=device, dtype=torch.bool)
+
+    non_final_next_z_where_states = torch.cat([s for s in batch.next_z_where_state
                                                 if s is not None])
-    state_batch = torch.cat(batch.state)
+    non_final_next_z_what_states = torch.cat([s for s in batch.next_z_what_state
+                                                if s is not None])
+    z_where_state_batch = torch.cat(batch.z_where_state)
+    z_what_state_batch = torch.cat(batch.z_what_state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
+    state_action_values = policy_net(z_where_state_batch, z_what_state_batch).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
@@ -254,7 +275,8 @@ def optimize_model():
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+    next_state_values[non_final_mask] = target_net(non_final_next_z_where_states, non_final_next_z_what_states).max(1)[0].detach()
+
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
@@ -264,7 +286,7 @@ def optimize_model():
 
     # Optimize the model
     optimizer.zero_grad()
-    loss.backward()
+    loss.backward(retain_graph=True)
     for param in policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
@@ -285,9 +307,9 @@ for i_episode in range(num_episodes):
     episode_start = start
     # Initialize the environment and state
     env.reset()
-    last_screen = get_screen()
-    current_screen = get_screen()
-    state = current_screen - last_screen
+    current_z_where, current_z_what = get_z_stuff(model)
+    last_z_where, last_z_what = current_z_where, current_z_what
+    z_where_state, z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
     for t in count():
         # timer stuff
         end = time.perf_counter()
@@ -295,7 +317,7 @@ for i_episode in range(num_episodes):
         start = end
         # Select and perform an action
         plot_screen(i_episode+1, t+1)
-        action = select_action(state)
+        action = select_action(z_where_state, z_what_state)
         _, reward, done, _ = env.step(action.item())
         if reward > 0:
             pos_reward_count += 1
@@ -304,18 +326,18 @@ for i_episode in range(num_episodes):
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        last_screen = current_screen
-        current_screen = get_screen()
+        last_z_where, last_z_what = current_z_where, current_z_what
+        current_z_where, current_z_what = get_z_stuff(model)
         if not done:
-            next_state = current_screen - last_screen
+            next_z_where_state, next_z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
         else:
             next_state = None
 
         # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+        memory.push(z_where_state, z_what_state, action, next_z_where_state, next_z_what_state, reward)
 
         # Move to the next state
-        state = next_state
+        z_where_state, z_what_state = next_z_where_state, next_z_what_state
 
         # Perform one step of the optimization (on the policy network)
         optimize_model()
