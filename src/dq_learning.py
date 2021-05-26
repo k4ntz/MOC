@@ -1,5 +1,6 @@
 # deep q learning on pong (and later on tennis)
 # inspired by https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+# call with python dq_learning.py --config configs/atari_ball_joint_v1.yaml resume True device 'cpu'
 
 import sys
 import gym
@@ -11,6 +12,8 @@ import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 from itertools import count
 from PIL import Image
+import PIL
+import cv2
 
 from rtpt import RTPT
 import time
@@ -23,11 +26,51 @@ import torchvision.transforms as T
 
 from dqn.dqn import DQN
 
+# if gpu is to be used
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # space stuff
+import os.path as osp
+
 from model import get_model
 from engine.utils import get_config
+from utils import Checkpointer
+from solver import get_optimizers
+
 
 cfg, task = get_config()
+
+print('Experiment name:', cfg.exp_name)
+print('Dataset:', cfg.dataset)
+print('Model name:', cfg.model)
+print('Resume:', cfg.resume)
+if cfg.resume:
+    print('Checkpoint:', cfg.resume_ckpt if cfg.resume_ckpt else 'last checkpoint')
+print('Using device:', cfg.device)
+if 'cuda' in cfg.device:
+    print('Using parallel:', cfg.parallel)
+if cfg.parallel:
+    print('Device ids:', cfg.device_ids)
+
+model = get_model(cfg)
+model = model.to(cfg.device)
+
+if len(cfg.gamelist) >= 10:
+    print("Using SPACE Model on every game")
+    suffix = 'all'
+elif len(cfg.gamelist) == 1:
+    suffix = cfg.gamelist[0]
+    print(f"Using SPACE Model on {suffix}")
+elif len(cfg.gamelist) == 2:
+    suffix = cfg.gamelist[0] + "_" + cfg.gamelist[1]
+    print(f"Using SPACE Model on {suffix}")
+else:
+    print("Can't train")
+    exit(1)
+checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), max_num=cfg.train.max_ckpt)
+use_cpu = 'cpu' in cfg.device
+if cfg.resume:
+   checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
 
 
 # init env
@@ -40,9 +83,6 @@ if is_ipython:
     from IPython import display
 
 plt.ion()
-
-# if gpu is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ### replay memory stuff
 Transition = namedtuple('Transition',
@@ -70,10 +110,33 @@ resize = T.Compose([T.ToPILImage(),
 
 ### PREPROCESSING
 
+# preprocessing flags
+black_bg = getattr(cfg, "train").black_background
+dilation = getattr(cfg, "train").dilation
+
 def get_screen():
     # TODO: insert preprocessing from space!
     screen = env.render(mode='rgb_array')
-    return resize(screen).unsqueeze(0)
+    pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
+    # convert image to opencv
+    opencv_img = np.asarray(pil_img).copy()
+    if black_bg:
+        # get most dominant color
+        colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
+        most_dominant_color = colors[count.argmax()]
+        # create the mask and use it to change the colors
+        bounds_size = 20
+        lower = most_dominant_color - [bounds_size, bounds_size, bounds_size]
+        upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
+        mask = cv2.inRange(opencv_img, lower, upper)
+        opencv_img[mask != 0] = [0,0,0]
+    # dilation 
+    if dilation:
+        kernel = np.ones((3,3), np.uint8)
+        opencv_img = cv2.dilate(opencv_img, kernel, iterations=1)
+    # convert to tensor
+    image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
+    return image_t.unsqueeze(0)
 
 env.reset()
 
@@ -87,6 +150,7 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
+
 
 # Get screen size so that we can initialize layers correctly based on shape
 # returned from AI gym. Typical dimensions at this point are close to 3x40x90
