@@ -25,6 +25,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 from dqn.dqn import DQN
+import dqn.dqn_saver
 
 import argparse
 
@@ -155,7 +156,6 @@ env.reset()
 
 ### TRAINING
 
-# get some other args
 
 # some hyperparameters
 
@@ -165,6 +165,10 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
+
+liveplot = False
+
+SAVE_EVERY = 5
 
 
 # Get screen size so that we can initialize layers correctly based on shape
@@ -294,6 +298,11 @@ def optimize_model():
 # training loop
 num_episodes = 100
 
+# games wins loses score
+wins = 0
+loses = 0
+last_game = "None"
+
 exp_name = "DQ-Learning-Pong-v0"
 rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
                 max_iterations=num_episodes)
@@ -315,8 +324,9 @@ for i_episode in range(num_episodes):
         end = time.perf_counter()
         episode_time = end - episode_start
         start = end
+        if liveplot:
+            plot_screen(i_episode+1, t+1)
         # Select and perform an action
-        plot_screen(i_episode+1, t+1)
         action = select_action(z_where_state, z_what_state)
         _, reward, done, _ = env.step(action.item())
         if reward > 0:
@@ -350,9 +360,9 @@ for i_episode in range(num_episodes):
             start = time.perf_counter()
             end = time.perf_counter()
             print(
-                'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, step time: {:.4f}s, episode time: {:.4f}s         '.format(
+                'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, step time: {:.4f}s, episode time: {:.4f}s, wins: {}, loses:{}, last_game:{}        '.format(
                     exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count,
-                    step_time, episode_time), end="\r")
+                    step_time, episode_time, wins, loses, last_game), end="\r")
         if done:
             episode_durations.append(t + 1)
             #plot_durations()
@@ -360,6 +370,13 @@ for i_episode in range(num_episodes):
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
+    # update wins and loses
+    if pos_reward_count >= neg_reward_count:
+        wins += 1
+        last_game = "Win"
+    else:
+        loses += 1
+        last_game = "Lose"
     rtpt.step()
 
 print('Complete')
