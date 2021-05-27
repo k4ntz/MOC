@@ -146,6 +146,7 @@ def get_screen():
 
 def get_z_stuff(model):
     image = get_screen()
+    image = image.to(device)
     # TODO: treat global_step in a more elegant way
     loss, log = model(image, global_step=100000000)
     # (B, N, 4), (B, N, 1), (B, N, D)
