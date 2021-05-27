@@ -311,7 +311,7 @@ def optimize_model():
     optimizer.step()
 
 # training loop
-num_episodes = 100
+num_episodes = 1000
 
 # games wins loses score
 wins = 0
