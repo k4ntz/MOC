@@ -75,7 +75,7 @@ use_cpu = 'cpu' in cfg.device
 if cfg.resume:
     checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
 if cfg.parallel:
-    model = nn.DataParallel(model, device_ids=cfg.device_ids)
+    #model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
 
 # init env
