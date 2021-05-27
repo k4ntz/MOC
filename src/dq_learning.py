@@ -25,7 +25,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 from dqn.dqn import DQN
-import dqn.dqn_saver
+import dqn.dqn_saver as saver
 
 import argparse
 
@@ -170,6 +170,8 @@ liveplot = False
 
 SAVE_EVERY = 5
 
+i_episode = 0
+exp_name = "DQ-Learning-Pong-v0"
 
 # Get screen size so that we can initialize layers correctly based on shape
 # returned from AI gym. Typical dimensions at this point are close to 3x40x90
@@ -188,6 +190,19 @@ target_net.eval()
 optimizer = optim.RMSprop(policy_net.parameters())
 memory = ReplayMemory(10000)
 
+# load if available
+if saver.check_loading_model(exp_name):
+    # folder and file exists, so load and return
+    model_path = saver.model_name(exp_name) 
+    print("Loading {}".format(model_path))
+    checkpoint = torch.load(model_path)
+    policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
+    target_net.load_state_dict(checkpoint['target_model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    memory = checkpoint['memory']
+    i_episode = checkpoint['episode']
+else:
+    print("No prior checkpoints exists, starting fresh")
 
 steps_done = 0
 
@@ -303,11 +318,10 @@ wins = 0
 loses = 0
 last_game = "None"
 
-exp_name = "DQ-Learning-Pong-v0"
 rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
                 max_iterations=num_episodes)
 rtpt.start()
-for i_episode in range(num_episodes):
+while i_episode < num_episodes:
     # reward logger
     pos_reward_count = 0
     neg_reward_count = 0
@@ -360,7 +374,7 @@ for i_episode in range(num_episodes):
             start = time.perf_counter()
             end = time.perf_counter()
             print(
-                'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, step time: {:.4f}s, episode time: {:.4f}s, wins: {}, loses:{}, last_game:{}        '.format(
+                'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, s-time: {:.4f}s, e-time: {:.4f}s, w: {}, l:{}, last_game:{}        '.format(
                     exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count,
                     step_time, episode_time, wins, loses, last_game), end="\r")
         if done:
@@ -377,10 +391,13 @@ for i_episode in range(num_episodes):
     else:
         loses += 1
         last_game = "Lose"
+    # checkpoint saver
+    if i_episode % SAVE_EVERY == 0:
+        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode)
+    # iterate to next episode
+    i_episode += 1
     rtpt.step()
 
 print('Complete')
 env.render()
 env.close()
-plt.ioff()
-plt.show()
