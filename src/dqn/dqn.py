@@ -14,25 +14,18 @@ class DQN(nn.Module):
 
     def __init__(self, outputs):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=2)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.lin1 = nn.Linear(9472, 512)
+        self.lin2 = nn.Linear(512, 128)
+        self.lin3 = nn.Linear(128, outputs)
 
-        self.head = nn.Linear(10224, outputs)
-
-    # Called with either one element to determine next action, or a batch
-    # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    def forward(self, x, y):
-        x = x.to(device).unsqueeze(1)
-        y = y.to(device).unsqueeze(1)
-
-        x = self.conv1(x)
-        x = self.bn1(x)
+    # Called with one element to determine next action
+    def forward(self, x):
+        x = x.to(device)
         x = F.relu(x)
-        y = F.relu(y)
-
         x = torch.flatten(x, 1)
-        y = torch.flatten(y, 1)
-        x = torch.cat((x, y), 1)
-
-        x = self.head(x)
+        x = self.lin1(x)
+        x = F.relu(x)
+        x = self.lin2(x)
+        x = F.relu(x)
+        x = self.lin3(x)
         return x

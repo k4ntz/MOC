@@ -91,7 +91,7 @@ plt.ion()
 
 ### replay memory stuff
 Transition = namedtuple('Transition',
-                        ('z_where_state', 'z_what_state', 'action', 'next_z_where_state', 'next_z_what_state', 'reward'))
+                        ('state', 'action', 'next_state', 'reward'))
 
 
 class ReplayMemory(object):
@@ -153,10 +153,19 @@ def get_z_stuff(model):
         loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
+        z_where = z_where.to(device)
+        z_pres_prob = z_pres_prob.to(device)
+        z_what = z_what.to(device)
         # clean up
         del image
         torch.cuda.empty_cache()
-        return z_where, z_what
+        # normalize z pres to 1 and 0
+        z_pres = z_pres_prob > 0.5
+        z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device)
+        # combine z tensors
+        z_where_prob = torch.cat((z_pres, z_where), 2)
+        z_combined = torch.cat((z_where_prob, z_what), 2)
+        return z_combined
     return None
 
 env.reset()
@@ -173,7 +182,7 @@ EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
 
-liveplot = False
+liveplot = True
 
 SAVE_EVERY = 5
 
@@ -213,7 +222,7 @@ else:
 
 steps_done = 0
 
-def select_action(z_where_state, z_what_state):
+def select_action(state):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
@@ -224,7 +233,7 @@ def select_action(z_where_state, z_what_state):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            return policy_net(z_where_state, z_what_state).max(1)[1].view(1, 1)
+            return policy_net(state).max(1)[1].view(1, 1)
     else:
         return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 
@@ -276,24 +285,18 @@ def optimize_model():
 
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
-    tuple1 = tuple(map(lambda s: s is not None,batch.next_z_where_state))
-    tuple2 = tuple(map(lambda s: s is not None,batch.next_z_what_state))
-    tuple_mask = tuple1 and tuple2
-    non_final_mask = torch.tensor(tuple_mask, device=device, dtype=torch.bool)
-
-    non_final_next_z_where_states = torch.cat([s for s in batch.next_z_where_state
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                          batch.next_state)), device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state
                                                 if s is not None])
-    non_final_next_z_what_states = torch.cat([s for s in batch.next_z_what_state
-                                                if s is not None])
-    z_where_state_batch = torch.cat(batch.z_where_state)
-    z_what_state_batch = torch.cat(batch.z_what_state)
+    state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
     # for each batch state according to policy_net
-    state_action_values = policy_net(z_where_state_batch, z_what_state_batch).gather(1, action_batch)
+    state_action_values = policy_net(state_batch).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
     # Expected values of actions for non_final_next_states are computed based
@@ -301,8 +304,7 @@ def optimize_model():
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_z_where_states, non_final_next_z_what_states).max(1)[0].detach()
-
+    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
@@ -312,7 +314,7 @@ def optimize_model():
 
     # Optimize the model
     optimizer.zero_grad()
-    loss.backward(retain_graph=True)
+    loss.backward()
     for param in policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
@@ -337,9 +339,7 @@ while i_episode < num_episodes:
     episode_start = start
     # Initialize the environment and state
     env.reset()
-    current_z_where, current_z_what = get_z_stuff(model)
-    last_z_where, last_z_what = current_z_where, current_z_what
-    z_where_state, z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
+    state = get_z_stuff(model)
     for t in count():
         # timer stuff
         end = time.perf_counter()
@@ -348,7 +348,7 @@ while i_episode < num_episodes:
         if liveplot:
             plot_screen(i_episode+1, t+1)
         # Select and perform an action
-        action = select_action(z_where_state, z_what_state)
+        action = select_action(state)
         _, reward, done, _ = env.step(action.item())
         if reward > 0:
             pos_reward_count += 1
@@ -357,18 +357,16 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        last_z_where, last_z_what = current_z_where, current_z_what
-        current_z_where, current_z_what = get_z_stuff(model)
         if not done:
-            next_z_where_state, next_z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
+            next_state = get_z_stuff(model)
         else:
             next_state = None
 
         # Store the transition in memory
-        memory.push(z_where_state, z_what_state, action, next_z_where_state, next_z_what_state, reward)
+        memory.push(state, action, next_state, reward)
 
         # Move to the next state
-        z_where_state, z_what_state = next_z_where_state, next_z_what_state
+        state = next_state
 
         # Perform one step of the optimization (on the policy network)
         optimize_model()
@@ -398,11 +396,11 @@ while i_episode < num_episodes:
     else:
         loses += 1
         last_game = "Lose"
+    # iterate to next episode
+    i_episode += 1
     # checkpoint saver
     if i_episode % SAVE_EVERY == 0:
         saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode)
-    # iterate to next episode
-    i_episode += 1
     rtpt.step()
 
 print('Complete')
