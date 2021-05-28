@@ -52,8 +52,8 @@ if cfg.resume:
 print('Using device:', cfg.device)
 if 'cuda' in cfg.device:
     print('Using parallel:', cfg.parallel)
-#if cfg.parallel:
-#    print('Device ids:', cfg.device_ids)
+if cfg.parallel:
+    print('Device ids:', cfg.device_ids)
 
 model = get_model(cfg)
 model = model.to(cfg.device)
@@ -74,8 +74,8 @@ checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), m
 use_cpu = 'cpu' in cfg.device
 if cfg.resume:
     checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
-if cfg.parallel:
-    model = nn.DataParallel(model, device_ids=cfg.device_ids)
+#if cfg.parallel:
+#    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
 
 # init env
