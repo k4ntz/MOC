@@ -35,7 +35,7 @@ class Atari(Dataset):
             colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
             most_dominant_color = colors[count.argmax()]
             # create the mask and use it to change the colors
-            bounds_size = 20
+            bounds_size = 1
             lower = most_dominant_color - [bounds_size, bounds_size, bounds_size]
             upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
             mask = cv2.inRange(opencv_img, lower, upper)
