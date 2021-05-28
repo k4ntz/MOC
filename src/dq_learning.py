@@ -14,6 +14,7 @@ from itertools import count
 from PIL import Image
 import PIL
 import cv2
+import os
 
 from rtpt import RTPT
 import time
@@ -26,6 +27,7 @@ import torchvision.transforms as T
 
 from dqn.dqn import DQN
 import dqn.dqn_saver as saver
+import dqn.dqn_logger
 
 import argparse
 
@@ -187,7 +189,15 @@ liveplot = True
 SAVE_EVERY = 5
 
 i_episode = 0
+global_step = 0
+
+
 exp_name = "DQ-Learning-Pong-v0"
+
+# init tensorboard
+log_path = os.getcwd() + "/dqn/logs/"
+log_name = exp_name
+logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name)
 
 # Get screen size so that we can initialize layers correctly based on shape
 # returned from AI gym. Typical dimensions at this point are close to 3x40x90
@@ -217,6 +227,7 @@ if saver.check_loading_model(exp_name):
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     memory = checkpoint['memory']
     i_episode = checkpoint['episode']
+    global_step = checkpoint['global_step']
 else:
     print("No prior checkpoints exists, starting fresh")
 
@@ -337,10 +348,12 @@ while i_episode < num_episodes:
     # timer stuff
     start = time.perf_counter()
     episode_start = start
+    episode_time = 0
     # Initialize the environment and state
     env.reset()
     state = get_z_stuff(model)
     for t in count():
+        global_step += 1
         # timer stuff
         end = time.perf_counter()
         episode_time = end - episode_start
@@ -396,11 +409,13 @@ while i_episode < num_episodes:
     else:
         loses += 1
         last_game = "Lose"
+    # log episode
+    logger.log_episode(wins, loses, episode_time, pos_reward_count, neg_reward_count, i_episode, global_step)
     # iterate to next episode
     i_episode += 1
     # checkpoint saver
     if i_episode % SAVE_EVERY == 0:
-        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode)
+        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode, global_step)
     rtpt.step()
 
 print('Complete')

@@ -8,7 +8,7 @@ print(PATH_TO_OUTPUTS)
 
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 
-def save_models(training_name, policy_model, target_model, optimizer, memory, episode):
+def save_models(training_name, policy_model, target_model, optimizer, memory, episode, global_step):
     if not os.path.exists(PATH_TO_OUTPUTS):
         os.makedirs(PATH_TO_OUTPUTS)
     model_path = model_name(training_name)
@@ -18,7 +18,8 @@ def save_models(training_name, policy_model, target_model, optimizer, memory, ep
             'target_model_state_dict': target_model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'memory': memory,
-            'episode': episode
+            'episode': episode,
+            'global_step': global_step
             }, model_path)
 
 
