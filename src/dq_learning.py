@@ -52,8 +52,8 @@ if cfg.resume:
 print('Using device:', cfg.device)
 if 'cuda' in cfg.device:
     print('Using parallel:', cfg.parallel)
-if cfg.parallel:
-    print('Device ids:', cfg.device_ids)
+#if cfg.parallel:
+#    print('Device ids:', cfg.device_ids)
 
 model = get_model(cfg)
 model = model.to(cfg.device)
@@ -144,6 +144,7 @@ def get_screen():
     image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
     return image_t.unsqueeze(0)
 
+# use SPACE model
 def get_z_stuff(model):
     image = get_screen()
     image = image.to(device)
@@ -151,6 +152,9 @@ def get_z_stuff(model):
     loss, log = model(image, global_step=100000000)
     # (B, N, 4), (B, N, 1), (B, N, D)
     z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
+    # clean up
+    del image
+    torch.cuda.empty_cache()
     return z_where, z_what
 
 env.reset()
