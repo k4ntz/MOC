@@ -161,11 +161,11 @@ def get_z_stuff(model):
         # clean up
         del image
         torch.cuda.empty_cache()
-        # normalize z pres to 1 and 0
-        z_pres = z_pres_prob > 0.5
-        z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device)
+        ## normalize z pres to 1 and 0
+        #z_pres = z_pres_prob > 0.5
+        #z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device)
         # combine z tensors
-        z_where_prob = torch.cat((z_pres, z_where), 2)
+        z_where_prob = torch.cat((z_pres_prob, z_where), 2)
         z_combined = torch.cat((z_where_prob, z_what), 2)
         return z_combined
     return None
@@ -178,13 +178,14 @@ env.reset()
 # some hyperparameters
 
 BATCH_SIZE = 128
-GAMMA = 0.999
+GAMMA = 0.99
 EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
+EPS_END = 0.02
+EPS_DECAY = 1000000
+TARGET_UPDATE = 1000
+lr = 1e-4
 
-liveplot = True
+liveplot = False
 
 SAVE_EVERY = 5
 
@@ -192,7 +193,7 @@ i_episode = 0
 global_step = 0
 
 
-exp_name = "DQ-Learning-Pong-v0"
+exp_name = "DQ-Learning-Pong-v1"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -213,7 +214,7 @@ target_net = DQN(n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
-optimizer = optim.RMSprop(policy_net.parameters())
+optimizer = optim.Adam(policy_net.parameters(), lr=lr)
 memory = ReplayMemory(10000)
 
 # load if available
@@ -289,40 +290,38 @@ def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
+    """
+    zip(*transitions) unzips the transitions into
+    Transition(*) creates new named tuple
+    batch.state - tuple of all the states (each state is a tensor)
+    batch.next_state - tuple of all the next states (each state is a tensor)
+    batch.reward - tuple of all the rewards (each reward is a float)
+    batch.action - tuple of all the actions (each action is an int)    
+    """
     batch = Transition(*zip(*transitions))
+    
+    actions = tuple((map(lambda a: torch.tensor([[a]], device='cuda'), batch.action))) 
+    rewards = tuple((map(lambda r: torch.tensor([r], device='cuda'), batch.reward))) 
 
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=device, dtype=torch.bool)
+    non_final_mask = torch.tensor(
+        tuple(map(lambda s: s is not None, batch.next_state)),
+        device=device, dtype=torch.uint8)
+    
     non_final_next_states = torch.cat([s for s in batch.next_state
-                                                if s is not None])
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
-
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
+                                       if s is not None]).to('cuda')
+    state_batch = torch.cat(batch.state).to('cuda')
+    action_batch = torch.cat(actions)
+    reward_batch = torch.cat(rewards)
+    
     state_action_values = policy_net(state_batch).gather(1, action_batch)
-
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1)[0].
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
+    
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
     next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-    # Compute Huber loss
-    criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
+    
+    loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+    
     # Optimize the model
     optimizer.zero_grad()
     loss.backward()
