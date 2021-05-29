@@ -242,7 +242,7 @@ def select_action(state):
         math.exp(-1. * steps_done / EPS_DECAY)
     # log eps_treshold
     if global_step % log_steps == 0:
-        logger.log_eps(eps_treshold, global_step)
+        logger.log_eps(eps_threshold, global_step)
     steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
