@@ -181,7 +181,7 @@ BATCH_SIZE = 128
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.02
-EPS_DECAY = 1000000
+EPS_DECAY = 500000
 TARGET_UPDATE = 1000
 lr = 1e-4
 
@@ -189,11 +189,15 @@ liveplot = False
 
 SAVE_EVERY = 5
 
+num_episodes = 1000
 i_episode = 0
 global_step = 0
 
+MEMORY_SIZE = 100000
+MEMORY_MIN_SIZE = 50000
 
-exp_name = "DQ-Learning-Pong-v1"
+
+exp_name = "DQ-Learning-Pong-v2"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -216,7 +220,7 @@ target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
 optimizer = optim.Adam(policy_net.parameters(), lr=lr)
-memory = ReplayMemory(10000)
+memory = ReplayMemory(MEMORY_SIZE)
 
 # load if available
 if saver.check_loading_model(exp_name):
@@ -334,7 +338,6 @@ def optimize_model():
     optimizer.step()
 
 # training loop
-num_episodes = 1000
 
 # games wins loses score
 wins = 0
@@ -385,7 +388,10 @@ while i_episode < num_episodes:
         state = next_state
 
         # Perform one step of the optimization (on the policy network)
-        optimize_model()
+        if len(memory) > MEMORY_MIN_SIZE:
+            optimize_model()
+        elif global_step % log_steps == 0:
+            logger.log_loss(0, global_step)
 
         # timer stuff
         end = time.perf_counter()
@@ -403,7 +409,7 @@ while i_episode < num_episodes:
             #plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
+    if i_episode % TARGET_UPDATE == 0 & len(memory) > MEMORY_MIN_SIZE:
         target_net.load_state_dict(policy_net.state_dict())
     # update wins and loses
     if pos_reward_count >= neg_reward_count:
