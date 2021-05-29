@@ -233,17 +233,14 @@ if saver.check_loading_model(exp_name):
 else:
     print("No prior checkpoints exists, starting fresh")
 
-steps_done = 0
 
 def select_action(state):
-    global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
+        math.exp(-1. * global_step / EPS_DECAY)
     # log eps_treshold
     if global_step % log_steps == 0:
         logger.log_eps(eps_threshold, global_step)
-    steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return largest column value of each row.
