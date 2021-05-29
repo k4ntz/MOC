@@ -198,6 +198,7 @@ exp_name = "DQ-Learning-Pong-v1"
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
 log_name = exp_name
+log_steps = 500
 logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name)
 
 # Get screen size so that we can initialize layers correctly based on shape
@@ -239,6 +240,9 @@ def select_action(state):
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * steps_done / EPS_DECAY)
+    # log eps_treshold
+    if global_step % log_steps == 0:
+        logger.log_eps(eps_treshold, global_step)
     steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
@@ -321,6 +325,9 @@ def optimize_model():
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
     
     loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+    # log loss
+    if global_step % log_steps == 0:
+        logger.log_loss(loss, global_step)
     
     # Optimize the model
     optimizer.zero_grad()
