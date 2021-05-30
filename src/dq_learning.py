@@ -429,7 +429,7 @@ while i_episode < num_episodes:
             #plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0 & len(memory) > MEMORY_MIN_SIZE:
+    if i_episode % TARGET_UPDATE == 0 and len(memory) > MEMORY_MIN_SIZE:
         target_net.load_state_dict(policy_net.state_dict())
     # update wins and loses
     if pos_reward_count >= neg_reward_count:
