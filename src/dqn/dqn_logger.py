@@ -37,3 +37,9 @@ class DQN_Logger:
             print("Logger is not initialized...")
             return
         self.writer.add_scalar('Train/loss', loss, global_step)
+
+    def log_max_q(self, max_q, global_step):
+        if self.writer == None:
+            print("Logger is not initialized...")
+            return
+        self.writer.add_scalar('Train/max q value', max_q, global_step)

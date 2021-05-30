@@ -310,8 +310,9 @@ def optimize_model():
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
     
     loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
-    # log loss
+    # log loss and max q
     if global_step % log_steps == 0:
+        logger.log_max_q(torch.max(expected_state_action_values), global_step)
         logger.log_loss(loss, global_step)
     
     # Optimize the model
