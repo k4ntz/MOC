@@ -115,7 +115,7 @@ resize = T.Compose([T.ToPILImage(),
                     T.Resize(40, interpolation=Image.CUBIC),
                     T.ToTensor()])
 
-### PREPROCESSING
+######## PREPROCESSING ########
 
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
@@ -146,6 +146,18 @@ def get_screen():
     image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
     return image_t.unsqueeze(0)
 
+# helper function to normalize tensor values to 0-1
+def normalize_tensors(t):
+    dim1 = t.shape[0]
+    dim2 = t.shape[1]
+    dim3 = t.shape[2]
+    t = t.view(t.size(0), -1)
+    t -= t.min(1, keepdim=True)[0]
+    t /= t.max(1, keepdim=True)[0]
+    t = t.view(dim1, dim2, dim3)
+    return t
+
+
 # use SPACE model
 def get_z_stuff(model):
     image = get_screen()
@@ -161,19 +173,25 @@ def get_z_stuff(model):
         # clean up
         del image
         torch.cuda.empty_cache()
-        ## normalize z pres to 1 and 0
-        #z_pres = z_pres_prob > 0.5
-        #z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device)
-        # combine z tensors
-        z_where_prob = torch.cat((z_pres_prob, z_where), 2)
-        z_combined = torch.cat((z_where_prob, z_what), 2)
+        ## nullize all z whats with z pres < 0.5
+        z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
+        z_what_pres = torch.zeros_like(z_what, device=device)
+        z_what_pres[z_pres] = z_what[z_pres]
+        ## same with z where 
+        z_where_pres = torch.zeros_like(z_where, device=device)
+        z_where_pres[z_pres] = z_where[z_pres]
+        #z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device).unsqueeze(2)
+        # normalize z what-pres and z where to 0-1
+        z_what_pres_n = normalize_tensors(z_what_pres)
+        z_where_pres_n = normalize_tensors(z_where_pres)
+        # combine z what pres with z where tensors
+        z_combined = torch.cat((z_where_pres_n, z_what_pres_n), 2)
         return z_combined
     return None
 
 env.reset()
 
-### TRAINING
-
+######## TRAINING ########
 
 # some hyperparameters
 
@@ -257,40 +275,6 @@ def select_action(state):
 
 episode_durations = []
 
-# function to plot live while training
-def plot_screen(episode, step):
-    plt.figure(3)
-    plt.clf()
-    plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
-    plt.imshow(get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy(),
-           interpolation='none')
-    plt.plot()
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
-
-# function to plot episode durations
-def plot_durations():
-    plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
-        
-
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
@@ -337,7 +321,43 @@ def optimize_model():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-# training loop
+### plot stuff 
+
+# function to plot live while training
+def plot_screen(episode, step):
+    plt.figure(3)
+    plt.clf()
+    plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
+    plt.imshow(get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy(),
+           interpolation='none')
+    plt.plot()
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    if is_ipython:
+        display.clear_output(wait=True)
+        display.display(plt.gcf())
+
+# function to plot episode durations
+def plot_durations():
+    plt.figure(2)
+    plt.clf()
+    durations_t = torch.tensor(episode_durations, dtype=torch.float)
+    plt.title('Training...')
+    plt.xlabel('Episode')
+    plt.ylabel('Duration')
+    plt.plot(durations_t.numpy())
+    # Take 100 episode averages and plot them too
+    if len(durations_t) >= 100:
+        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
+
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    if is_ipython:
+        display.clear_output(wait=True)
+        display.display(plt.gcf())
+        
+
+### training loop
 
 # games wins loses score
 wins = 0
