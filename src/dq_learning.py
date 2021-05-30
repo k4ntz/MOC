@@ -289,16 +289,16 @@ def optimize_model():
     """
     batch = Transition(*zip(*transitions))
     
-    actions = tuple((map(lambda a: torch.tensor([[a]], device='cuda'), batch.action))) 
-    rewards = tuple((map(lambda r: torch.tensor([r], device='cuda'), batch.reward))) 
+    actions = tuple((map(lambda a: torch.tensor([[a]], device=device), batch.action))) 
+    rewards = tuple((map(lambda r: torch.tensor([r], device=device), batch.reward))) 
 
     non_final_mask = torch.tensor(
         tuple(map(lambda s: s is not None, batch.next_state)),
         device=device, dtype=torch.uint8)
     
     non_final_next_states = torch.cat([s for s in batch.next_state
-                                       if s is not None]).to('cuda')
-    state_batch = torch.cat(batch.state).to('cuda')
+                                       if s is not None]).to(device)
+    state_batch = torch.cat(batch.state).to(device)
     action_batch = torch.cat(actions)
     reward_batch = torch.cat(rewards)
     
