@@ -215,7 +215,7 @@ MEMORY_SIZE = 100000
 MEMORY_MIN_SIZE = 50000
 
 
-exp_name = "DQ-Learning-Pong-v2"
+exp_name = "DQ-Learning-Pong-v3"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
