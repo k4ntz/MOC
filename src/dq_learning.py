@@ -195,13 +195,13 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 128
-GAMMA = 0.99
+BATCH_SIZE = 64
+GAMMA = 0.97
 EPS_START = 0.9
 EPS_END = 0.02
-EPS_DECAY = 500000
-TARGET_UPDATE = 1000
-lr = 1e-4
+EPS_DECAY = 100000
+# TARGET_UPDATE = 1000
+lr = 0.00025
 
 liveplot = False
 
@@ -211,11 +211,11 @@ num_episodes = 1000
 i_episode = 0
 global_step = 0
 
-MEMORY_SIZE = 100000
-MEMORY_MIN_SIZE = 50000
+MEMORY_SIZE = 50000
+MEMORY_MIN_SIZE = 30000
 
 
-exp_name = "DQ-Learning-Pong-v3"
+exp_name = "DQ-Learning-Pong-v4"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -430,7 +430,7 @@ while i_episode < num_episodes:
             #plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0 and len(memory) > MEMORY_MIN_SIZE:
+    if len(memory) > MEMORY_MIN_SIZE:
         target_net.load_state_dict(policy_net.state_dict())
     # update wins and loses
     if pos_reward_count >= neg_reward_count:
