@@ -173,19 +173,15 @@ def get_z_stuff(model):
         # clean up
         del image
         torch.cuda.empty_cache()
-        ## nullize all z whats with z pres < 0.5
+        ## nullize all z whats with z pres < 0.5 and normalize
         z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
         z_what_pres = torch.zeros_like(z_what, device=device)
         z_what_pres[z_pres] = z_what[z_pres]
         ## same with z where 
         z_where_pres = torch.zeros_like(z_where, device=device)
         z_where_pres[z_pres] = z_where[z_pres]
-        #z_pres = torch.tensor(z_pres, dtype=torch.uint8, device=device).unsqueeze(2)
-        # normalize z what-pres and z where to 0-1
-        z_what_pres_n = normalize_tensors(z_what_pres)
-        z_where_pres_n = normalize_tensors(z_where_pres)
         # combine z what pres with z where tensors
-        z_combined = torch.cat((z_where_pres_n, z_what_pres_n), 2)
+        z_combined = torch.cat((z_where_pres, z_what_pres), 2)
         return z_combined
     return None
 
@@ -196,9 +192,9 @@ env.reset()
 # some hyperparameters
 
 BATCH_SIZE = 64
-GAMMA = 0.97
-EPS_START = 0.9
-EPS_END = 0.02
+GAMMA = 0.99
+EPS_START = 1
+EPS_END = 0.05
 EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
 lr = 0.00025
@@ -212,10 +208,10 @@ i_episode = 0
 global_step = 0
 
 MEMORY_SIZE = 50000
-MEMORY_MIN_SIZE = 30000
+MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v4"
+exp_name = "DQ-Learning-Pong-v0"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -240,6 +236,9 @@ target_net.eval()
 optimizer = optim.Adam(policy_net.parameters(), lr=lr)
 memory = ReplayMemory(MEMORY_SIZE)
 
+total_max_q = 0
+total_loss = 0
+
 # load if available
 if saver.check_loading_model(exp_name):
     # folder and file exists, so load and return
@@ -252,6 +251,8 @@ if saver.check_loading_model(exp_name):
     memory = checkpoint['memory']
     i_episode = checkpoint['episode']
     global_step = checkpoint['global_step']
+    total_max_q = checkpoint['total_max_q']
+    total_loss = checkpoint['total_loss']
 else:
     print("No prior checkpoints exists, starting fresh")
 
@@ -276,6 +277,10 @@ def select_action(state):
 episode_durations = []
 
 def optimize_model():
+    # logging variables
+    global total_max_q
+    global total_loss
+
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
@@ -311,9 +316,12 @@ def optimize_model():
     
     loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
     # log loss and max q
+    max_q = torch.max(expected_state_action_values)
+    total_max_q += max_q
+    total_loss += loss
     if global_step % log_steps == 0:
-        logger.log_max_q(torch.max(expected_state_action_values), global_step)
-        logger.log_loss(loss, global_step)
+        logger.log_max_q(total_max_q/global_step, global_step)
+        logger.log_loss(total_loss/global_step, global_step)
     
     # Optimize the model
     optimizer.zero_grad()
@@ -440,12 +448,12 @@ while i_episode < num_episodes:
         loses += 1
         last_game = "Lose"
     # log episode
-    logger.log_episode(wins, loses, episode_time, pos_reward_count, neg_reward_count, i_episode, global_step)
+    logger.log_episode(episode_time, pos_reward_count, neg_reward_count, i_episode, global_step)
     # iterate to next episode
     i_episode += 1
     # checkpoint saver
     if i_episode % SAVE_EVERY == 0:
-        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode, global_step)
+        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode, global_step, total_max_q, total_loss)
     rtpt.step()
 
 print('Complete')

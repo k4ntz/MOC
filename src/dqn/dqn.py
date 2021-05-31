@@ -21,7 +21,6 @@ class DQN(nn.Module):
     # Called with one element to determine next action
     def forward(self, x):
         x = x.to(device)
-        x = F.relu(x)
         x = x.view(x.size(0), -1)
         x = self.lin1(x)
         x = F.relu(x)
