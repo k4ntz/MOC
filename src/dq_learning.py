@@ -195,7 +195,7 @@ BATCH_SIZE = 64
 GAMMA = 0.99
 EPS_START = 1
 EPS_END = 0.05
-EPS_DECAY = 100000
+EPS_DECAY = 500000
 # TARGET_UPDATE = 1000
 lr = 0.00025
 
@@ -211,7 +211,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v0"
+exp_name = "DQ-Learning-Pong-v1"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -244,7 +244,7 @@ if saver.check_loading_model(exp_name):
     # folder and file exists, so load and return
     model_path = saver.model_name(exp_name) 
     print("Loading {}".format(model_path))
-    checkpoint = torch.load(model_path)
+    checkpoint = torch.load(model_path, map_location=torch.device(device))
     policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
     target_net.load_state_dict(checkpoint['target_model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
