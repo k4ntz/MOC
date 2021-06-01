@@ -318,7 +318,8 @@ def optimize_model():
     # log loss and max q
     max_q = torch.max(expected_state_action_values)
     total_max_q += max_q
-    total_loss += loss
+    with torch.no_grad():
+        total_loss += loss
     if global_step % log_steps == 0:
         logger.log_max_q(total_max_q/global_step, global_step)
         logger.log_loss(total_loss/global_step, global_step)
