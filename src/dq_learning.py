@@ -181,7 +181,7 @@ def get_z_stuff(model):
         z_where_pres = torch.zeros_like(z_where, device=device)
         z_where_pres[z_pres] = z_where[z_pres]
         # combine z what pres with z where tensors
-        z_combined = torch.cat((z_where_pres, z_what_pres), 2)
+        z_combined = z_where_pres #torch.cat((z_where_pres, z_what_pres), 2)
         return z_combined
     return None
 
@@ -211,7 +211,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v1"
+exp_name = "DQ-Learning-Pong-v1-only-zwhere-zpres"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
