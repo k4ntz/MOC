@@ -18,8 +18,8 @@ class Space(nn.Module):
     def forward(self, x, global_step):
         """
         Inference.
-        
-        :param x: (B, 3, H, W)
+        With time-dimension for consistency
+        :param x: (B, T, 3, H, W)
         :param global_step: global training step
         :return:
             loss: a scalor. Note it will be better to return (B,)
@@ -27,7 +27,7 @@ class Space(nn.Module):
         """
         
         # Background extraction
-        # (B, 3, H, W), (B, 3, H, W), (B,)
+        # (B, T, 3, H, W), (B, T, 3, H, W), (B, T)
         bg_likelihood, bg, kl_bg, log_bg = self.bg_module(x, global_step)
         
         # Foreground extraction
@@ -37,13 +37,13 @@ class Space(nn.Module):
         if global_step and global_step < arch.fix_alpha_steps:
             alpha_map = torch.full_like(alpha_map, arch.fix_alpha_value)
             
-        # Compute final mixture likelhood
-        # (B, 3, H, W)
+        # Compute final mixture likelihood
+        # (B, T, 3, H, W)
         fg_likelihood = (fg_likelihood + (alpha_map + 1e-5).log())
         bg_likelihood = (bg_likelihood + (1 - alpha_map + 1e-5).log())
-        # (B, 2, 3, H, W)
+        # (B, T, 2, 3, H, W)
         log_like = torch.stack((fg_likelihood, bg_likelihood), dim=1)
-        # (B, 3, H, W)
+        # (B, T, 3, H, W)
         log_like = torch.logsumexp(log_like, dim=1)
         # (B,)
         log_like = log_like.flatten(start_dim=1).sum(1)

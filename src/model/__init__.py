@@ -11,6 +11,6 @@ def get_model(cfg):
     
     model = None
     if cfg.model == 'SPACE':
-        model = Space()
+        model = TcSpace()
         
     return model

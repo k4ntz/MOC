@@ -6,7 +6,8 @@ cfg = CfgNode({
     'seed': 8848,
     'exp_name': '',
     'model': 'SPACE',
-    
+    # Whether a TcSpace or (Space for TcSpace) should be loaded
+    'load_time_consistency': True,
     # Resume training or not
     'resume': True,
     # If resume is true, then we load this checkpoint. If '', we load the last checkpoint
@@ -93,6 +94,6 @@ cfg = CfgNode({
 from model.space.arch import arch
 from eval.eval_cfg import eval_cfg
 
-# For these two, please go to the correponding file
+# For these two, please go to the corresponding file
 cfg.arch = arch
 cfg.eval_cfg = eval_cfg

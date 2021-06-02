@@ -12,8 +12,9 @@ from torch.nn import functional as F
 from model.space.utils import spatial_transform
 
 class Checkpointer:
-    def __init__(self, checkpointdir, max_num):
+    def __init__(self, checkpointdir, max_num, load_time_consistency=False):
         self.max_num = max_num
+        self.load_time_consistency = load_time_consistency
         self.checkpointdir = checkpointdir
         if not osp.exists(checkpointdir):
             os.makedirs(checkpointdir)
@@ -27,7 +28,7 @@ class Checkpointer:
     def save(self, path: str, model, optimizer_fg, optimizer_bg, epoch, global_step):
         assert path.endswith('.pth')
         os.makedirs(osp.dirname(path), exist_ok=True)
-        
+
         if isinstance(model, nn.DataParallel):
             model = model.module
         checkpoint = {
@@ -40,7 +41,7 @@ class Checkpointer:
         with open(path, 'wb') as f:
             torch.save(checkpoint, f)
             print(f'Checkpoint has been saved to "{path}".')
-    
+
     def save_last(self, model, optimizer_fg, optimizer_bg, epoch, global_step):
         path = osp.join(self.checkpointdir, 'model_{:09}.pth'.format(global_step + 1))
         
@@ -66,7 +67,10 @@ class Checkpointer:
             checkpoint = torch.load(path)
         else:
             checkpoint = torch.load(path, map_location='cpu')
-        model.load_state_dict(checkpoint.pop('model'))
+        if self.load_time_consistency:
+            model.load_state_dict(checkpoint.pop('model'))
+        else:
+            model.space.load_state_dict(checkpoint.pop('model'))
         if optimizer_fg:
             optimizer_fg.load_state_dict(checkpoint.pop('optimizer_fg'))
         if optimizer_bg:
@@ -79,7 +83,6 @@ class Checkpointer:
         """
         If path is '', we load the last checkpoint
         """
-        
         if path == '':
             with open(self.listfile, 'rb') as f:
                 model_list = pickle.load(f)

@@ -1,7 +1,10 @@
 from yacs.config import CfgNode
 
 arch = CfgNode({
-    
+    # TR
+    'adjacent_consistency_weight': 1e-3,
+
+    # SPACE-config
     'img_shape': (128, 128),
     
     # Grid size. There will be G*G slots
