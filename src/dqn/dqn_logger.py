@@ -15,7 +15,7 @@ class DQN_Logger:
         if self.writer == None:
             print("Logger is not initialized...")
             return
-        self.writer.add_scalar('Train/episode_time', episode_time, global_step)
+        self.writer.add_scalar('Train/episode_steps', global_step, episode)
         self.writer.add_scalar('Train/reward', pos_reward - neg_reward, global_step)
         self.writer.add_scalar('Train/reward_episode', pos_reward - neg_reward, episode)
 

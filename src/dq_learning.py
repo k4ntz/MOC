@@ -316,7 +316,7 @@ def optimize_model():
     expected_q_value = reward + GAMMA * next_states_target_q_value * (1 - done)
     
     # Calc loss with expected_q_value and q_value
-    loss = (selected_q_value - expected_q_value.detach()).pow(2).mean()
+    loss = F.mse_loss(selected_q_value, expected_q_value.detach())
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
