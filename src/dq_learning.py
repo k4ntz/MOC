@@ -298,9 +298,9 @@ def optimize_model():
     # Convert them to tensors
     state = torch.from_numpy(np.array(batch.state)).float().to(device)
     next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
-    action = torch.tensor(batch.action, dtype=torch.long)
-    reward = torch.tensor(batch.reward, dtype=torch.float)
-    done = torch.tensor(batch.done, dtype=torch.float)
+    action = torch.tensor(batch.action, dtype=torch.long, device=device)
+    reward = torch.tensor(batch.reward, dtype=torch.float, device=device)
+    done = torch.tensor(batch.done, dtype=torch.float, device=device)
 
     # Make predictions
     state_q_values = policy_net(state)
