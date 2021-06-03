@@ -211,7 +211,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v1-only-zwhere-zpres"
+exp_name = "DQ-Learning-Pong-v2-only-zwhere-zpres"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -266,6 +266,7 @@ def select_action(state):
         logger.log_eps(eps_threshold, global_step)
     if sample > eps_threshold:
         with torch.no_grad():
+            state = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
@@ -301,12 +302,13 @@ def optimize_model():
         tuple(map(lambda s: s is not None, batch.next_state)),
         device=device, dtype=torch.uint8)
     
-    non_final_next_states = torch.cat([s for s in batch.next_state
+    batch_next_states = torch.tensor(batch.next_state, dtype=torch.float, device=device).unsqueeze(0)
+    non_final_next_states = torch.cat([s for s in batch_next_states
                                        if s is not None]).to(device)
-    state_batch = torch.cat(batch.state).to(device)
+    state_batch = torch.tensor(batch.state, dtype=torch.float, device=device)
     action_batch = torch.cat(actions)
     reward_batch = torch.cat(rewards)
-    
+
     state_action_values = policy_net(state_batch).gather(1, action_batch)
     
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
@@ -320,6 +322,8 @@ def optimize_model():
     total_max_q += max_q
     with torch.no_grad():
         total_loss += loss
+
+    # log optimization step
     if global_step % log_steps == 0:
         logger.log_max_q(total_max_q/global_step, global_step)
         logger.log_loss(total_loss/global_step, global_step)
@@ -388,6 +392,9 @@ while i_episode < num_episodes:
     # Initialize the environment and state
     env.reset()
     state = get_z_stuff(model)
+    # Stack state . Every state contains 4 time contionusly frames
+    # We stack frames like 4 channel image
+    state = np.stack((state, state, state, state))
     for t in count():
         global_step += 1
         # timer stuff
@@ -408,6 +415,9 @@ while i_episode < num_episodes:
         # Observe new state
         if not done:
             next_state = get_z_stuff(model)
+            # Stack state . Every state contains 4 time contionusly frames
+            # We stack frames like 4 channel image
+            next_state = np.stack((next_state, state[0], state[1], state[2]))
         else:
             next_state = None
 
