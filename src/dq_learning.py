@@ -175,8 +175,8 @@ def get_z_stuff(model):
         torch.cuda.empty_cache()
         ## nullize all z whats with z pres < 0.5 and normalize
         z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
-        z_what_pres = torch.zeros_like(z_what, device=device)
-        z_what_pres[z_pres] = z_what[z_pres]
+        #z_what_pres = torch.zeros_like(z_what, device=device)
+        #z_what_pres[z_pres] = z_what[z_pres]
         ## same with z where 
         z_where_pres = torch.zeros_like(z_where, device=device)
         z_where_pres[z_pres] = z_where[z_pres]
@@ -192,10 +192,10 @@ env.reset()
 # some hyperparameters
 
 BATCH_SIZE = 64
-GAMMA = 0.99
+GAMMA = 0.97
 EPS_START = 1
 EPS_END = 0.05
-EPS_DECAY = 500000
+EPS_DECAY = 200000
 # TARGET_UPDATE = 1000
 lr = 0.00025
 
@@ -211,7 +211,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v2-only-zwhere-zpres"
+exp_name = "DQ-Learning-Pong-v3-only-zwhere-zpres"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
