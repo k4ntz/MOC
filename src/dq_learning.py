@@ -191,7 +191,7 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 GAMMA = 0.99
 EPS_START = 1
 EPS_END = 0.05
@@ -298,37 +298,31 @@ def optimize_model():
     ostart = time.perf_counter()
     
     # Convert them to tensors
-    state = torch.tensor(batch.state, dtype=torch.float, device=device)
-    next_state = torch.tensor(batch.next_state, dtype=torch.float, device=device)
-    action = torch.tensor(batch.action, dtype=torch.long, device=device)
-    reward = torch.tensor(batch.reward, dtype=torch.float, device=device)
-    done = torch.tensor(batch.done, dtype=torch.float, device=device)
+    state = torch.from_numpy(np.array(batch.state)).float().to(device)
+    next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
+    action = torch.tensor(batch.action, dtype=torch.long)
+    reward = torch.tensor(batch.reward, dtype=torch.float)
+    done = torch.tensor(batch.done, dtype=torch.float)
 
     print(time.perf_counter() - ostart)
     # Make predictions
     state_q_values = policy_net(state)
     next_states_q_values = policy_net(next_state)
     next_states_target_q_values = target_net(next_state)
-    print(time.perf_counter() - ostart)
     # Find selected action's q_value
     selected_q_value = state_q_values.gather(1, action.unsqueeze(1)).squeeze(1)
-    print(time.perf_counter() - ostart)
     # Get indice of the max value of next_states_q_values
     # Use that indice to get a q_value from next_states_target_q_values
     # We use greedy for policy So it called off-policy
     next_states_target_q_value = next_states_target_q_values.gather(1, next_states_q_values.max(1)[1].unsqueeze(1)).squeeze(1)
-    print(time.perf_counter() - ostart)
     # Use Bellman function to find expected q value
     expected_q_value = reward + GAMMA * next_states_target_q_value * (1 - done)
-    print(time.perf_counter() - ostart)
     
     # Calc loss with expected_q_value and q_value
     loss = F.mse_loss(selected_q_value, expected_q_value.detach())
-    print(time.perf_counter() - ostart)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    print(time.perf_counter() - ostart)
     
     # log loss and max q
     max_q = torch.max(state_q_values).item()
@@ -339,8 +333,6 @@ def optimize_model():
     if global_step % log_steps == 0:
         logger.log_max_q(total_max_q/global_step, global_step)
         logger.log_loss(total_loss/global_step, global_step)
-    print(time.perf_counter() - ostart)
-    print("###")
     print(time.perfff_counter() - ostart)
 
 ### plot stuff 
@@ -433,7 +425,7 @@ while i_episode < num_episodes:
         state = next_state
 
         # Perform one step of the optimization (on the policy network)
-        if len(memory) > MEMORY_MIN_SIZE:
+        if len(memory) > 16:#MEMORY_MIN_SIZE:
             optimize_model()
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
