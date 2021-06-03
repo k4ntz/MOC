@@ -93,7 +93,7 @@ plt.ion()
 
 ### replay memory stuff
 Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+                        ('state', 'action', 'next_state', 'reward', 'done'))
 
 
 class ReplayMemory(object):
@@ -295,45 +295,41 @@ def optimize_model():
     """
     batch = Transition(*zip(*transitions))
     
-    actions = tuple((map(lambda a: torch.tensor([[a]], device=device), batch.action))) 
-    rewards = tuple((map(lambda r: torch.tensor([r], device=device), batch.reward))) 
+    # Convert them to tensors
+    state = torch.tensor(batch.state, dtype=torch.float, device=device)
+    next_state = torch.tensor(batch.next_state, dtype=torch.float, device=device)
+    action = torch.tensor(batch.action, dtype=torch.long, device=device)
+    reward = torch.tensor(batch.reward, dtype=torch.float, device=device)
+    done = torch.tensor(batch.done, dtype=torch.float, device=device)
 
-    non_final_mask = torch.tensor(
-        tuple(map(lambda s: s is not None, batch.next_state)),
-        device=device, dtype=torch.uint8)
+    # Make predictions
+    state_q_values = policy_net(state)
+    next_states_q_values = policy_net(next_state)
+    next_states_target_q_values = target_net(next_state)
+    # Find selected action's q_value
+    selected_q_value = state_q_values.gather(1, action.unsqueeze(1)).squeeze(1)
+    # Get indice of the max value of next_states_q_values
+    # Use that indice to get a q_value from next_states_target_q_values
+    # We use greedy for policy So it called off-policy
+    next_states_target_q_value = next_states_target_q_values.gather(1, next_states_q_values.max(1)[1].unsqueeze(1)).squeeze(1)
+    # Use Bellman function to find expected q value
+    expected_q_value = reward + GAMMA * next_states_target_q_value * (1 - done)
     
-    batch_next_states = torch.tensor(batch.next_state, dtype=torch.float, device=device).unsqueeze(0)
-    non_final_next_states = torch.cat([s for s in batch_next_states
-                                       if s is not None]).to(device)
-    state_batch = torch.tensor(batch.state, dtype=torch.float, device=device)
-    action_batch = torch.cat(actions)
-    reward_batch = torch.cat(rewards)
-
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
+    # Calc loss with expected_q_value and q_value
+    loss = (selected_q_value - expected_q_value.detach()).pow(2).mean()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
     
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
-    # Compute the expected Q values
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-    
-    loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
     # log loss and max q
-    max_q = torch.max(expected_state_action_values)
+    max_q = torch.max(state_q_values).item()
     total_max_q += max_q
     with torch.no_grad():
         total_loss += loss
-
     # log optimization step
     if global_step % log_steps == 0:
         logger.log_max_q(total_max_q/global_step, global_step)
         logger.log_loss(total_loss/global_step, global_step)
-    
-    # Optimize the model
-    optimizer.zero_grad()
-    loss.backward()
-    for param in policy_net.parameters():
-        param.grad.data.clamp_(-1, 1)
-    optimizer.step()
 
 ### plot stuff 
 
@@ -413,16 +409,13 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        if not done:
-            next_state = get_z_stuff(model)
-            # Stack state . Every state contains 4 time contionusly frames
-            # We stack frames like 4 channel image
-            next_state = np.stack((next_state, state[0], state[1], state[2]))
-        else:
-            next_state = None
+        next_state = get_z_stuff(model)
+        # Stack state . Every state contains 4 time contionusly frames
+        # We stack frames like 4 channel image
+        next_state = np.stack((next_state, state[0], state[1], state[2]))
 
         # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+        memory.push(state, action, next_state, reward, done)
 
         # Move to the next state
         state = next_state
