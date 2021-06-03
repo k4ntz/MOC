@@ -182,7 +182,7 @@ def get_z_stuff(model):
         z_where_pres[z_pres] = z_where[z_pres]
         # combine z what pres with z where tensors
         z_combined = z_where_pres #torch.cat((z_where_pres, z_what_pres), 2)
-        return z_combined
+        return z_combined.cpu()
     return None
 
 env.reset()
