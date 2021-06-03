@@ -191,7 +191,7 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 GAMMA = 0.99
 EPS_START = 1
 EPS_END = 0.05
@@ -294,8 +294,6 @@ def optimize_model():
     batch.action - tuple of all the actions (each action is an int)    
     """
     batch = Transition(*zip(*transitions))
-
-    ostart = time.perf_counter()
     
     # Convert them to tensors
     state = torch.from_numpy(np.array(batch.state)).float().to(device)
@@ -304,7 +302,6 @@ def optimize_model():
     reward = torch.tensor(batch.reward, dtype=torch.float)
     done = torch.tensor(batch.done, dtype=torch.float)
 
-    print(time.perf_counter() - ostart)
     # Make predictions
     state_q_values = policy_net(state)
     next_states_q_values = policy_net(next_state)
@@ -333,7 +330,6 @@ def optimize_model():
     if global_step % log_steps == 0:
         logger.log_max_q(total_max_q/global_step, global_step)
         logger.log_loss(total_loss/global_step, global_step)
-    print(time.perfff_counter() - ostart)
 
 ### plot stuff 
 
@@ -425,7 +421,7 @@ while i_episode < num_episodes:
         state = next_state
 
         # Perform one step of the optimization (on the policy network)
-        if len(memory) > 16:#MEMORY_MIN_SIZE:
+        if len(memory) > MEMORY_MIN_SIZE:
             optimize_model()
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
