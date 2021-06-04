@@ -300,7 +300,7 @@ def optimize_model():
     next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
     action = torch.cat(batch.action, dim=0).to(device).squeeze(1)
     reward = torch.cat(batch.reward, dim=0).to(device).squeeze(1)
-    done = torch.cat(batch.done, dim=0).to(device).squeeze(1):
+    done = torch.cat(batch.done, dim=0).to(device).squeeze(1)
 
     # Make predictions
     state_q_values = policy_net(state)
