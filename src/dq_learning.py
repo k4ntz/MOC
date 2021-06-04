@@ -166,7 +166,7 @@ def get_z_stuff(model):
     with torch.no_grad():
         # Runs the forward pass under autocast.
         with torch.cuda.amp.autocast():
-            loss, log = model(image, global_step=100000000)
+            loss, log = model(image.half()), global_step=100000000)
             # (B, N, 4), (B, N, 1), (B, N, D)
             z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
             z_where = z_where.to(device)
@@ -300,9 +300,9 @@ def optimize_model():
     # Convert them to tensors
     state = torch.from_numpy(np.array(batch.state)).float().to(device)
     next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
-    action = torch.tensor(batch.action, dtype=torch.long, device=device)
-    reward = torch.tensor(batch.reward, dtype=torch.float, device=device)
-    done = torch.tensor(batch.done, dtype=torch.float, device=device)
+    action = torch.from_numpy(np.array(batch.action)).float().to(device)
+    reward = torch.from_numpy(np.array(batch.reward)).float().to(device)
+    done = torch.from_numpy(np.array(batch.done)).float().to(device)
 
     # Make predictions
     state_q_values = policy_net(state)
