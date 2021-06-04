@@ -189,7 +189,7 @@ def get_z_stuff(model):
         z_combined = torch.cat((z_where_pres, z_what_pres), 1)
         first_dim = min(z_combined.shape[0], z_stuff.shape[0])
         z_stuff[:first_dim] = z_combined[:first_dim]
-        return z_stuff
+        return z_stuff.cpu()
     return None
 
 env.reset()
