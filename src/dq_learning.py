@@ -143,7 +143,7 @@ def get_screen():
         kernel = np.ones((3,3), np.uint8)
         opencv_img = cv2.dilate(opencv_img, kernel, iterations=1)
     # convert to tensor
-    image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
+    image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float().to(device)
     return image_t.unsqueeze(0)
 
 # helper function to normalize tensor values to 0-1
@@ -161,7 +161,6 @@ def normalize_tensors(t):
 # use SPACE model
 def get_z_stuff(model):
     image = get_screen()
-    image = image.to(device)
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
         loss, log = model(image, global_step=100000000)
@@ -282,9 +281,6 @@ def optimize_model():
     global total_max_q
     global total_loss
 
-    if cfg.parallel:
-        policy_net = nn.DataParallel(policy_net, device_ids=cfg.device_ids)
-        target_net = nn.DataParallel(target_net, device_ids=cfg.device_ids)
 
     if len(memory) < BATCH_SIZE:
         return
@@ -404,8 +400,13 @@ while i_episode < num_episodes:
         if liveplot:
             plot_screen(i_episode+1, t+1)
         # Select and perform an action
+        debugs = time.perf_counter()
         action = select_action(state)
+        print(time.perf_counter() - debugs)
+        debugs = time.perf_counter()
         _, reward, done, _ = env.step(action.item())
+        print(time.perf_counter() - debugs)
+        debugs = time.perf_counter()
         if reward > 0:
             pos_reward_count += 1
         if reward < 0:
@@ -414,19 +415,24 @@ while i_episode < num_episodes:
 
         # Observe new state
         next_state = get_z_stuff(model)
+        print(time.perf_counter() - debugs)
+        debugs = time.perf_counter()
         # Stack state . Every state contains 4 time contionusly frames
         # We stack frames like 4 channel image
         next_state = np.stack((next_state, state[0], state[1], state[2]))
 
         # Store the transition in memory
         memory.push(state, action, next_state, reward, done)
-
+        print(time.perf_counter() - debugs)
+        debugs = time.perf_counter()
         # Move to the next state
         state = next_state
 
         # Perform one step of the optimization (on the policy network)
         if len(memory) > MEMORY_MIN_SIZE:
             optimize_model()
+            print(time.perf_counter() - debugs)
+            debugs = time.perf_counter()
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
 
@@ -445,6 +451,7 @@ while i_episode < num_episodes:
             episode_durations.append(t + 1)
             #plot_durations()
             break
+        print("###")
     # Update the target network, copying all weights and biases in DQN
     if len(memory) > MEMORY_MIN_SIZE:
         target_net.load_state_dict(policy_net.state_dict())
