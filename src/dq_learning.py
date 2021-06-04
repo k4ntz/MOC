@@ -79,13 +79,6 @@ if cfg.resume:
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-# create a quantized model instance
-torch.backends.quantized.engine = 'qnnpack'
-model = torch.quantization.quantize_dynamic(
-    model,  # the original model
-    {torch.nn.Linear},  # a set of layers to dynamically quantize
-    dtype=torch.qint8).to(cfg.device)  # the target dtype for quantized weights
-
 
 # init env
 env = gym.make('Pong-v0')
@@ -170,7 +163,8 @@ def get_z_stuff(model):
     image = get_screen()
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
-        loss, log = model(image, global_step=100000000)
+        with torch.cuda.amp.autocast():
+            loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
         z_where = z_where.to(device)
