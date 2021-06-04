@@ -157,14 +157,15 @@ def normalize_tensors(t):
     t = t.view(dim1, dim2, dim3)
     return t
 
+boxes_len = 32
 
 # use SPACE model
 def get_z_stuff(model):
     image = get_screen()
     # TODO: treat global_step in a more elegant way
+    z_stuff = torch.zeros_like(torch.rand((5, 38)), device=device)
     with torch.no_grad():
-        with torch.cuda.amp.autocast():
-            loss, log = model(image, global_step=100000000)
+        loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
         z_where = z_where.to(device)
@@ -173,16 +174,22 @@ def get_z_stuff(model):
         # clean up
         del image
         torch.cuda.empty_cache()
-        ## nullize all z whats with z pres < 0.5 and normalize
+        ## nullize all z whats with z pres < 0.5
         z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
-        #z_what_pres = torch.zeros_like(z_what, device=device)
-        #z_what_pres[z_pres] = z_what[z_pres]
+        z_what_pres = z_what[z_pres]
         ## same with z where 
-        z_where_pres = torch.zeros_like(z_where, device=device)
-        z_where_pres[z_pres] = z_where[z_pres]
+        z_where_pres = z_where[z_pres]
+        # get coordinates
+        coord1 = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres[0]) if x]).to(device).unsqueeze(1)
+        coord2 = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres[0]) if x]).to(device).unsqueeze(1)
+        # append coordinates to z where tensor
+        z_where_pres = torch.cat((z_where_pres, coord1), 1)
+        z_where_pres = torch.cat((z_where_pres, coord2), 1)
         # combine z what pres with z where tensors
-        z_combined = z_where_pres #torch.cat((z_where_pres, z_what_pres), 2)
-        return z_combined.cpu()
+        z_combined = torch.cat((z_where_pres, z_what_pres), 1)
+        first_dim = min(z_combined.shape[0], z_stuff.shape[0])
+        z_stuff[:first_dim] = z_combined[:first_dim]
+        return z_stuff
     return None
 
 env.reset()
@@ -211,7 +218,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v3-only-zwhere-zpres"
+exp_name = "DQ-Learning-Pong-v4"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -411,9 +418,9 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
-        debugs = time.perf_counter()
+        #debugs = time.perf_counter()
         next_state = get_z_stuff(model)
-        print(time.perf_counter() - debugs)
+        #print(time.perf_counter() - debugs)
         # Stack state . Every state contains 4 time contionusly frames
         # We stack frames like 4 channel image
         next_state = np.stack((next_state, state[0], state[1], state[2]))
@@ -444,7 +451,6 @@ while i_episode < num_episodes:
             episode_durations.append(t + 1)
             #plot_durations()
             break
-        print("###")
     # Update the target network, copying all weights and biases in DQN
     if len(memory) > MEMORY_MIN_SIZE:
         target_net.load_state_dict(policy_net.state_dict())
