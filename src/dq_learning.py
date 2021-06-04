@@ -161,7 +161,7 @@ def normalize_tensors(t):
 # use SPACE model
 def get_z_stuff(model):
     image = get_screen()
-    image = image.to(device)
+    #image = image.to(device)
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
         # Runs the forward pass under autocast.
