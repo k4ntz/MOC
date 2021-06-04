@@ -166,7 +166,7 @@ def get_z_stuff(model):
     with torch.no_grad():
         # Runs the forward pass under autocast.
         with torch.cuda.amp.autocast():
-            loss, log = model(image.half()), global_step=100000000)
+            loss, log = model(image.half(), global_step=100000000)
             # (B, N, 4), (B, N, 1), (B, N, D)
             z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
             z_where = z_where.to(device)
