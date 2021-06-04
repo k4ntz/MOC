@@ -298,9 +298,9 @@ def optimize_model():
     # Convert them to tensors
     state = torch.from_numpy(np.array(batch.state)).float().to(device)
     next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
-    action = torch.tensor(batch.action, dtype=torch.long, device=device)
-    reward = torch.tensor(batch.reward, dtype=torch.float, device=device)
-    done = torch.tensor(batch.done, dtype=torch.float, device=device)
+    action = torch.cat(batch.action, dim=0).to(device).squeeze(1)
+    reward = torch.cat(batch.reward, dim=0).to(device).squeeze(1)
+    done = torch.cat(batch.done, dim=0).to(device).squeeze(1):
 
     # Make predictions
     state_q_values = policy_net(state)
@@ -400,13 +400,9 @@ while i_episode < num_episodes:
         if liveplot:
             plot_screen(i_episode+1, t+1)
         # Select and perform an action
-        debugs = time.perf_counter()
         action = select_action(state)
-        print(time.perf_counter() - debugs)
-        debugs = time.perf_counter()
         _, reward, done, _ = env.step(action.item())
-        print(time.perf_counter() - debugs)
-        debugs = time.perf_counter()
+        
         if reward > 0:
             pos_reward_count += 1
         if reward < 0:
@@ -414,6 +410,7 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # Observe new state
+        debugs = time.perf_counter()
         next_state = get_z_stuff(model)
         print(time.perf_counter() - debugs)
         debugs = time.perf_counter()
