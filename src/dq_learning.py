@@ -164,25 +164,27 @@ def get_z_stuff(model):
     image = image.to(device)
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
-        loss, log = model(image, global_step=100000000)
-        # (B, N, 4), (B, N, 1), (B, N, D)
-        z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
-        z_where = z_where.to(device)
-        z_pres_prob = z_pres_prob.to(device)
-        z_what = z_what.to(device)
-        # clean up
-        del image
-        torch.cuda.empty_cache()
-        ## nullize all z whats with z pres < 0.5 and normalize
-        z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
-        #z_what_pres = torch.zeros_like(z_what, device=device)
-        #z_what_pres[z_pres] = z_what[z_pres]
-        ## same with z where 
-        z_where_pres = torch.zeros_like(z_where, device=device)
-        z_where_pres[z_pres] = z_where[z_pres]
-        # combine z what pres with z where tensors
-        z_combined = z_where_pres #torch.cat((z_where_pres, z_what_pres), 2)
-        return z_combined.cpu()
+        # Runs the forward pass under autocast.
+        with torch.cuda.amp.autocast():
+            loss, log = model(image, global_step=100000000)
+            # (B, N, 4), (B, N, 1), (B, N, D)
+            z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
+            z_where = z_where.to(device)
+            z_pres_prob = z_pres_prob.to(device)
+            z_what = z_what.to(device)
+            # clean up
+            del image
+            torch.cuda.empty_cache()
+            ## nullize all z whats with z pres < 0.5 and normalize
+            z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
+            #z_what_pres = torch.zeros_like(z_what, device=device)
+            #z_what_pres[z_pres] = z_what[z_pres]
+            ## same with z where 
+            z_where_pres = torch.zeros_like(z_where, device=device)
+            z_where_pres[z_pres] = z_where[z_pres]
+            # combine z what pres with z where tensors
+            z_combined = z_where_pres #torch.cat((z_where_pres, z_what_pres), 2)
+            return z_combined.cpu()
     return None
 
 env.reset()
