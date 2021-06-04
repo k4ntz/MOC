@@ -79,6 +79,13 @@ if cfg.resume:
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
+# create a quantized model instance
+torch.backends.quantized.engine = 'qnnpack'
+model = torch.quantization.quantize_dynamic(
+    model,  # the original model
+    {torch.nn.Linear},  # a set of layers to dynamically quantize
+    dtype=torch.qint8).to(cfg.device)  # the target dtype for quantized weights
+
 
 # init env
 env = gym.make('Pong-v0')
@@ -413,23 +420,18 @@ while i_episode < num_episodes:
         debugs = time.perf_counter()
         next_state = get_z_stuff(model)
         print(time.perf_counter() - debugs)
-        debugs = time.perf_counter()
         # Stack state . Every state contains 4 time contionusly frames
         # We stack frames like 4 channel image
         next_state = np.stack((next_state, state[0], state[1], state[2]))
 
         # Store the transition in memory
         memory.push(state, action, next_state, reward, done)
-        print(time.perf_counter() - debugs)
-        debugs = time.perf_counter()
         # Move to the next state
         state = next_state
 
         # Perform one step of the optimization (on the policy network)
         if len(memory) > MEMORY_MIN_SIZE:
             optimize_model()
-            print(time.perf_counter() - debugs)
-            debugs = time.perf_counter()
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
 
