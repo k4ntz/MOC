@@ -157,13 +157,13 @@ def normalize_tensors(t):
     t = t.view(dim1, dim2, dim3)
     return t
 
-boxes_len = 32
+boxes_len = 16
 
 # use SPACE model
 def get_z_stuff(model):
     image = get_screen()
     # TODO: treat global_step in a more elegant way
-    z_stuff = torch.zeros_like(torch.rand((5, 38)), device=device)
+    z_stuff = torch.zeros_like(torch.rand((5, 36)), device=device)
     with torch.no_grad():
         loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
@@ -180,11 +180,11 @@ def get_z_stuff(model):
         ## same with z where 
         z_where_pres = z_where[z_pres]
         # get coordinates
-        coord1 = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres[0]) if x]).to(device).unsqueeze(1)
-        coord2 = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres[0]) if x]).to(device).unsqueeze(1)
-        # append coordinates to z where tensor
-        z_where_pres = torch.cat((z_where_pres, coord1), 1)
-        z_where_pres = torch.cat((z_where_pres, coord2), 1)
+        coord_x = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres[0]) if x]).to(device)
+        coord_y = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres[0]) if x]).to(device)
+        # normalize z where centers to [0:1], add coordinates to its center values and normalize again
+        z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
+        z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
         # combine z what pres with z where tensors
         z_combined = torch.cat((z_where_pres, z_what_pres), 1)
         first_dim = min(z_combined.shape[0], z_stuff.shape[0])
@@ -198,13 +198,13 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 GAMMA = 0.97
 EPS_START = 1
 EPS_END = 0.05
-EPS_DECAY = 200000
+EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
-lr = 0.00025
+lr = 0.0005
 
 liveplot = False
 
@@ -218,7 +218,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v4"
+exp_name = "DQ-Learning-Pong-v5"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -334,10 +334,12 @@ def optimize_model():
     total_max_q += max_q
     with torch.no_grad():
         total_loss += loss
-    # log optimization step
+    # log metrics for last log_steps and reset
     if global_step % log_steps == 0:
-        logger.log_max_q(total_max_q/global_step, global_step)
-        logger.log_loss(total_loss/global_step, global_step)
+        logger.log_max_q(total_max_q/log_steps, global_step)
+        total_max_q = 0
+        logger.log_loss(total_loss/log_steps, global_step)
+        total_loss = 0
 
 ### plot stuff 
 
@@ -393,6 +395,8 @@ while i_episode < num_episodes:
     start = time.perf_counter()
     episode_start = start
     episode_time = 0
+    # logger stuff
+    episode_steps = 0
     # Initialize the environment and state
     env.reset()
     state = get_z_stuff(model)
@@ -435,6 +439,7 @@ while i_episode < num_episodes:
             optimize_model()
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
+            logger.log_max_q(0, global_step)
 
         # timer stuff
         end = time.perf_counter()
@@ -449,6 +454,7 @@ while i_episode < num_episodes:
                     step_time, episode_time, wins, loses, last_game), end="\r")
         if done:
             episode_durations.append(t + 1)
+            episode_steps = t + 1
             #plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
@@ -462,7 +468,7 @@ while i_episode < num_episodes:
         loses += 1
         last_game = "Lose"
     # log episode
-    logger.log_episode(episode_time, pos_reward_count, neg_reward_count, i_episode, global_step)
+    logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
     # iterate to next episode
     i_episode += 1
     # checkpoint saver
