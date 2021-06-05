@@ -163,7 +163,7 @@ boxes_len = 16
 def get_z_stuff(model):
     image = get_screen()
     # TODO: treat global_step in a more elegant way
-    z_stuff = torch.zeros_like(torch.rand((5, 36)), device=device)
+    z_stuff = torch.zeros_like(torch.rand((5, 4)), device=device)
     with torch.no_grad():
         loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
@@ -186,9 +186,10 @@ def get_z_stuff(model):
         z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
         z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
         # combine z what pres with z where tensors
-        z_combined = torch.cat((z_where_pres, z_what_pres), 1)
-        first_dim = min(z_combined.shape[0], z_stuff.shape[0])
-        z_stuff[:first_dim] = z_combined[:first_dim]
+        #z_combined = torch.cat((z_where_pres, z_what_pres), 1)
+        #first_dim = min(z_combined.shape[0], z_stuff.shape[0])
+        first_dim = min(z_where_pres.shape[0], z_stuff.shape[0])
+        z_stuff[:first_dim] = z_where_pres[:first_dim]
         return z_stuff.cpu()
     return None
 
@@ -218,7 +219,7 @@ MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
 
-exp_name = "DQ-Learning-Pong-v5"
+exp_name = "DQ-Learning-Pong-v5-only-zwhere"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
