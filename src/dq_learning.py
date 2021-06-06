@@ -32,7 +32,7 @@ import dqn.dqn_logger
 import argparse
 
 # if gpu is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # space stuff
 import os.path as osp
@@ -44,6 +44,9 @@ from solver import get_optimizers
 
 
 cfg, task = get_config()
+
+# if gpu is to be used
+device = cfg.device
 
 print('Experiment name:', cfg.exp_name)
 print('Dataset:', cfg.dataset)
@@ -190,16 +193,13 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
 
 
 # use SPACE model
-def get_z_stuff(model, images):
+def get_z_stuff(model, image):
     # TODO: treat global_step in a more elegant way
-    z_final = []
     with torch.no_grad():
-        loss, log = model(images, global_step=100000000)
+        loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
-        for i in range(skip_frames):
-            z_final.append(process_z_stuff(z_where[i], z_pres_prob[i], z_what[i]))
-        return np.stack(z_final)
+        return process_z_stuff(z_where[0], z_pres_prob[0], z_what[0])
     return None
 
 env.reset()
@@ -409,9 +409,9 @@ while i_episode < num_episodes:
     episode_steps = 0
     # Initialize the environment and state
     env.reset()
-    images = torch.cat([get_screen()] * skip_frames).to(device)
-    # get z stuff returns stacked z stuff for k steps
-    state = get_z_stuff(model, images)
+    # get z stuff for init
+    state = get_z_stuff(model, get_screen())
+    state = np.stack((state, state, state, state))
     # last done action
     action_item = None
     action = None
@@ -438,15 +438,13 @@ while i_episode < num_episodes:
             neg_reward_count += 1
         reward = torch.tensor([reward], device=device)
 
-        # observe new screen
-        images = torch.cat((get_screen(), images[0].unsqueeze(0), images[1].unsqueeze(0), images[2].unsqueeze(0)), 0).to(device)
         # if skip frames are over, observe new state
-        if action is None or global_step % skip_frames == 0:
-            next_state = get_z_stuff(model, images)
-            # Store the transition in memory
-            memory.push(state, action, next_state, reward, done)
-            # Move to the next state
-            state = next_state
+        next_state = get_z_stuff(model, get_screen())
+        next_state = np.stack((next_state, state[0], state[1], state[2]))
+        # Store the transition in memory
+        memory.push(state, action, next_state, reward, done)
+        # Move to the next state
+        state = next_state
         # TODO: REMOVE
         #print(time.perf_counter() - debugs)
 
