@@ -76,8 +76,8 @@ checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), m
 use_cpu = 'cpu' in cfg.device
 if cfg.resume:
     checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
-#if cfg.parallel:
-#    model = nn.DataParallel(model, device_ids=cfg.device_ids)
+if cfg.parallel:
+    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
 
 # init env
@@ -159,38 +159,47 @@ def normalize_tensors(t):
 
 boxes_len = 16
 
-# use SPACE model
-def get_z_stuff(model):
-    image = get_screen()
-    # TODO: treat global_step in a more elegant way
+skip_frames = 4
+
+# helper function to process a single frame of z stuff
+def process_z_stuff(z_where, z_pres_prob, z_what):
     z_stuff = torch.zeros_like(torch.rand((5, 4)), device=device)
+    z_where = z_where.to(device)
+    z_pres_prob = z_pres_prob.to(device)
+    z_what = z_what.to(device)
+    # clean up
+    torch.cuda.empty_cache()
+    ## nullize all z whats with z pres < 0.5
+    z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5)
+    z_what_pres = z_what[z_pres]
+    ## same with z where 
+    z_where_pres = z_where[z_pres]
+    # get coordinates
+    coord_x = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres) if x]).to(device)
+    coord_y = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres) if x]).to(device)
+    # normalize z where centers to [0:1], add coordinates to its center values and normalize again
+    z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
+    z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
+    # combine z what pres with z where tensors
+    #z_combined = torch.cat((z_where_pres, z_what_pres), 1)
+    #first_dim = min(z_combined.shape[0], z_stuff.shape[0])
+    first_dim = min(z_where_pres.shape[0], z_stuff.shape[0])
+    z_stuff[:first_dim] = z_where_pres[:first_dim]
+    z_stuff = z_stuff.unsqueeze(0).cpu()
+    return z_stuff
+
+
+# use SPACE model
+def get_z_stuff(model, images):
+    # TODO: treat global_step in a more elegant way
+    z_final = []
     with torch.no_grad():
-        loss, log = model(image, global_step=100000000)
+        loss, log = model(images, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
-        z_where = z_where.to(device)
-        z_pres_prob = z_pres_prob.to(device)
-        z_what = z_what.to(device)
-        # clean up
-        del image
-        torch.cuda.empty_cache()
-        ## nullize all z whats with z pres < 0.5
-        z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5).unsqueeze(0)
-        z_what_pres = z_what[z_pres]
-        ## same with z where 
-        z_where_pres = z_where[z_pres]
-        # get coordinates
-        coord_x = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres[0]) if x]).to(device)
-        coord_y = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres[0]) if x]).to(device)
-        # normalize z where centers to [0:1], add coordinates to its center values and normalize again
-        z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
-        z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
-        # combine z what pres with z where tensors
-        #z_combined = torch.cat((z_where_pres, z_what_pres), 1)
-        #first_dim = min(z_combined.shape[0], z_stuff.shape[0])
-        first_dim = min(z_where_pres.shape[0], z_stuff.shape[0])
-        z_stuff[:first_dim] = z_where_pres[:first_dim]
-        return z_stuff.cpu()
+        for i in range(skip_frames):
+            z_final.append(process_z_stuff(z_where[i], z_pres_prob[i], z_what[i]))
+        return np.stack(z_final)
     return None
 
 env.reset()
@@ -199,13 +208,13 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 256
+BATCH_SIZE = 128
 GAMMA = 0.97
 EPS_START = 1
 EPS_END = 0.05
 EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
-lr = 0.0005
+lr = 0.00025
 
 liveplot = False
 
@@ -400,11 +409,15 @@ while i_episode < num_episodes:
     episode_steps = 0
     # Initialize the environment and state
     env.reset()
-    state = get_z_stuff(model)
-    # Stack state . Every state contains 4 time contionusly frames
-    # We stack frames like 4 channel image
-    state = np.stack((state, state, state, state))
+    images = torch.cat([get_screen()] * skip_frames).to(device)
+    # get z stuff returns stacked z stuff for k steps
+    state = get_z_stuff(model, images)
+    # last done action
+    action_item = None
+    action = None
     for t in count():
+        # TODO: REMOVE
+        #debugs = time.perf_counter()
         global_step += 1
         # timer stuff
         end = time.perf_counter()
@@ -412,9 +425,12 @@ while i_episode < num_episodes:
         start = end
         if liveplot:
             plot_screen(i_episode+1, t+1)
-        # Select and perform an action
-        action = select_action(state)
-        _, reward, done, _ = env.step(action.item())
+        # If skipped frames are over, select action
+        if action_item is None or global_step % skip_frames == 0:
+            action = select_action(state)
+            action_item = action.item()
+        # perform action
+        _, reward, done, _ = env.step(action_item)
         
         if reward > 0:
             pos_reward_count += 1
@@ -422,18 +438,17 @@ while i_episode < num_episodes:
             neg_reward_count += 1
         reward = torch.tensor([reward], device=device)
 
-        # Observe new state
-        #debugs = time.perf_counter()
-        next_state = get_z_stuff(model)
+        # observe new screen
+        images = torch.cat((get_screen(), images[0].unsqueeze(0), images[1].unsqueeze(0), images[2].unsqueeze(0)), 0).to(device)
+        # if skip frames are over, observe new state
+        if action is None or global_step % skip_frames == 0:
+            next_state = get_z_stuff(model, images)
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward, done)
+            # Move to the next state
+            state = next_state
+        # TODO: REMOVE
         #print(time.perf_counter() - debugs)
-        # Stack state . Every state contains 4 time contionusly frames
-        # We stack frames like 4 channel image
-        next_state = np.stack((next_state, state[0], state[1], state[2]))
-
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward, done)
-        # Move to the next state
-        state = next_state
 
         # Perform one step of the optimization (on the policy network)
         if len(memory) > MEMORY_MIN_SIZE:
