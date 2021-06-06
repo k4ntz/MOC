@@ -162,8 +162,6 @@ def normalize_tensors(t):
 
 boxes_len = 16
 
-skip_frames = 4
-
 # helper function to process a single frame of z stuff
 def process_z_stuff(z_where, z_pres_prob, z_what):
     z_stuff = torch.zeros_like(torch.rand((5, 4)), device=device)
@@ -217,6 +215,7 @@ EPS_DECAY = 100000
 lr = 0.00025
 
 liveplot = False
+DEBUG = False
 
 SAVE_EVERY = 5
 
@@ -224,11 +223,19 @@ num_episodes = 1000
 i_episode = 0
 global_step = 0
 
+skip_frames = 1
+
 MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
 
+# for debugging nn stuff
+if DEBUG:
+    EPS_START = EPS_END
+    BATCH_SIZE = 12
+    MEMORY_MIN_SIZE = BATCH_SIZE
 
-exp_name = "DQ-Learning-Pong-v6-only-zwhere"
+
+exp_name = "DQ-Learning-Pong-v7-only-zwhere"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -276,8 +283,10 @@ else:
 
 def select_action(state):
     sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * global_step / EPS_DECAY)
+    eps_threshold = EPS_START
+    if global_step > MEMORY_MIN_SIZE:
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+            math.exp(-1. * (global_step - MEMORY_MIN_SIZE) / EPS_DECAY)
     # log eps_treshold
     if global_step % log_steps == 0:
         logger.log_eps(eps_threshold, global_step)
