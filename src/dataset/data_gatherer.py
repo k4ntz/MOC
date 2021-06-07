@@ -2,6 +2,13 @@ import argparse
 import sys
 import gym
 from gym import wrappers, logger
+from rtpt import RTPT
+
+# Create RTPT object
+rtpt = RTPT(name_initials='QD', experiment_name='TestingRTPT', max_iterations=10)
+
+# Start the RTPT tracking
+rtpt.start()
 
 
 class RandomAgent(object):
@@ -19,19 +26,9 @@ if __name__ == '__main__':
     parser.add_argument('env_id', nargs='?', default='Pong-v0', help='Select the environment to run')
     args = parser.parse_args()
 
-    # You can set the level to logger.DEBUG or logger.WARN if you
-    # want to change the amount of output.
-    logger.set_level(logger.INFO)
-
     env = gym.make(args.env_id)
 
-    # You provide the directory to write to (can be an existing
-    # directory, including one with existing data -- all monitor files
-    # will be namespaced). You can also dump to a tempdir if you'd
-    # like: tempfile.mkdtemp().
-    outdir = '/tmp/random-agent-results'
-    # env = wrappers.Monitor(env, directory=outdir, force=True)
-    env = gym.wrappers.Monitor(env, './video/', video_callable=lambda episode_id: True, force=True)
+    out_dir = 'data_gathered/random-agent-results/'
     agent = RandomAgent(env.action_space)
 
     episode_count = 100
@@ -40,15 +37,15 @@ if __name__ == '__main__':
 
     for i in range(episode_count):
         ob = env.reset()
+        step = 0
         while True:
             action = agent.act(ob, reward, done)
             ob, reward, done, _ = env.step(action)
-            env.render('rgb_array')
+            plt.imshow(env.render('rgb_array'))
+            plt.savefig(f"{out_dir}{args.env_id}_ep{i}_st{step}.png")
+            step += 1
             if done:
                 break
-            # Note there's no env.render() here. But the environment still can open window and
-            # render if asked by env.monitor: it calls env.render('rgb_array') to record video.
-            # Video is not recorded every episode, see capped_cubic_video_schedule for details.
+        rtpt.step(subtitle=f"step={i}/{episode_count}")
 
-    # Close the env and write monitor result info to disk
     env.close()
