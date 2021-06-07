@@ -22,11 +22,8 @@ class RandomAgent(object):
 
 
 def gather(cfg):
-    parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('env_id', nargs='?', default='Pong-v0', help='Select the environment to run')
-    args = parser.parse_args()
-
-    env = gym.make(args.env_id)
+    args_env_id = 'Pong-v0'
+    env = gym.make(args_env_id)
 
     out_dir = '../data_gathered/random-agent-results/'
     agent = RandomAgent(env.action_space)
