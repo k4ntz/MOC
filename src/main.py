@@ -2,7 +2,7 @@ from engine.utils import get_config
 from engine.train import train
 from engine.eval import eval
 from engine.show import show
-from engine.gather import gather
+from engine.data_gatherer import gather
 
 
 if __name__ == '__main__':
