@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     env = gym.make(args.env_id)
 
-    out_dir = 'data_gathered/random-agent-results/'
+    out_dir = '../data_gathered/random-agent-results/'
     agent = RandomAgent(env.action_space)
 
     episode_count = 100
