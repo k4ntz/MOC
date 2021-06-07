@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from vis import get_vislogger
 import time
 from torch.nn.utils import clip_grad_norm_
-import rtpt
+from rtpt import RTPT
 
 # Create RTPT object
 rtpt = RTPT(name_initials='QD', experiment_name='TestingRTPT', max_iterations=10)
