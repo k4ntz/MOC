@@ -3,6 +3,7 @@ import sys
 import gym
 from gym import wrappers, logger
 from rtpt import RTPT
+import matplotlib.pyplot as plt
 
 # Create RTPT object
 rtpt = RTPT(name_initials='QD', experiment_name='TestingRTPT', max_iterations=10)
