@@ -45,11 +45,11 @@ class DQN_Logger:
     def fill_video_buffer(self, image, fps=30):
         self.video_buffer.append(image)
 
-    def save_video(self, episode, fps=25.0):
+    def save_video(self, model_name, fps=25.0):
         if not os.path.exists(PATH_TO_VIDEO):
             os.makedirs(PATH_TO_VIDEO)
         if len(self.video_buffer) > fps:
-            file_path = PATH_TO_VIDEO + "episode_" + str(episode) + ".avi"
+            file_path = PATH_TO_VIDEO + model_name + ".avi"
             # do video saving stuff
             fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
             writer = cv2.VideoWriter(file_path, fourcc, fps, (128, 128))

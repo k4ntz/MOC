@@ -501,7 +501,7 @@ while i_episode < num_episodes:
     logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
     # if video step, create video
     if i_episode % video_every == 0:
-        logger.save_video(i_episode)
+        logger.save_video(exp_name)
     # iterate to next episode
     i_episode += 1
     # checkpoint saver
