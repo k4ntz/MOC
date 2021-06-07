@@ -123,7 +123,7 @@ resize = T.Compose([T.ToPILImage(),
 
 i_episode = 0
 global_step = 0
-video_every = 1
+video_every = 10
 
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
@@ -228,6 +228,8 @@ liveplot = False
 DEBUG = False
 
 SAVE_EVERY = 5
+if not USE_SPACE:
+    SAVE_EVERY = 25
 
 num_episodes = 1000
 
@@ -309,7 +311,7 @@ def get_state():
             logger.fill_video_buffer(opencv_img)
         # convert color
         opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
-        return torch.from_numpy(opencv_img / 255).float().to(device)
+        return torch.from_numpy(opencv_img / 255).float()
 
 
 def select_action(state):
