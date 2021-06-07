@@ -21,7 +21,7 @@ class RandomAgent(object):
         return self.action_space.sample()
 
 
-def gather():
+def gather(cfg):
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('env_id', nargs='?', default='Pong-v0', help='Select the environment to run')
     args = parser.parse_args()
