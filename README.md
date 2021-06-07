@@ -1,3 +1,7 @@
+# TcSPACE
+
+This fork is used for my master thesis, aiming to amplify SPACE with techniques using optical flow or constrastive approaches.
+
 # SPACE
 
 This is an official PyTorch implementation of the SPACE model presented in the following paper:
