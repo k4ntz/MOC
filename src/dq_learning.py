@@ -122,6 +122,7 @@ resize = T.Compose([T.ToPILImage(),
 
 i_episode = 0
 global_step = 0
+video_every = 1
 
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
@@ -229,8 +230,6 @@ SAVE_EVERY = 5
 num_episodes = 1000
 
 skip_frames = 1
-
-video_every = 10
 
 MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
