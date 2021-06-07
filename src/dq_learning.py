@@ -26,6 +26,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 from dqn.dqn import DQN
+from dqn.dqn import DuelCNN
 import dqn.dqn_saver as saver
 import dqn.dqn_logger
 
@@ -129,7 +130,6 @@ black_bg = getattr(cfg, "train").black_background
 dilation = getattr(cfg, "train").dilation
 
 def get_screen():
-    # TODO: insert preprocessing from space!
     screen = env.render(mode='rgb_array')
     pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
     # convert image to opencv
@@ -199,7 +199,7 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
 
 
 # use SPACE model
-def get_z_stuff(model, image):
+def get_z_stuff(image):
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
         loss, log = model(image, global_step=100000000)
@@ -222,6 +222,8 @@ EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
 lr = 0.00025
 
+USE_SPACE = False
+
 liveplot = False
 DEBUG = False
 
@@ -241,7 +243,7 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v7-only-zwhere"
+exp_name = "DQ-Learning-Pong-v7-cnn"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -258,8 +260,15 @@ _, _, screen_height, screen_width = init_screen.shape
 # Get number of actions from gym action space
 n_actions = env.action_space.n
 
-policy_net = DQN(n_actions).to(device)
-target_net = DQN(n_actions).to(device)
+policy_net = None
+target_net = None
+if USE_SPACE:
+    policy_net = DQN(n_actions).to(device)
+    target_net = DQN(n_actions).to(device)
+else:
+    policy_net = DuelCNN(128, 128, n_actions).to(device)
+    target_net = DuelCNN(128, 128, n_actions).to(device)
+
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
@@ -286,6 +295,22 @@ if saver.check_loading_model(exp_name):
 else:
     print("No prior checkpoints exists, starting fresh")
 
+# helper function to get state, whether to use SPACE or not
+def get_state():
+    if USE_SPACE:
+        return get_z_stuff(get_screen())
+    else:
+        screen = env.render(mode='rgb_array')
+        pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
+        # convert image to opencv
+        opencv_img = np.asarray(pil_img).copy()
+        # fill video buffer
+        if i_episode % video_every == 0:
+            logger.fill_video_buffer(opencv_img)
+        # convert color
+        opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
+        return torch.from_numpy(opencv_img / 255).float().to(device)
+
 
 def select_action(state):
     sample = random.random()
@@ -298,6 +323,7 @@ def select_action(state):
         logger.log_eps(eps_threshold, global_step)
     if sample > eps_threshold or liveplot:
         with torch.no_grad():
+
             state = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
@@ -425,7 +451,7 @@ while i_episode < num_episodes:
     # Initialize the environment and state
     env.reset()
     # get z stuff for init
-    state = get_z_stuff(model, get_screen())
+    state = get_state()
     state = np.stack((state, state, state, state))
     # last done action
     action_item = None
@@ -454,7 +480,7 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # if skip frames are over, observe new state
-        next_state = get_z_stuff(model, get_screen())
+        next_state = get_state()
         next_state = np.stack((next_state, state[0], state[1], state[2]))
         # Store the transition in memory
         memory.push(state, action, next_state, reward, done)
