@@ -40,7 +40,7 @@ def gather(cfg):
             action = agent.act(ob, reward, done)
             ob, reward, done, _ = env.step(action)
             plt.imshow(env.render('rgb_array'))
-            plt.savefig(f"{out_dir}{args.env_id}_ep{i}_st{step}.png")
+            plt.savefig(f"{out_dir}{args_env_id}_ep{i}_st{step}.png")
             step += 1
             if done:
                 break
