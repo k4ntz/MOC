@@ -120,6 +120,9 @@ resize = T.Compose([T.ToPILImage(),
 
 ######## PREPROCESSING ########
 
+i_episode = 0
+global_step = 0
+
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
 dilation = getattr(cfg, "train").dilation
@@ -130,6 +133,10 @@ def get_screen():
     pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
     # convert image to opencv
     opencv_img = np.asarray(pil_img).copy()
+    # fill video buffer
+    if i_episode % video_every == 0:
+        logger.fill_video_buffer(opencv_img)
+    # convert color
     opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2BGR)
     if black_bg:
         # get most dominant color
@@ -214,16 +221,16 @@ EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
 lr = 0.00025
 
-liveplot = False
+liveplot = True
 DEBUG = False
 
 SAVE_EVERY = 5
 
 num_episodes = 1000
-i_episode = 0
-global_step = 0
 
 skip_frames = 1
+
+video_every = 10
 
 MEMORY_SIZE = 50000
 MEMORY_MIN_SIZE = 25000
@@ -290,7 +297,7 @@ def select_action(state):
     # log eps_treshold
     if global_step % log_steps == 0:
         logger.log_eps(eps_threshold, global_step)
-    if sample > eps_threshold:
+    if sample > eps_threshold or liveplot:
         with torch.no_grad():
             state = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
             # t.max(1) will return largest column value of each row.
@@ -367,7 +374,7 @@ def plot_screen(episode, step):
     plt.figure(3)
     plt.clf()
     plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
-    plt.imshow(get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy(),
+    plt.imshow(env.render(mode='rgb_array'),
            interpolation='none')
     plt.plot()
     plt.pause(0.001)  # pause a bit so that plots are updated
@@ -492,6 +499,9 @@ while i_episode < num_episodes:
         last_game = "Lose"
     # log episode
     logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
+    # if video step, create video
+    if i_episode % video_every == 0:
+        logger.save_video(i_episode)
     # iterate to next episode
     i_episode += 1
     # checkpoint saver
