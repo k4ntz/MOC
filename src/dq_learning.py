@@ -221,7 +221,7 @@ EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
 lr = 0.00025
 
-liveplot = True
+liveplot = False
 DEBUG = False
 
 SAVE_EVERY = 5
