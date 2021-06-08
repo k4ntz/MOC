@@ -85,7 +85,7 @@ if cfg.resume:
 
 
 # init env
-env = gym.make('Pong-v0')
+env = gym.make('PongDeterministic-v4')
 env.reset()
 
 # set up matplotlib
@@ -217,7 +217,7 @@ env.reset()
 BATCH_SIZE = 128
 GAMMA = 0.97
 EPS_START = 1
-EPS_END = 0.05
+EPS_END = 0.01
 EPS_DECAY = 100000
 # TARGET_UPDATE = 1000
 lr = 0.00025
@@ -245,7 +245,7 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v7-cnn"
+exp_name = "DQ-Learning-Pong-v8-cnn"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -268,8 +268,8 @@ if USE_SPACE:
     policy_net = DQN(n_actions).to(device)
     target_net = DQN(n_actions).to(device)
 else:
-    policy_net = DuelCNN(128, 128, n_actions).to(device)
-    target_net = DuelCNN(128, 128, n_actions).to(device)
+    policy_net = DuelCNN(64, 64, n_actions).to(device)
+    target_net = DuelCNN(64, 64, n_actions).to(device)
 
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
@@ -310,6 +310,7 @@ def get_state():
         if i_episode % video_every == 0:
             logger.fill_video_buffer(opencv_img)
         # convert color
+        opencv_img = cv2.resize(opencv_img, (64,64), interpolation = cv2.INTER_AREA)
         opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
         return torch.from_numpy(opencv_img / 255).float()
 
@@ -323,7 +324,7 @@ def select_action(state):
     # log eps_treshold
     if global_step % log_steps == 0:
         logger.log_eps(eps_threshold, global_step)
-    if sample > eps_threshold or liveplot:
+    if sample > eps_threshold:
         with torch.no_grad():
 
             state = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
