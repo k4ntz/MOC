@@ -10,10 +10,10 @@ import torchvision.transforms as T
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class DQN(nn.Module):
+class LinearNN(nn.Module):
 
     def __init__(self, outputs):
-        super(DQN, self).__init__()
+        super(LinearNN, self).__init__()
         # x consecutive frames
         # y elements in sparse representation
         # z elements per object

@@ -21,19 +21,13 @@ import time
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import torchvision.transforms as T
 
-from dqn.dqn import DQN
-from dqn.dqn import DuelCNN
 import dqn.dqn_saver as saver
 import dqn.dqn_logger
+import dqn.dqn_agent as dqn_agent
 
 import argparse
-
-# if gpu is to be used
-#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # space stuff
 import os.path as osp
@@ -42,7 +36,6 @@ from model import get_model
 from engine.utils import get_config
 from utils import Checkpointer
 from solver import get_optimizers
-
 
 cfg, task = get_config()
 
@@ -83,7 +76,6 @@ if cfg.resume:
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-
 # init env
 env = gym.make('PongDeterministic-v4')
 env.reset()
@@ -98,7 +90,6 @@ plt.ion()
 ### replay memory stuff
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
-
 
 class ReplayMemory(object):
 
@@ -219,10 +210,9 @@ GAMMA = 0.97
 EPS_START = 1
 EPS_END = 0.01
 EPS_DECAY = 100000
-# TARGET_UPDATE = 1000
 lr = 0.00025
 
-USE_SPACE = False
+USE_SPACE = True
 
 liveplot = False
 DEBUG = False
@@ -245,7 +235,7 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v8-cnn"
+exp_name = "DQ-Learning-Pong-v8-only-zwhere"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -253,29 +243,24 @@ log_name = exp_name
 log_steps = 500
 logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name)
 
-# Get screen size so that we can initialize layers correctly based on shape
-# returned from AI gym. Typical dimensions at this point are close to 3x40x90
-# which is the result of a clamped and down-scaled render buffer in get_screen()
-init_screen = get_screen()
-_, _, screen_height, screen_width = init_screen.shape
-
 # Get number of actions from gym action space
 n_actions = env.action_space.n
-
-policy_net = None
-target_net = None
-if USE_SPACE:
-    policy_net = DQN(n_actions).to(device)
-    target_net = DQN(n_actions).to(device)
-else:
-    policy_net = DuelCNN(64, 64, n_actions).to(device)
-    target_net = DuelCNN(64, 64, n_actions).to(device)
-
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
-
-optimizer = optim.Adam(policy_net.parameters(), lr=lr)
 memory = ReplayMemory(MEMORY_SIZE)
+
+# init agent
+agent = dqn_agent.Agent(
+    BATCH_SIZE,
+    GAMMA,
+    EPS_START,
+    EPS_END,
+    EPS_DECAY,
+    lr,
+    n_actions,
+    MEMORY_MIN_SIZE,
+    device,
+    log_steps,
+    USE_SPACE
+)
 
 total_max_q = 0
 total_loss = 0
@@ -286,9 +271,9 @@ if saver.check_loading_model(exp_name):
     model_path = saver.model_name(exp_name) 
     print("Loading {}".format(model_path))
     checkpoint = torch.load(model_path, map_location=torch.device(device))
-    policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
-    target_net.load_state_dict(checkpoint['target_model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    agent.policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
+    agent.target_net.load_state_dict(checkpoint['target_model_state_dict'])
+    agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     memory = checkpoint['memory']
     i_episode = checkpoint['episode']
     global_step = checkpoint['global_step']
@@ -314,86 +299,8 @@ def get_state():
         opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
         return torch.from_numpy(opencv_img / 255).float()
 
-
-def select_action(state):
-    sample = random.random()
-    eps_threshold = EPS_START
-    if global_step > MEMORY_MIN_SIZE:
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-            math.exp(-1. * (global_step - MEMORY_MIN_SIZE) / EPS_DECAY)
-    # log eps_treshold
-    if global_step % log_steps == 0:
-        logger.log_eps(eps_threshold, global_step)
-    if sample > eps_threshold:
-        with torch.no_grad():
-
-            state = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
-            # t.max(1) will return largest column value of each row.
-            # second column on max result is index of where max element was
-            # found, so we pick action with the larger expected reward.
-            return policy_net(state).max(1)[1].view(1, 1)
-    else:
-        return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
-
-
 episode_durations = []
 
-def optimize_model():
-    # logging variables
-    global total_max_q
-    global total_loss
-
-
-    if len(memory) < BATCH_SIZE:
-        return
-    transitions = memory.sample(BATCH_SIZE)
-    """
-    zip(*transitions) unzips the transitions into
-    Transition(*) creates new named tuple
-    batch.state - tuple of all the states (each state is a tensor)
-    batch.next_state - tuple of all the next states (each state is a tensor)
-    batch.reward - tuple of all the rewards (each reward is a float)
-    batch.action - tuple of all the actions (each action is an int)    
-    """
-    batch = Transition(*zip(*transitions))
-    
-    # Convert them to tensors
-    state = torch.from_numpy(np.array(batch.state)).float().to(device)
-    next_state = torch.from_numpy(np.array(batch.next_state)).float().to(device)
-    action = torch.cat(batch.action, dim=0).to(device).squeeze(1)
-    reward = torch.cat(batch.reward, dim=0).to(device)
-    done = torch.tensor(batch.done, dtype=torch.float, device=device)
-
-    # Make predictions
-    state_q_values = policy_net(state)
-    next_states_q_values = policy_net(next_state)
-    next_states_target_q_values = target_net(next_state)
-    # Find selected action's q_value
-    selected_q_value = state_q_values.gather(1, action.unsqueeze(1)).squeeze(1)
-    # Get indice of the max value of next_states_q_values
-    # Use that indice to get a q_value from next_states_target_q_values
-    # We use greedy for policy So it called off-policy
-    next_states_target_q_value = next_states_target_q_values.gather(1, next_states_q_values.max(1)[1].unsqueeze(1)).squeeze(1)
-    # Use Bellman function to find expected q value
-    expected_q_value = reward + GAMMA * next_states_target_q_value * (1 - done)
-    
-    # Calc loss with expected_q_value and q_value
-    loss = F.mse_loss(selected_q_value, expected_q_value.detach())
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    
-    # log loss and max q
-    max_q = torch.max(state_q_values).item()
-    total_max_q += max_q
-    with torch.no_grad():
-        total_loss += loss
-    # log metrics for last log_steps and reset
-    if global_step % log_steps == 0:
-        logger.log_max_q(total_max_q/log_steps, global_step)
-        total_max_q = 0
-        logger.log_loss(total_loss/log_steps, global_step)
-        total_loss = 0
 
 ### plot stuff 
 
@@ -409,27 +316,6 @@ def plot_screen(episode, step):
     if is_ipython:
         display.clear_output(wait=True)
         display.display(plt.gcf())
-
-# function to plot episode durations
-def plot_durations():
-    plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
-        
 
 ### training loop
 
@@ -471,7 +357,7 @@ while i_episode < num_episodes:
             plot_screen(i_episode+1, t+1)
         # If skipped frames are over, select action
         if action_item is None or global_step % skip_frames == 0:
-            action = select_action(state)
+            action = agent.select_action(state, global_step, logger)
             action_item = action.item()
         # perform action
         _, reward, done, _ = env.step(action_item)
@@ -494,7 +380,7 @@ while i_episode < num_episodes:
 
         # Perform one step of the optimization (on the policy network)
         if len(memory) > MEMORY_MIN_SIZE:
-            optimize_model()
+            total_max_q, total_loss = agent.optimize_model(memory, total_max_q, total_loss, logger, global_step)
         elif global_step % log_steps == 0:
             logger.log_loss(0, global_step)
             logger.log_max_q(0, global_step)
@@ -517,7 +403,7 @@ while i_episode < num_episodes:
             break
     # Update the target network, copying all weights and biases in DQN
     if len(memory) > MEMORY_MIN_SIZE:
-        target_net.load_state_dict(policy_net.state_dict())
+        agent.target_net.load_state_dict(agent.policy_net.state_dict())
     # update wins and loses
     if pos_reward_count >= neg_reward_count:
         wins += 1
@@ -534,7 +420,7 @@ while i_episode < num_episodes:
     i_episode += 1
     # checkpoint saver
     if i_episode % SAVE_EVERY == 0:
-        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode, global_step, total_max_q, total_loss)
+        saver.save_models(exp_name, agent.policy_net, agent.target_net, agent.optimizer, memory, i_episode, global_step, total_max_q, total_loss)
     rtpt.step()
 
 print('Complete')
