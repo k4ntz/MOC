@@ -8,7 +8,7 @@ from gym.wrappers.monitoring.video_recorder import VideoRecorder
 from multiprocessing import Process
 
 # Create RTPT object
-rtpt = RTPT(name_initials='QD', experiment_name='TestingRTPT', max_iterations=10)
+rtpt = RTPT(name_initials='TR', experiment_name='DataGather', max_iterations=10)
 
 # Start the RTPT tracking
 rtpt.start()
