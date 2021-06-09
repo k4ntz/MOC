@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 import multiprocessing as mp
 
+episode_count = 1000
 # Create RTPT object
-rtpt = RTPT(name_initials='TR', experiment_name='DataGather', max_iterations=10)
+rtpt = RTPT(name_initials='TRo', experiment_name='DataGatherer', max_iterations=episode_count)
 
 # Start the RTPT tracking
 rtpt.start()
@@ -43,7 +44,7 @@ def gather_agent(cfg, agent_id):
 
     agent = RandomAgent(env.action_space)
 
-    episode_count = 1000
+
     reward = 0
     done = False
 
@@ -62,7 +63,8 @@ def gather_agent(cfg, agent_id):
             if done:
                 break
         renderer.close_recorder()
-        rtpt.step(subtitle=f"ag{agent_id} step={i}/{episode_count}")
+        if agent_id == 0:
+            rtpt.step(subtitle=f"step={i}/{episode_count}")
 
     env.close()
 

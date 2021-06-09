@@ -12,11 +12,6 @@ import time
 from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
 
-# Create RTPT object
-rtpt = RTPT(name_initials='QD', experiment_name='TestingRTPT', max_iterations=10)
-
-# Start the RTPT tracking
-rtpt.start()
 
 
 def train(cfg):
@@ -33,7 +28,8 @@ def train(cfg):
         print('Device ids:', cfg.device_ids)
 
     print('Loading data')
-
+    rtpt = RTPT(name_initials='TRo', experiment_name='Train TcSP', max_iterations=cfg.train.max_epochs)
+    rtpt.start()
     trainloader = get_dataloader(cfg, 'train')
     if cfg.train.eval_on:
         valset = get_dataset(cfg, 'val')
@@ -74,14 +70,14 @@ def train(cfg):
             start = end
 
             model.train()
-            imgs = data.to(cfg.device)
-            loss, log = model(imgs, global_step)
+            vids = data.to(cfg.device)
+            loss, log = model(vids, global_step)
             # In case of using DataParallel
             loss = loss.mean()
             optimizer_fg.zero_grad()
             optimizer_bg.zero_grad()
             loss.backward()
-            epoch_loss = loss.item()
+            epoch_loss += loss.item()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
 

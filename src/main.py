@@ -3,6 +3,7 @@ from engine.train import train
 from engine.eval import eval
 from engine.show import show
 from engine.data_gatherer import gather
+from engine.video_splitter import split_videos
 
 
 if __name__ == '__main__':
@@ -11,6 +12,7 @@ if __name__ == '__main__':
         'train': train,
         'eval': eval,
         'show': show,
+        'split_videos': split_videos,
         'gather': gather
     }
     cfg, task = get_config()

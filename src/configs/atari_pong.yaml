@@ -19,10 +19,10 @@ dataset_roots:
 
 train:
   batch_size: 12
-  max_epochs: 1000
-  max_steps: 160000
-  print_every: 500
-  save_every: 1000
+  max_epochs: 100
+  max_steps: 16000
+  print_every: 250
+  save_every: 500
   num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
