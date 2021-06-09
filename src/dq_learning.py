@@ -189,17 +189,17 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
         y_pos = z_obj[3]
         size_relation = z_obj[0]/z_obj[1]
         # if in slot of right paddle
-        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
+        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.925 or (y_pos < 0.18 or y_pos > 0.87)):
             # put right paddle at first
             z_stuff[0] = z_obj
             indices.append(0)
         # if its in slot of left paddle
-        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
+        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.925 or (y_pos < 0.18 or y_pos > 0.87)):
             # put left paddle at last
             z_stuff[2] = z_obj
             indices.append(2)
         # it it has size relation of ball
-        elif size_relation > 0.9:
+        elif size_relation > 0.95 and size_relation < 1.1:
             # put ball in the middle
             z_stuff[1] = z_obj
             indices.append(1)
