@@ -5,7 +5,7 @@ from gym import wrappers, logger
 from rtpt import RTPT
 import matplotlib.pyplot as plt
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
-from multiprocessing import Process
+import multiprocessing as mp
 
 # Create RTPT object
 rtpt = RTPT(name_initials='TR', experiment_name='DataGather', max_iterations=10)
