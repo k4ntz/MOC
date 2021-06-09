@@ -33,5 +33,5 @@ def split_videos_job(cfg, job_id):
 
 def split_videos(cfg):
     for agent_id in range(NUM_PROCESSES):
-        proc = mp.Process(target=gather_agent, args=(cfg, agent_id))
+        proc = mp.Process(target=split_videos_job, args=(cfg, agent_id))
         proc.start()
