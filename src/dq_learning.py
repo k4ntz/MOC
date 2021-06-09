@@ -189,12 +189,12 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
         y_pos = z_obj[3]
         size_relation = z_obj[0]/z_obj[1]
         # if in slot of right paddle
-        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.925 or (y_pos < 0.21 or y_pos > 0.86)):
+        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
             # put right paddle at first
             z_stuff[0] = z_obj
             indices.append(0)
         # if its in slot of left paddle
-        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.925 or (y_pos < 0.21 or y_pos > 0.86)):
+        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
             # put left paddle at last
             z_stuff[2] = z_obj
             indices.append(2)
