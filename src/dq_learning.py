@@ -199,7 +199,7 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
             z_stuff[2] = z_obj
             indices.append(2)
         # it it has size relation of ball
-        elif size_relation > 0.95 and size_relation < 1.1:
+        elif size_relation > 0.95 and size_relation < 1.2:
             # put ball in the middle
             z_stuff[1] = z_obj
             indices.append(1)
