@@ -17,7 +17,6 @@ rtpt.start()
 class GymRenderer:
     def __init__(self, env, title="video"):
         self.env = env
-        self.record = record
         self.video_rec = VideoRecorder(env, path=f"videos/{title}.mp4")
 
     def render(self):
@@ -68,6 +67,7 @@ def gather_agent(cfg, agent_id):
 
 
 NUM_PROCESSES = 16
+
 
 def gather(cfg):
     for agent_id in range(NUM_PROCESSES):
