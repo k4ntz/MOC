@@ -198,8 +198,8 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
             # put left paddle at last
             z_stuff[2] = z_obj
             indices.append(2)
-        # it it has size relation of ball
-        elif size_relation > 0.95 and size_relation < 1.2:
+        # if it is no paddle and has roughly size relation of ball
+        elif size_relation > 0.7:
             # put ball in the middle
             z_stuff[1] = z_obj
             indices.append(1)
