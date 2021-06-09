@@ -26,7 +26,7 @@ train:
   num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
-  eval_on: false
+  eval_on: true
   solver:
     fg:
       optim: 'RMSprop'
