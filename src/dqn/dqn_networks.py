@@ -17,7 +17,7 @@ class LinearNN(nn.Module):
         # x consecutive frames
         # y elements in sparse representation
         # z elements per object
-        self.input_size = 4 * 5 * 4
+        self.input_size = 4 * 3 * 4
 
         self.lin1 = nn.Linear(self.input_size, 128)
 

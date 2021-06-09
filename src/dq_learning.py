@@ -36,6 +36,7 @@ from model import get_model
 from engine.utils import get_config
 from utils import Checkpointer
 from solver import get_optimizers
+from eval.ap import convert_to_boxes
 
 cfg, task = get_config()
 
@@ -163,14 +164,15 @@ boxes_len = 16
 
 # helper function to process a single frame of z stuff
 def process_z_stuff(z_where, z_pres_prob, z_what):
-    z_stuff = torch.zeros_like(torch.rand((5, 4)), device=device)
+    z_stuff = torch.zeros_like(torch.rand((3, 4)), device=device)
     z_where = z_where.to(device)
     z_pres_prob = z_pres_prob.to(device)
     z_what = z_what.to(device)
     # clean up
     torch.cuda.empty_cache()
-    ## nullize all z whats with z pres < 0.5
+    # create z pres < 0.5
     z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5)
+    # get z whats with z pres
     z_what_pres = z_what[z_pres]
     ## same with z where 
     z_where_pres = z_where[z_pres]
@@ -180,11 +182,31 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
     # normalize z where centers to [0:1], add coordinates to its center values and normalize again
     z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
     z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
-    # combine z what pres with z where tensors
-    #z_combined = torch.cat((z_where_pres, z_what_pres), 1)
-    #first_dim = min(z_combined.shape[0], z_stuff.shape[0])
-    first_dim = min(z_where_pres.shape[0], z_stuff.shape[0])
-    z_stuff[:first_dim] = z_where_pres[:first_dim]
+    # define what is player, ball and enemy
+    indices = [0, 0, 0]
+    for i, z_obj in enumerate(z_where_pres):
+        x_pos = z_obj[2]
+        y_pos = z_obj[3]
+        size_relation = z_obj[0]/z_obj[1]
+        # if in slot of right paddle
+        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
+            # put right paddle at first
+            z_stuff[0] = z_obj
+            indices[0] = i
+        # if its in slot of left paddle
+        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
+            # put left paddle at last
+            z_stuff[2] = z_obj
+            indices[2] = i
+        # it it has size relation of ball
+        elif size_relation > 0.9:
+            # put ball in the middle
+            z_stuff[1] = z_obj
+            indices[1] = i
+    # log video with given classes
+    if i_episode % video_every == 0:
+        boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
+        logger.draw_bounding_box(boxes_batch, indices)
     z_stuff = z_stuff.unsqueeze(0).cpu()
     return z_stuff
 
@@ -235,7 +257,7 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v8-only-zwhere"
+exp_name = "DQ-Learning-Pong-v9-zw"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
@@ -388,6 +410,10 @@ while i_episode < num_episodes:
         # timer stuff
         end = time.perf_counter()
         step_time = end - start
+
+        #TODO: Remove
+        #if t % 60 == 0:
+        #    logger.save_video(exp_name)
 
         if (t) % 10 == 0: # print every 100 steps
             start = time.perf_counter()

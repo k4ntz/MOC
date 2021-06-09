@@ -3,7 +3,11 @@
 import torch
 import os
 import cv2
+import numpy as np
+
 from torch.utils.tensorboard import SummaryWriter
+
+from utils import draw_bounding_boxes
 
 FOLDER_TO_VIDEO = "/dqn/video/"
 PATH_TO_VIDEO = os.getcwd() + FOLDER_TO_VIDEO
@@ -44,6 +48,19 @@ class DQN_Logger:
 
     def fill_video_buffer(self, image, fps=30):
         self.video_buffer.append(image)
+
+    # helper function to draw bounding box over z wheres 
+    def draw_bounding_box(self, boxes_batch, indices):
+        last_frame = self.video_buffer.pop()
+        bb = (boxes_batch[0][:,:4] * (128, 128, 128, 128)).round().astype(int)
+        # blue = dqn, green = ball, red = enemy, random = black
+        color = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 0, 0), (0,0,0)]
+        thickness = 2
+        for single_bb, color_i in zip(bb, indices):
+            start = (single_bb[2], single_bb[0])
+            end = (single_bb[3], single_bb[1])
+            last_frame = cv2.rectangle(last_frame, start, end, color[color_i], thickness)
+        self.video_buffer.append(last_frame)
 
     def save_video(self, model_name, fps=25.0):
         if not os.path.exists(PATH_TO_VIDEO):
