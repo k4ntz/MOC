@@ -183,7 +183,7 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
     z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
     z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
     # define what is player, ball and enemy
-    indices = [0, 0, 0, 0, 0]
+    indices = []
     for i, z_obj in enumerate(z_where_pres):
         x_pos = z_obj[2]
         y_pos = z_obj[3]
@@ -192,17 +192,17 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
         if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
             # put right paddle at first
             z_stuff[0] = z_obj
-            indices[i] = 0
+            indices.append(0)
         # if its in slot of left paddle
         elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.899 or (y_pos < 0.15 or y_pos > 0.88)):
             # put left paddle at last
             z_stuff[2] = z_obj
-            indices[i] = 2
+            indices.append(2)
         # it it has size relation of ball
         elif size_relation > 0.9:
             # put ball in the middle
             z_stuff[1] = z_obj
-            indices[i] = 1
+            indices.append(1)
     # log video with given classes
     if i_episode % video_every == 0:
         boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
