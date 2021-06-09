@@ -70,6 +70,6 @@ def gather_agent(cfg, agent_id):
 NUM_PROCESSES = 16
 
 def gather(cfg):
-    for i in range(NUM_PROCESSES):
-        proc = mp.Process(target=gather_agent, args=(cfg, env))
+    for agent_id in range(NUM_PROCESSES):
+        proc = mp.Process(target=gather_agent, args=(cfg, agent_id))
         proc.start()
