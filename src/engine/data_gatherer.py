@@ -43,13 +43,14 @@ def gather_agent(cfg, agent_id):
 
     agent = RandomAgent(env.action_space)
 
-    episode_count = 10
+    episode_count = 1000
     reward = 0
     done = False
 
     for i in range(episode_count):
         ob = env.reset()
-        renderer = GymRenderer(env, title=f'{args_env_id}_ep{agent_id * episode_count + i}')
+        episode_id = agent_id * episode_count + i
+        renderer = GymRenderer(env, title=f'{args_env_id}_ep{episode_id:06}')
         step = 0
         while True:
             action = agent.act(ob, reward, done)
@@ -73,3 +74,5 @@ def gather(cfg):
     for agent_id in range(NUM_PROCESSES):
         proc = mp.Process(target=gather_agent, args=(cfg, agent_id))
         proc.start()
+
+    gather_agent(cfg, NUM_PROCESSES)
