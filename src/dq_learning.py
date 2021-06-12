@@ -164,7 +164,7 @@ boxes_len = 16
 
 # helper function to process a single frame of z stuff
 def process_z_stuff(z_where, z_pres_prob, z_what):
-    z_stuff = torch.zeros_like(torch.rand((3, 4)), device=device)
+    z_stuff = torch.zeros_like(torch.rand((2, 4)), device=device)
     z_where = z_where.to(device)
     z_pres_prob = z_pres_prob.to(device)
     z_what = z_what.to(device)
@@ -196,8 +196,9 @@ def process_z_stuff(z_where, z_pres_prob, z_what):
         # if its in slot of left paddle
         elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
             # put left paddle at last
-            z_stuff[2] = z_obj
-            indices.append(2)
+            #z_stuff[2] = z_obj
+            #indices.append(2)
+            indices.append(3)
         # if it is no paddle and has roughly size relation of ball
         elif size_relation > 0.7:
             # put ball in the middle
@@ -260,7 +261,7 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v9-zw"
+exp_name = "DQ-Learning-Pong-v9-zw-no-enemy"
 
 # init tensorboard
 log_path = os.getcwd() + "/dqn/logs/"
