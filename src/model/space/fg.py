@@ -127,7 +127,7 @@ class SpaceFg(nn.Module):
         # (B*G*G, D)
         z_what, z_what_post = self.z_what_net(x_att)
 
-        t_cons_loss = self.t_cons_loss(z_what)
+        # t_cons_loss = self.t_cons_loss(z_what)
 
         # Decode z_what into small reconstructed glimpses
         # All (B*G*G, 3, H, W)

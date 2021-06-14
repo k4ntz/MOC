@@ -3,6 +3,7 @@ from yacs.config import CfgNode
 arch = CfgNode({
     # TR
     'adjacent_consistency_weight': 1e-3,
+    'pres_inconsistency_weight': 1e-4,
 
     # SPACE-config
     'img_shape': (128, 128),

@@ -9,6 +9,7 @@ from .space import Space
 from rtpt import RTPT
 from .arch import arch
 
+
 class TcSpace(nn.Module):
 
     def __init__(self):
@@ -16,6 +17,7 @@ class TcSpace(nn.Module):
 
         self.space = Space()
         self.adjacency_weight = arch.adjacent_consistency_weight
+        self.pres_inconsistency_weight = arch.pres_inconsistency_weight
 
     def forward(self, x, global_step):
         """
@@ -32,15 +34,33 @@ class TcSpace(nn.Module):
             over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
         z_whats = torch.tensor([get_log(res)['z_what'] for res in over_time])
-        z_what_deltas = z_whats[1:] - z_whats[:-1]
+        z_what_deltas = (z_whats[1:] - z_whats[:-1]) ** 2
+
+        # (T, B, G*G, 1)
+        z_press = torch.tensor([get_log(res)['z_pres'] for res in over_time])
+        # (T, B, G*G, 4)
+        z_wheres = torch.tensor([get_log(res)['z_where'] for res in over_time])
+        # (T-2, B, G*G, 1)
+        z_pres_similarity = (1 - sqDelta(z_press[2:], z_press[:-2]))
+        z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
+        z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
 
         losses = torch.tensor([get_loss(res) for res in over_time])
-        loss = losses.mean() + self.adjacency_weight * z_what_deltas.mean()
+        loss = losses.mean() \
+               + self.adjacency_weight * z_what_deltas.mean() \
+               + self.pres_inconsistency_weight * z_pres_inconsistencies.mean()
         log = {
             'z_what_deltas': z_what_deltas,
+            'z_pres_inconsistencies': z_pres_inconsistencies,
+            'z_pres_similarity': z_pres_similarity,
+            'z_pres_deltas': z_pres_deltas,
             'space_log': [get_log(res) for res in over_time]
         }
         return loss, log
+
+
+def sqDelta(t1, t2):
+    return (t1 - t2).square()
 
 
 def get_log(res):

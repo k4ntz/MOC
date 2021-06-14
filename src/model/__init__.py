@@ -1,4 +1,5 @@
 from .space.space import Space
+from .space.time_consistency import TcSpace
 
 __all__ = ['get_model']
 
