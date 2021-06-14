@@ -38,9 +38,9 @@ class TcSpace(nn.Module):
         z_what_deltas = (z_whats[1:] - z_whats[:-1]) ** 2
         print(z_whats.shape)
         # (T, B, G*G, 1)
-        z_press = torch.tensor([get_log(res)['z_pres'] for res in over_time])
+        z_press = torch.stack([get_log(res)['z_pres'] for res in over_time])
         # (T, B, G*G, 4)
-        z_wheres = torch.tensor([get_log(res)['z_where'] for res in over_time])
+        z_wheres = torch.stack([get_log(res)['z_where'] for res in over_time])
         # (T-2, B, G*G, 1)
         z_pres_similarity = (1 - sqDelta(z_press[2:], z_press[:-2]))
         z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
