@@ -23,7 +23,7 @@ class SpaceVis:
             for key, value in img.items():
                 if isinstance(value, torch.Tensor):
                     img[key] = value.detach().cpu()
-                    if isinstance(log[key], torch.Tensor) and img[key].ndim > 0:
+                    if isinstance(img[key], torch.Tensor) and img[key].ndim > 0:
                         img[key] = img[key][:num_batch]
             log_img = AttrDict(img)
 
