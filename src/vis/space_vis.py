@@ -46,7 +46,7 @@ class SpaceVis:
             grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
             nrow = grid.size(1)
             B, N, _, H, W = grid.size()
-            grid = grid.view(B*N, 3, H, W)
+            grid = grid.reshape(B*N, 3, H, W)
 
             grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/#0-separations', grid_image, global_step)
