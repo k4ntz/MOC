@@ -67,7 +67,6 @@ def train(cfg):
         start = time.perf_counter()
         epoch_loss = 0
         for i, data in enumerate(trainloader):
-            print(f'DataPoint: {i}')
             end = time.perf_counter()
             data_time = end - start
             start = end
