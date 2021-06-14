@@ -30,7 +30,7 @@ class TcSpace(nn.Module):
             log: a dictionary for visualization
         """
         over_time = []
-        for i in x.shape[1]:
+        for i in range(x.shape[1]):
             over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
         z_whats = torch.tensor([get_log(res)['z_what'] for res in over_time])
