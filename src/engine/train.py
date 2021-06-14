@@ -71,9 +71,9 @@ def train(cfg):
             start = end
 
             model.train()
-            print("Pre to.device", torch.cuda.memory_summary(device=None, abbreviated=False))
+            print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             vids = data.to(cfg.device)
-            print("Post to.device", torch.cuda.memory_summary(device=None, abbreviated=False))
+            print("Post to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             loss, log = model(vids, global_step)
             # In case of using DataParallel
             loss = loss.mean()
