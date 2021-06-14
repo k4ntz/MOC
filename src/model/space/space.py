@@ -62,7 +62,8 @@ class Space(nn.Module):
             'y': y,
             # (B,)
             'mse': ((y-x)**2).flatten(start_dim=1).sum(dim=1),
-            'log_like': log_like
+            'log_like': log_like,
+            'loss': loss
         }
         log.update(log_fg)
         log.update(log_bg)
