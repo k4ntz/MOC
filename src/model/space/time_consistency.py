@@ -34,7 +34,7 @@ class TcSpace(nn.Module):
             over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
         z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
-        z_what_deltas = (z_whats[1:] - z_whats[:-1]) ** 2
+        z_what_deltas = sqDelta(z_whats[1:], z_whats[:-1])
         # (T, B, G*G, 1)
         z_press = torch.stack([get_log(res)['z_pres'] for res in over_time])
         # (T, B, G*G, 4)

@@ -19,31 +19,30 @@ class SpaceVis:
         """
         """
         B = num_batch
-        
-        for key, value in log.space.items():
-            if isinstance(value, torch.Tensor):
-                log[key] = value.detach().cpu()
-                if isinstance(log[key], torch.Tensor) and log[key].ndim > 0:
-                    log[key] = log[key][:num_batch]
-        log_all = AttrDict(log.space)
-        for i, log in enumerate(log_all):
+        for i, img in enumerate(log['space']):
+            for key, value in img.items():
+                if isinstance(value, torch.Tensor):
+                    img[key] = value.detach().cpu()
+                    if isinstance(log[key], torch.Tensor) and img[key].ndim > 0:
+                        img[key] = img[key][:num_batch]
+            log_img = AttrDict(log['space'])
 
             # (B, 3, H, W)
             fg_box = bbox_in_one(
-                log.fg, log.z_pres, log.z_scale, log.z_shift
+                log_img.fg, log_img.z_pres, log_img.z_scale, log_img.z_shift
             )
             # (B, 1, 3, H, W)
-            imgs = log.imgs[:, None]
-            fg = log.fg[:, None]
-            recon = log.y[:, None]
+            imgs = log_img.imgs[:, None]
+            fg = log_img.fg[:, None]
+            recon = log_img.y[:, None]
             fg_box = fg_box[:, None]
-            bg = log.bg[:, None]
+            bg = log_img.bg[:, None]
             # (B, K, 3, H, W)
-            comps = log.comps
+            comps = log_img.comps
             # (B, K, 3, H, W)
-            masks = log.masks.expand_as(comps)
+            masks = log_img.masks.expand_as(comps)
             masked_comps = comps * masks
-            alpha_map = log.alpha_map[:, None].expand_as(imgs)
+            alpha_map = log_img.alpha_map[:, None].expand_as(imgs)
             grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
             nrow = grid.size(1)
             B, N, _, H, W = grid.size()
@@ -52,25 +51,25 @@ class SpaceVis:
             grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/#0-separations', grid_image, global_step)
 
-            grid_image = make_grid(log.imgs, 5, normalize=False, pad_value=1)
+            grid_image = make_grid(log_img.imgs, 5, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/1-image', grid_image, global_step)
 
-            grid_image = make_grid(log.y, 5, normalize=False, pad_value=1)
+            grid_image = make_grid(log_img.y, 5, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/2-reconstruction_overall', grid_image, global_step)
 
-            grid_image = make_grid(log.bg, 5, normalize=False, pad_value=1)
+            grid_image = make_grid(log_img.bg, 5, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/3-background', grid_image, global_step)
 
-            mse = (log.y - log.imgs) ** 2
+            mse = (log_img.y - log_img.imgs) ** 2
             mse = mse.flatten(start_dim=1).sum(dim=1).mean(dim=0)
             log_like, kl_z_what, kl_z_where, kl_z_pres, kl_z_depth, kl_bg = (
-                log['log_like'].mean(), log['kl_z_what'].mean(), log['kl_z_where'].mean(),
-                log['kl_z_pres'].mean(), log['kl_z_depth'].mean(), log['kl_bg'].mean()
+                log_img['log_like'].mean(), log_img['kl_z_what'].mean(), log_img['kl_z_where'].mean(),
+                log_img['kl_z_pres'].mean(), log_img['kl_z_depth'].mean(), log_img['kl_bg'].mean()
             )
-            loss_boundary = log.boundary_loss.mean()
-            loss = log.loss.mean()
+            loss_boundary = log_img.boundary_loss.mean()
+            loss = log_img.loss.mean()
 
-            count = log.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
+            count = log_img.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
             writer.add_scalar(f'{mode}{i}/mse', mse.item(), global_step=global_step)
             writer.add_scalar(f'{mode}{i}/loss', loss, global_step=global_step)
             writer.add_scalar(f'{mode}{i}/count', count, global_step=global_step)
