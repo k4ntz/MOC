@@ -14,23 +14,20 @@ from itertools import count
 from PIL import Image
 import PIL
 import cv2
+import os
 
 from rtpt import RTPT
 import time
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import torchvision.transforms as T
 
-from dqn.dqn import DQN
 import dqn.dqn_saver as saver
+import dqn.dqn_logger
+import dqn.dqn_agent as dqn_agent
 
 import argparse
-
-# if gpu is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # space stuff
 import os.path as osp
@@ -39,9 +36,12 @@ from model import get_model
 from engine.utils import get_config
 from utils import Checkpointer
 from solver import get_optimizers
-
+from eval.ap import convert_to_boxes
 
 cfg, task = get_config()
+
+# if gpu is to be used
+device = cfg.device
 
 print('Experiment name:', cfg.exp_name)
 print('Dataset:', cfg.dataset)
@@ -77,9 +77,8 @@ if cfg.resume:
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-
 # init env
-env = gym.make('Pong-v0')
+env = gym.make('PongDeterministic-v4')
 env.reset()
 
 # set up matplotlib
@@ -91,8 +90,7 @@ plt.ion()
 
 ### replay memory stuff
 Transition = namedtuple('Transition',
-                        ('z_where_state', 'z_what_state', 'action', 'next_z_where_state', 'next_z_what_state', 'reward'))
-
+                        ('state', 'action', 'next_state', 'reward', 'done'))
 
 class ReplayMemory(object):
 
@@ -113,18 +111,25 @@ resize = T.Compose([T.ToPILImage(),
                     T.Resize(40, interpolation=Image.CUBIC),
                     T.ToTensor()])
 
-### PREPROCESSING
+######## PREPROCESSING ########
+
+i_episode = 0
+global_step = 0
+video_every = 10
 
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
 dilation = getattr(cfg, "train").dilation
 
 def get_screen():
-    # TODO: insert preprocessing from space!
     screen = env.render(mode='rgb_array')
     pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
     # convert image to opencv
     opencv_img = np.asarray(pil_img).copy()
+    # fill video buffer
+    if i_episode % video_every == 0:
+        logger.fill_video_buffer(opencv_img)
+    # convert color
     opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2BGR)
     if black_bg:
         # get most dominant color
@@ -141,102 +146,196 @@ def get_screen():
         kernel = np.ones((3,3), np.uint8)
         opencv_img = cv2.dilate(opencv_img, kernel, iterations=1)
     # convert to tensor
-    image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
+    image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float().to(device)
     return image_t.unsqueeze(0)
 
+# helper function to normalize tensor values to 0-1
+def normalize_tensors(t):
+    dim1 = t.shape[0]
+    dim2 = t.shape[1]
+    dim3 = t.shape[2]
+    t = t.view(t.size(0), -1)
+    t -= t.min(1, keepdim=True)[0]
+    t /= t.max(1, keepdim=True)[0]
+    t = t.view(dim1, dim2, dim3)
+    return t
+
+boxes_len = 16
+
+# helper function to process a single frame of z stuff
+def process_z_stuff(z_where, z_pres_prob, z_what):
+    z_stuff = torch.zeros_like(torch.rand((2, 4)), device=device)
+    z_where = z_where.to(device)
+    z_pres_prob = z_pres_prob.to(device)
+    z_what = z_what.to(device)
+    # clean up
+    torch.cuda.empty_cache()
+    # create z pres < 0.5
+    z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5)
+    # get z whats with z pres
+    z_what_pres = z_what[z_pres]
+    ## same with z where 
+    z_where_pres = z_where[z_pres]
+    # get coordinates
+    coord_x = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres) if x]).to(device)
+    coord_y = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres) if x]).to(device)
+    # normalize z where centers to [0:1], add coordinates to its center values and normalize again
+    z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
+    z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
+    # define what is player, ball and enemy
+    indices = []
+    for i, z_obj in enumerate(z_where_pres):
+        x_pos = z_obj[2]
+        y_pos = z_obj[3]
+        size_relation = z_obj[0]/z_obj[1]
+        # if in slot of right paddle
+        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
+            # put right paddle at first
+            z_stuff[0] = z_obj
+            indices.append(0)
+        # if its in slot of left paddle
+        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
+            # put left paddle at last
+            #z_stuff[2] = z_obj
+            #indices.append(2)
+            indices.append(3)
+        # if it is no paddle and has roughly size relation of ball
+        elif size_relation > 0.7:
+            # put ball in the middle
+            z_stuff[1] = z_obj
+            indices.append(1)
+        else:
+            # append black cause 4th box or sth like that
+            indices.append(3)
+    # log video with given classes
+    if i_episode % video_every == 0:
+        boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
+        logger.draw_bounding_box(boxes_batch, indices)
+    z_stuff = z_stuff.unsqueeze(0).cpu()
+    return z_stuff
+
+
 # use SPACE model
-def get_z_stuff(model):
-    image = get_screen()
-    image = image.to(device)
+def get_z_stuff(image):
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
         loss, log = model(image, global_step=100000000)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
-        # clean up
-        del image
-        torch.cuda.empty_cache()
-        return z_where, z_what
+        return process_z_stuff(z_where[0], z_pres_prob[0], z_what[0])
     return None
 
 env.reset()
 
-### TRAINING
-
+######## TRAINING ########
 
 # some hyperparameters
 
 BATCH_SIZE = 128
-GAMMA = 0.999
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
+GAMMA = 0.97
+EPS_START = 1
+EPS_END = 0.01
+EPS_DECAY = 100000
+lr = 0.00025
+
+USE_SPACE = True
 
 liveplot = False
+DEBUG = False
 
 SAVE_EVERY = 5
+if not USE_SPACE:
+    SAVE_EVERY = 25
 
-i_episode = 0
-exp_name = "DQ-Learning-Pong-v0"
+num_episodes = 1000
 
-# Get screen size so that we can initialize layers correctly based on shape
-# returned from AI gym. Typical dimensions at this point are close to 3x40x90
-# which is the result of a clamped and down-scaled render buffer in get_screen()
-init_screen = get_screen()
-_, _, screen_height, screen_width = init_screen.shape
+skip_frames = 1
+
+MEMORY_SIZE = 50000
+MEMORY_MIN_SIZE = 25000
+
+# for debugging nn stuff
+if DEBUG:
+    EPS_START = EPS_END
+    BATCH_SIZE = 12
+    MEMORY_MIN_SIZE = BATCH_SIZE
+
+
+exp_name = "DQ-Learning-Pong-v9-zw-no-enemy"
+
+# init tensorboard
+log_path = os.getcwd() + "/dqn/logs/"
+log_name = exp_name
+log_steps = 500
+logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name)
 
 # Get number of actions from gym action space
 n_actions = env.action_space.n
+memory = ReplayMemory(MEMORY_SIZE)
 
-policy_net = DQN(n_actions).to(device)
-target_net = DQN(n_actions).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
+# init agent
+agent = dqn_agent.Agent(
+    BATCH_SIZE,
+    GAMMA,
+    EPS_START,
+    EPS_END,
+    EPS_DECAY,
+    lr,
+    n_actions,
+    MEMORY_MIN_SIZE,
+    device,
+    log_steps,
+    USE_SPACE
+)
 
-optimizer = optim.RMSprop(policy_net.parameters())
-memory = ReplayMemory(10000)
+total_max_q = 0
+total_loss = 0
 
 # load if available
 if saver.check_loading_model(exp_name):
     # folder and file exists, so load and return
     model_path = saver.model_name(exp_name) 
     print("Loading {}".format(model_path))
-    checkpoint = torch.load(model_path)
-    policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
-    target_net.load_state_dict(checkpoint['target_model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    checkpoint = torch.load(model_path, map_location=torch.device(device))
+    agent.policy_net.load_state_dict(checkpoint['policy_model_state_dict'])
+    agent.target_net.load_state_dict(checkpoint['target_model_state_dict'])
+    agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     memory = checkpoint['memory']
     i_episode = checkpoint['episode']
+    global_step = checkpoint['global_step']
+    total_max_q = checkpoint['total_max_q']
+    total_loss = checkpoint['total_loss']
 else:
     print("No prior checkpoints exists, starting fresh")
 
-steps_done = 0
-
-def select_action(z_where_state, z_what_state):
-    global steps_done
-    sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
-    if sample > eps_threshold:
-        with torch.no_grad():
-            # t.max(1) will return largest column value of each row.
-            # second column on max result is index of where max element was
-            # found, so we pick action with the larger expected reward.
-            return policy_net(z_where_state, z_what_state).max(1)[1].view(1, 1)
+# helper function to get state, whether to use SPACE or not
+def get_state():
+    if USE_SPACE:
+        return get_z_stuff(get_screen())
     else:
-        return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
-
+        screen = env.render(mode='rgb_array')
+        pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
+        # convert image to opencv
+        opencv_img = np.asarray(pil_img).copy()
+        # fill video buffer
+        if i_episode % video_every == 0:
+            logger.fill_video_buffer(opencv_img)
+        # convert color
+        opencv_img = cv2.resize(opencv_img, (64,64), interpolation = cv2.INTER_AREA)
+        opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
+        return torch.from_numpy(opencv_img / 255).float()
 
 episode_durations = []
+
+
+### plot stuff 
 
 # function to plot live while training
 def plot_screen(episode, step):
     plt.figure(3)
     plt.clf()
     plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
-    plt.imshow(get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy(),
+    plt.imshow(env.render(mode='rgb_array'),
            interpolation='none')
     plt.plot()
     plt.pause(0.001)  # pause a bit so that plots are updated
@@ -244,81 +343,7 @@ def plot_screen(episode, step):
         display.clear_output(wait=True)
         display.display(plt.gcf())
 
-# function to plot episode durations
-def plot_durations():
-    plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
-        
-
-def optimize_model():
-    if len(memory) < BATCH_SIZE:
-        return
-    transitions = memory.sample(BATCH_SIZE)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
-    batch = Transition(*zip(*transitions))
-
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
-    tuple1 = tuple(map(lambda s: s is not None,batch.next_z_where_state))
-    tuple2 = tuple(map(lambda s: s is not None,batch.next_z_what_state))
-    tuple_mask = tuple1 and tuple2
-    non_final_mask = torch.tensor(tuple_mask, device=device, dtype=torch.bool)
-
-    non_final_next_z_where_states = torch.cat([s for s in batch.next_z_where_state
-                                                if s is not None])
-    non_final_next_z_what_states = torch.cat([s for s in batch.next_z_what_state
-                                                if s is not None])
-    z_where_state_batch = torch.cat(batch.z_where_state)
-    z_what_state_batch = torch.cat(batch.z_what_state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
-
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
-    state_action_values = policy_net(z_where_state_batch, z_what_state_batch).gather(1, action_batch)
-
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1)[0].
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_z_where_states, non_final_next_z_what_states).max(1)[0].detach()
-
-    # Compute the expected Q values
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-    # Compute Huber loss
-    criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
-    # Optimize the model
-    optimizer.zero_grad()
-    loss.backward(retain_graph=True)
-    for param in policy_net.parameters():
-        param.grad.data.clamp_(-1, 1)
-    optimizer.step()
-
-# training loop
-num_episodes = 1000
+### training loop
 
 # games wins loses score
 wins = 0
@@ -335,47 +360,64 @@ while i_episode < num_episodes:
     # timer stuff
     start = time.perf_counter()
     episode_start = start
+    episode_time = 0
+    # logger stuff
+    episode_steps = 0
     # Initialize the environment and state
     env.reset()
-    current_z_where, current_z_what = get_z_stuff(model)
-    last_z_where, last_z_what = current_z_where, current_z_what
-    z_where_state, z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
+    # get z stuff for init
+    state = get_state()
+    state = np.stack((state, state, state, state))
+    # last done action
+    action_item = None
+    action = None
     for t in count():
+        # TODO: REMOVE
+        #debugs = time.perf_counter()
+        global_step += 1
         # timer stuff
         end = time.perf_counter()
         episode_time = end - episode_start
         start = end
         if liveplot:
             plot_screen(i_episode+1, t+1)
-        # Select and perform an action
-        action = select_action(z_where_state, z_what_state)
-        _, reward, done, _ = env.step(action.item())
+        # If skipped frames are over, select action
+        if action_item is None or global_step % skip_frames == 0:
+            action = agent.select_action(state, global_step, logger)
+            action_item = action.item()
+        # perform action
+        _, reward, done, _ = env.step(action_item)
+        
         if reward > 0:
             pos_reward_count += 1
         if reward < 0:
             neg_reward_count += 1
         reward = torch.tensor([reward], device=device)
 
-        # Observe new state
-        last_z_where, last_z_what = current_z_where, current_z_what
-        current_z_where, current_z_what = get_z_stuff(model)
-        if not done:
-            next_z_where_state, next_z_what_state = current_z_where - last_z_where, current_z_what - last_z_what
-        else:
-            next_state = None
-
+        # if skip frames are over, observe new state
+        next_state = get_state()
+        next_state = np.stack((next_state, state[0], state[1], state[2]))
         # Store the transition in memory
-        memory.push(z_where_state, z_what_state, action, next_z_where_state, next_z_what_state, reward)
-
+        memory.push(state, action, next_state, reward, done)
         # Move to the next state
-        z_where_state, z_what_state = next_z_where_state, next_z_what_state
+        state = next_state
+        # TODO: REMOVE
+        #print(time.perf_counter() - debugs)
 
         # Perform one step of the optimization (on the policy network)
-        optimize_model()
+        if len(memory) > MEMORY_MIN_SIZE:
+            total_max_q, total_loss = agent.optimize_model(memory, total_max_q, total_loss, logger, global_step)
+        elif global_step % log_steps == 0:
+            logger.log_loss(0, global_step)
+            logger.log_max_q(0, global_step)
 
         # timer stuff
         end = time.perf_counter()
         step_time = end - start
+
+        #TODO: Remove
+        #if t % 60 == 0:
+        #    logger.save_video(exp_name)
 
         if (t) % 10 == 0: # print every 100 steps
             start = time.perf_counter()
@@ -386,11 +428,12 @@ while i_episode < num_episodes:
                     step_time, episode_time, wins, loses, last_game), end="\r")
         if done:
             episode_durations.append(t + 1)
+            episode_steps = t + 1
             #plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
-        target_net.load_state_dict(policy_net.state_dict())
+    if len(memory) > MEMORY_MIN_SIZE:
+        agent.target_net.load_state_dict(agent.policy_net.state_dict())
     # update wins and loses
     if pos_reward_count >= neg_reward_count:
         wins += 1
@@ -398,11 +441,16 @@ while i_episode < num_episodes:
     else:
         loses += 1
         last_game = "Lose"
-    # checkpoint saver
-    if i_episode % SAVE_EVERY == 0:
-        saver.save_models(exp_name, policy_net, target_net, optimizer, memory, i_episode)
+    # log episode
+    logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
+    # if video step, create video
+    if i_episode % video_every == 0:
+        logger.save_video(exp_name)
     # iterate to next episode
     i_episode += 1
+    # checkpoint saver
+    if i_episode % SAVE_EVERY == 0:
+        saver.save_models(exp_name, agent.policy_net, agent.target_net, agent.optimizer, memory, i_episode, global_step, total_max_q, total_loss)
     rtpt.step()
 
 print('Complete')
