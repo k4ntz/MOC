@@ -19,13 +19,13 @@ class SpaceVis:
         """
         """
         B = num_batch
-        for i, img in enumerate(log['space']):
+        for i, img in enumerate(log['space_log']):
             for key, value in img.items():
                 if isinstance(value, torch.Tensor):
                     img[key] = value.detach().cpu()
                     if isinstance(log[key], torch.Tensor) and img[key].ndim > 0:
                         img[key] = img[key][:num_batch]
-            log_img = AttrDict(log['space'])
+            log_img = AttrDict(img)
 
             # (B, 3, H, W)
             fg_box = bbox_in_one(
