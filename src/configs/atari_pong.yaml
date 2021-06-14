@@ -14,7 +14,7 @@ dataset: 'ATARI'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../data/ATARI'
+  ATARI: 'data/ATARI'
 
 
 train:
