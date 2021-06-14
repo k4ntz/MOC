@@ -33,9 +33,10 @@ class TcSpace(nn.Module):
         for i in range(x.shape[1]):
             over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
-        z_whats = torch.tensor([get_log(res)['z_what'] for res in over_time])
+        print(get_log(over_time[0])['z_what'].shape)
+        z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
         z_what_deltas = (z_whats[1:] - z_whats[:-1]) ** 2
-
+        print(z_whats.shape)
         # (T, B, G*G, 1)
         z_press = torch.tensor([get_log(res)['z_pres'] for res in over_time])
         # (T, B, G*G, 4)
