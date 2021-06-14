@@ -58,7 +58,7 @@ def train(cfg):
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
 
-    print('Start training')
+    print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch}')
     end_flag = False
     for epoch in range(start_epoch, cfg.train.max_epochs):
         print(f'Epoch: {epoch}')
@@ -67,6 +67,7 @@ def train(cfg):
         start = time.perf_counter()
         epoch_loss = 0
         for i, data in enumerate(trainloader):
+            print(f'DataPoint: {i}')
             end = time.perf_counter()
             data_time = end - start
             start = end
