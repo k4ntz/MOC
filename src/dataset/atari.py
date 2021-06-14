@@ -20,7 +20,10 @@ class Atari(Dataset):
 
     def __getitem__(self, index):
         fn = self.video_fn[index]
-        video = skv.vread(os.path.join(self.video_path, fn))
+        video = skv.vread(os.path.join(self.video_path, fn), outputdict = {
+            "-sws_flags": "bilinear",
+            "-s": "128x128"
+        })
         # pil_img = Image.open(os.path.join(self.video_path, fn)).convert('RGB')
         # pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
 
