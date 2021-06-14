@@ -73,12 +73,17 @@ for i in tqdm(range(nb_images)):
     # boxes_batch, zwhats = boxes_and_what(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0), z_what)
 
 
-    labels = get_labels(table.iloc[[i]], boxes_batch)
     if action == "visu":
-        image = place_labels(labels, boxes_batch, image_fs[0])
+        if False:
+            labels = get_labels(table.iloc[[i]], boxes_batch)
+            image = place_labels(labels, boxes_batch, image_fs[0])
+        else:
+            labels = None
         image = draw_bounding_boxes(image, boxes_batch, labels)
         show_image(image)
+        exit()
         # show_image(image_fs[0])
+
     assert z_what_pres.shape[0] == labels.shape[0]
     all_z_what.append(z_what_pres.detach().cpu())
     all_labels.append(labels.detach().cpu())
