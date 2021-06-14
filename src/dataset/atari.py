@@ -12,7 +12,8 @@ class Atari(Dataset):
 
         # self.video_path = os.checkpointdir.join(root, f'{key_word}')
         self.video_path = root
-
+        print(os.listdir(root))
+        print(os.listdir(os.path.join(root, "Pong-v0", mode)))
         self.video_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root)
                          if gamelist is None or fn in gamelist
                          for img in os.listdir(os.path.join(root, fn, mode))]
