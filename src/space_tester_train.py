@@ -44,7 +44,7 @@ def save_model(model_name, model, optimizer, global_step):
 
 # helper function to load model
 def load_model(model_name, model, optimizer):
-    model_path = PATH_TO_OUTPUT + model_name
+    model_path = PATH_TO_OUTPUTS + model_name
     if not os.path.isfile(model_path):
         print("{} does not exist".format(model_path))
         return False
@@ -103,6 +103,7 @@ def train(cfg):
     exp_name = cfg.exp_name + "_tester"
 
     model_name = exp_name + ".pth"
+    full_path = PATH_TO_OUTPUTS + model_name
    
     model = SPACE_Classifier()
     model = model.to(cfg.device)
@@ -110,7 +111,8 @@ def train(cfg):
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     if os.path.exists(PATH_TO_OUTPUTS):
-        if os.path.isfile(model_name):
+        if os.path.isfile(full_path):
+            print("Loading " + full_path)
             model, optimizer, global_step = load_model(model_name, model, optimizer)
     else:
         os.makedirs(PATH_TO_OUTPUTS)
