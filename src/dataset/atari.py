@@ -17,10 +17,14 @@ class Atari(Dataset):
                          if gamelist is None or fn in gamelist
                          for img in os.listdir(os.path.join(root, fn, mode))]
         self.video_fn.sort()
+        print(self.video_path)
+        print(self.video_fn[3])
+
 
     def __getitem__(self, index):
         fn = self.video_fn[index]
         video = skv.vread(os.path.join(self.video_path, fn))
+        print(os.path.join(self.video_path, fn))
         # pil_img = Image.open(os.path.join(self.video_path, fn)).convert('RGB')
         # pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
 
