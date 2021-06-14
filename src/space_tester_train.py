@@ -128,7 +128,7 @@ def train(cfg):
 
     for epoch in range(start_epoch, max_epoch):
         start = time.perf_counter()
-        with tqdm(total=len(trainloader)) as pbar:
+        with tqdm(total=len(train_table)) as pbar:
             for i, data in tqdm(enumerate(trainloader)):
                 end = time.perf_counter()
                 data_time = end - start
@@ -161,6 +161,8 @@ def train(cfg):
                 start = time.perf_counter()
                 global_step += 1
                 pbar.update(1)
+                if (i+1) * 12 > len(train_table):
+                    break
         rtpt.step()
 
 
