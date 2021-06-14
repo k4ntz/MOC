@@ -21,9 +21,9 @@ def split_videos_job(cfg, job_id):
         vid = skv.vread(f'videos/{args_env_id}/{args_env_id}_ep{i:06}.mp4')
         for j in range(0, vid.shape[0] - SEQUENCE_LENGTH, 4):
             sub_vid = vid[j:j + SEQUENCE_LENGTH]
-            if j % 3 == 0:
+            if j % 12 == 0:
                 skv.vwrite(f'data/ATARI/{args_env_id}/test/{args_env_id}_ep{i:06}_seq{j:03}.mp4', sub_vid)
-            elif j % 4 == 0:
+            elif j % 16 == 0:
                 skv.vwrite(f'data/ATARI/{args_env_id}/validation/{args_env_id}_ep{i:06}_seq{j:03}.mp4', sub_vid)
             else:
                 skv.vwrite(f'data/ATARI/{args_env_id}/train/{args_env_id}_ep{i:06}_seq{j:03}.mp4', sub_vid)
