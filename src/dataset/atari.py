@@ -28,7 +28,7 @@ class Atari(Dataset):
         # pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
 
         video_t = torch.from_numpy(video / 255).permute(0, 3, 1, 2).float()
-
+        print(video_t.shape)
         return video_t
 
     def __len__(self):

@@ -19,7 +19,7 @@ dataset_roots:
 
 
 train:
-  batch_size: 12
+  batch_size: 1
   max_epochs: 100
   max_steps: 16000
   print_every: 250
