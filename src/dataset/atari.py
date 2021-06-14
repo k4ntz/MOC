@@ -20,7 +20,7 @@ class Atari(Dataset):
 
     def __getitem__(self, index):
         fn = self.video_fn[index]
-        video = skv.vread(os.path.join(self.video_path, fn), outputdict = {
+        video = skv.vread(os.path.join(self.video_path, fn), outputdict={
             "-sws_flags": "bilinear",
             "-s": "128x128"
         })
@@ -28,7 +28,7 @@ class Atari(Dataset):
         # pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
 
         video_t = torch.from_numpy(video / 255).permute(0, 3, 1, 2).float()
-        print(video_t.shape)
+        # print(video_t.shape) = torch.Size([10, 3, 128, 128])
         return video_t
 
     def __len__(self):
