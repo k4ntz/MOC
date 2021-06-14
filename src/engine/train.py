@@ -61,7 +61,6 @@ def train(cfg):
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
     for epoch in range(start_epoch, cfg.train.max_epochs):
-        print(f'Epoch: {epoch}')
         if end_flag:
             break
         start = time.perf_counter()
