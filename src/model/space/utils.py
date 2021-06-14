@@ -26,7 +26,8 @@ def spatial_transform(image, z_where, out_dims, inverse=False):
     theta[:, 0, -1] = z_where[:, 2] if not inverse else - z_where[:, 2] / (z_where[:, 0] + 1e-9)
     theta[:, 1, -1] = z_where[:, 3] if not inverse else - z_where[:, 3] / (z_where[:, 1] + 1e-9)
     # 2. construct sampling grid
-    grid = F.affine_grid(theta, torch.Size(out_dims))
+    # TODO: Investigate effect of align_corners=False
+    grid = F.affine_grid(theta, torch.Size(out_dims), align_corners=True)
     # 3. sample image from grid
     return F.grid_sample(image, grid, align_corners=True)
 
