@@ -61,6 +61,7 @@ def train(cfg):
     print('Start training')
     end_flag = False
     for epoch in range(start_epoch, cfg.train.max_epochs):
+        print(f'Epoch: {epoch}')
         if end_flag:
             break
         start = time.perf_counter()
@@ -71,9 +72,9 @@ def train(cfg):
             start = end
 
             model.train()
-            print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
+            # print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             vids = data.to(cfg.device)
-            print("Post to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
+            # print("Post to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             loss, log = model(vids, global_step)
             # In case of using DataParallel
             loss = loss.mean()
@@ -83,13 +84,13 @@ def train(cfg):
             epoch_loss += loss.item()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
-            print("Before Step", torch.cuda.memory_summary(device=None, abbreviated=False))
+            # print("Before Step", torch.cuda.memory_summary(device=4, abbreviated=False))
 
             optimizer_fg.step()
 
             # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
             optimizer_bg.step()
-            print("After Step", torch.cuda.memory_summary(device=None, abbreviated=False))
+            # print("After Step", torch.cuda.memory_summary(device=4, abbreviated=False))
 
             end = time.perf_counter()
             batch_time = end - start
