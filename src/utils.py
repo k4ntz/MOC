@@ -45,7 +45,8 @@ def draw_bounding_boxes(image, boxes_batch, labels=None):
         image = image.to("cpu")
     if labels is not None:
         labels = label_names(labels)
-        colors = [base_objects_colors[lab] for lab in labels]
+        # colors = [base_objects_colors[lab] for lab in labels]
+        colors = ["red"] * 50
     image = draw_bb(image, torch.tensor(bb), colors=colors)
     return image
 
