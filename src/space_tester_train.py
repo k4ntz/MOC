@@ -110,6 +110,10 @@ def train(cfg):
     criterion = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
+    # parallelize on multiple devices
+    if cfg.parallel:
+        model = nn.DataParallel(model, device_ids=cfg.device_ids)
+
     if os.path.exists(PATH_TO_OUTPUTS):
         if os.path.isfile(full_path):
             print("Loading " + full_path)
@@ -117,12 +121,13 @@ def train(cfg):
     else:
         os.makedirs(PATH_TO_OUTPUTS)
 
-
-    # parallelize on multiple devices
-    if cfg.parallel:
-        model = nn.DataParallel(model, device_ids=cfg.device_ids)
-
-    trainloader = get_dataloader(cfg, 'train')    
+    
+    # load data and cut to size of table 
+    trainloader = get_dataloader(cfg, 'train')   
+    len_table = len(train_table)
+    len_data = round(len(train_table)/cfg.train.batch_size)
+    len_cut_data = round(len(trainloader) - len_data)
+    trainloader, _ = torch.utils.data.random_split(trainloader, [len_data, len_cut_data])
 
     print('Start training')
     rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
@@ -130,8 +135,8 @@ def train(cfg):
 
     for epoch in range(start_epoch, max_epoch):
         start = time.perf_counter()
-        with tqdm(total=len(train_table)) as pbar:
-            for i, data in tqdm(enumerate(trainloader)):
+        with tqdm(total=len(trainloader)) as pbar:
+            for i, data in tqdm(enumerate(trainloader.dataset)):
                 end = time.perf_counter()
                 data_time = end - start
                 start = end
@@ -163,8 +168,6 @@ def train(cfg):
                 start = time.perf_counter()
                 global_step += 1
                 pbar.update(1)
-                if (i+1) * 12 > len(train_table):
-                    break
         rtpt.step()
 
 
