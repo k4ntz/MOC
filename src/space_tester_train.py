@@ -123,20 +123,18 @@ def train(cfg):
 
     
     # load data and cut to size of table 
-    trainloader = get_dataloader(cfg, 'train')   
-    len_table = len(train_table)
-    len_data = round(len(train_table)/cfg.train.batch_size)
-    len_cut_data = round(len(trainloader) - len_data)
-    trainloader, _ = torch.utils.data.random_split(trainloader, [len_data, len_cut_data])
+    trainloader = get_dataloader(cfg, 'train')
+    len_table = len(train_table) - ((len(train_table) % cfg.train.batch_size) * 2)
+    len_data = round(len_table/cfg.train.batch_size)
 
     print('Start training')
     rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
                 max_iterations=max_iter)
-
+    rtpt.start()
     for epoch in range(start_epoch, max_epoch):
         start = time.perf_counter()
-        with tqdm(total=len(trainloader)) as pbar:
-            for i, data in tqdm(enumerate(trainloader.dataset)):
+        with tqdm(total=len_data) as pbar:
+            for i, data in tqdm(enumerate(trainloader)):
                 end = time.perf_counter()
                 data_time = end - start
                 start = end
@@ -168,6 +166,8 @@ def train(cfg):
                 start = time.perf_counter()
                 global_step += 1
                 pbar.update(1)
+                if i + cfg.train.batch_size >= len_data:
+                    break
         rtpt.step()
 
 
