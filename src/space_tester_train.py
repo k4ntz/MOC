@@ -129,7 +129,7 @@ def train(cfg):
 
     print('Start training')
     rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
-                max_iterations=max_iter)
+                max_iterations=max_epoch)
     rtpt.start()
     for epoch in range(start_epoch, max_epoch):
         start = time.perf_counter()
