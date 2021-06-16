@@ -31,9 +31,10 @@ class TcSpace(nn.Module):
             log: a dictionary for visualization
         """
         print(x.shape, )
-        over_time = []
-        for i in range(x.shape[1]):
-            over_time.append(self.space(x[:, i], global_step))
+
+        # over_time = []
+        # for i in range(x.shape[1]):
+        #     over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
         # z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
         # z_what_deltas = sqDelta(z_whats[1:], z_whats[:-1])
@@ -46,14 +47,20 @@ class TcSpace(nn.Module):
         # z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
         # z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
 
-        losses = torch.tensor([get_loss(res) for res in over_time])
-        loss = losses.mean()
+        # losses = torch.tensor([get_loss(res) for res in over_time])
+        # loss = losses.mean()
+        # log = {
+        #     # 'z_what_deltas': z_what_deltas,
+        #     # 'z_pres_inconsistencies': z_pres_inconsistencies,
+        #     # 'z_pres_similarity': z_pres_similarity,
+        #     # 'z_pres_deltas': z_pres_deltas,
+        #     'space_log': [get_log(res) for res in over_time]
+        # }
+        y = x[:, 0]
+        print(y, y.shape)
+        loss, log = self.space(y, global_step)
         log = {
-            # 'z_what_deltas': z_what_deltas,
-            # 'z_pres_inconsistencies': z_pres_inconsistencies,
-            # 'z_pres_similarity': z_pres_similarity,
-            # 'z_pres_deltas': z_pres_deltas,
-            'space_log': [get_log(res) for res in over_time]
+            'space_log': [log]
         }
         return loss, log
 
