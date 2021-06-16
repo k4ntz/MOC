@@ -9,8 +9,6 @@ tqdm~=4.42.1
 yacs==0.1.6
 tensorboard==2.1.1
 rtpt~=0.0.4
-torch~=1.8.0+cpu
-torchvision~=0.6.1
 argparse~=1.4.0
 gym~=0.18.0
 scikit-video

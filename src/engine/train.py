@@ -14,8 +14,8 @@ from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
 
 
-
 def train(cfg):
+
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -38,6 +38,19 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
+    
+    if len(cfg.gamelist) >= 10:
+        print("Training on every game")
+        suffix = 'all'
+    elif len(cfg.gamelist) == 1:
+        suffix = cfg.gamelist[0]
+        print(f"Training on {suffix}")
+    elif len(cfg.gamelist) == 2:
+        suffix = cfg.gamelist[0] + "_" + cfg.gamelist[1]
+        print(f"Training on {suffix}")
+    else:
+        print("Can't train")
+        exit(1)
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
                                 load_time_consistency=cfg.load_time_consistency)
     model.train()
@@ -54,12 +67,15 @@ def train(cfg):
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
+    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed)), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
 
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
+                max_iterations=cfg.train.max_epochs)
+    rtpt.start()
     for epoch in range(start_epoch, cfg.train.max_epochs):
         if end_flag:
             break

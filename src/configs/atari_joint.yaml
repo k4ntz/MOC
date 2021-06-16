@@ -1,6 +1,6 @@
 seed: 1
 model: 'SPACE'
-resume: true
+resume: false
 resume_ckpt: ''
 parallel: false
 device_ids: [4, 5, 6, 7]
@@ -15,6 +15,7 @@ dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
   ATARI: '../data/ATARI'
+  # ATARI: '../aiml_atari_data/space_like'
 
 
 train:
@@ -73,4 +74,3 @@ gamelist: [
     'Qbert-v0',
     'SpaceInvaders-v0',
     ]
-

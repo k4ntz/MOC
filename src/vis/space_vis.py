@@ -2,18 +2,23 @@ from torch.utils.tensorboard import SummaryWriter
 import imageio
 import numpy as np
 import torch
+
+import matplotlib
+matplotlib.use('Agg')
+
 from utils import spatial_transform
-from .utils import bbox_in_one
+from .utils import bbox_in_one, colored_bbox_in_one_image
 from attrdict import AttrDict
 from torchvision.utils import make_grid
 from torch.utils.data import Subset, DataLoader
+import matplotlib.pyplot as plt
 
 
 class SpaceVis:
     def __init__(self):
         pass
-    
-    
+
+
     @torch.no_grad()
     def train_vis(self, writer: SummaryWriter, log, global_step, mode, num_batch=10):
         """
@@ -112,12 +117,40 @@ class SpaceVis:
         nrow = grid.size(1)
         B, N, _, H, W = grid.size()
         grid = grid.view(B*N, 3, H, W)
-        
+
         # (3, H, W)
         grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
-        
+
         # (H, W, 3)
         image = torch.clamp(grid_image, 0.0, 1.0)
         image = image.permute(1, 2, 0).numpy()
         image = (image * 255).astype(np.uint8)
         imageio.imwrite(path, image)
+
+    @torch.no_grad()
+    def show_bb(self, model, image, path, device):
+        image = image.to(device)
+        loss, log = model(image, 100000000)
+        for key, value in log.items():
+            if isinstance(value, torch.Tensor):
+                log[key] = value.detach().cpu()
+        log = AttrDict(log)
+        # (B, 3, H, W)
+        fg_box = colored_bbox_in_one_image(
+            log.fg, log.z_pres, log.z_scale, log.z_shift
+        )
+        # (B, 1, 3, H, W)
+        imgs = log.imgs[:, None]
+        fg = log.fg[:, None]
+        recon = log.y[:, None]
+        fg_box = fg_box[:, None]
+        bg = log.bg[:, None]
+        # (B, K, 3, H, W)
+        comps = log.comps
+        # (B, K, 3, H, W)
+        masks = log.masks.expand_as(comps)
+        masked_comps = comps * masks
+        alpha_map = log.alpha_map[:, None].expand_as(imgs)
+        grid = torch.cat([imgs, recon,  fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
+        plt.imshow(fg_box[0][0].permute(1, 2, 0))
+        plt.show()

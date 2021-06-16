@@ -11,8 +11,10 @@ import PIL
 class Atari(Dataset):
     def __init__(self, root, mode, gamelist=None):
         assert mode in ['train', 'validation', 'test'], f'Invalid dataset mode "{mode}"'
+        
+        # self.image_path = os.checkpointdir.join(root, f'{key_word}')
         self.image_path = root
-
+        
         image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root) \
                     if gamelist is None or fn in gamelist \
                     for img in os.listdir(os.path.join(root, fn, mode))]
@@ -24,7 +26,7 @@ class Atari(Dataset):
         # self.video_fn.sort()
         self.image_fn = image_fn
         self.image_fn.sort()
-
+    
     def __getitem__(self, index):
         # fn = self.video_fn[index]
         # video = skv.vread(os.path.join(self.video_path, fn), outputdict={

@@ -35,7 +35,7 @@ def spatial_transform(image, z_where, out_dims, inverse=False):
 def linear_annealing(device, step, start_step, end_step, start_value, end_value):
     """
     Linear annealing
-    
+
     :param x: original value. Only for getting device
     :param step: current global step
     :param start_step: when to start changing value

@@ -20,26 +20,27 @@ def get_config():
         metavar='FILE',
         help='Path to config file'
     )
-    
+
     parser.add_argument(
         'opts',
         help='Modify config options using the command line',
         default=None,
         nargs=argparse.REMAINDER
     )
+
     args = parser.parse_args()
     if args.config_file:
         cfg.merge_from_file(args.config_file)
     if args.opts:
         cfg.merge_from_list(args.opts)
-    
+
     # Use config file name as the default experiment name
     if cfg.exp_name == '':
         if args.config_file:
             cfg.exp_name = os.path.splitext(os.path.basename(args.config_file))[0]
         else:
             raise ValueError('exp_name cannot be empty without specifying a config file')
-        
+
     # Seed
     import torch
     torch.manual_seed(cfg.seed)
@@ -47,7 +48,5 @@ def get_config():
     torch.backends.cudnn.benchmark = False
     import numpy as np
     np.random.seed(cfg.seed)
-    
+
     return cfg, args.task
-
-
