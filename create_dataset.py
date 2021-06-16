@@ -99,7 +99,7 @@ while True:
         env.render()
         sleep(0.01)
     # img = draw_names(obs, info)  # to see where the objects are
-    if args.random and np.random.rand() < 0.01:
+    if (not args.random) or np.random.rand() < 0.01:
         image_n = index[image_count]
         try:
             if not augment_dict(obs, info, args.game): # wrong image
@@ -133,7 +133,6 @@ while True:
         except IndexError:
             # print("Wrong image")
             continue
-
 
 df = pd.DataFrame(series, dtype=int)
 # enemy_list = ['sue', 'inky', 'pinky', 'blinky', 'player']
