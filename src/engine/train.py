@@ -38,6 +38,7 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
+    print(f'device: {net.dummy_param.device}')
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
                                 load_time_consistency=cfg.load_time_consistency)
     model.train()

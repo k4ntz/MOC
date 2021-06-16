@@ -18,6 +18,7 @@ class TcSpace(nn.Module):
         self.space = Space()
         self.adjacency_weight = arch.adjacent_consistency_weight
         self.pres_inconsistency_weight = arch.pres_inconsistency_weight
+        self.dummy_param = nn.Parameter(torch.empty(0))
 
     def forward(self, x, global_step):
         """
@@ -29,6 +30,7 @@ class TcSpace(nn.Module):
             loss: a scalar. Note it will be better to return (B,)
             log: a dictionary for visualization
         """
+        print(x.shape, )
         over_time = []
         for i in range(x.shape[1]):
             over_time.append(self.space(x[:, i], global_step))

@@ -38,7 +38,6 @@ class Atari(Dataset):
         base_idx = min(index, len(self.image_fn) - 4)
         fn = self.image_fn[base_idx:base_idx + 4]
         torch_stack = torch.stack([self.img_path_to_tensor(f) for f in fn])
-        print(torch_stack.shape)
         return torch_stack
 
     def __len__(self):
