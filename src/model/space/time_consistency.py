@@ -55,14 +55,12 @@ class TcSpace(nn.Module):
         #     # 'z_pres_deltas': z_pres_deltas,
         #     'space_log': [get_log(res) for res in over_time]
         # }
-        y1 = x[:, 0]
-        y2 = x[:, 1]
-        loss1, log1 = self.space(y1, global_step)
-        loss2, log2 = self.space(y2, global_step)
+        y = [x[:, i] for i in range(4)]
+        responses = [self.space(y1, global_step), y1 in y]
         log = {
-            'space_log': [log1, log2]
+            'space_log': [get_log(r) for r in responses]
         }
-        return loss1 + loss2, log
+        return sum([get_loss(r) for r in responses]), log
 
 
 def sqDelta(t1, t2):
