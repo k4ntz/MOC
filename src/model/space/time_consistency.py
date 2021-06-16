@@ -57,7 +57,6 @@ class TcSpace(nn.Module):
         #     'space_log': [get_log(res) for res in over_time]
         # }
         y = x[:, 0]
-        print(y, y.shape)
         loss, log = self.space(y, global_step)
         log = {
             'space_log': [log]
