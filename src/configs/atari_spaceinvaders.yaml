@@ -1,28 +1,28 @@
 seed: 1
 model: 'SPACE'
-resume: true
+resume: false
 resume_ckpt: ''
 parallel: false
-device_ids: [0, 1]
-device: 'cuda:2'
-logdir: '../output/logs'
-checkpointdir: '../output/checkpoints'
-evaldir: '../output/eval'
+device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+device: 'cuda:0'
+logdir: 'output/logs'
+checkpointdir: 'output/checkpoints'
+evaldir: 'output/eval'
 
 dataset: 'ATARI'
 dataset_roots:
-  OBJ3D_SMALL: '../data/OBJ3D_SMALL'
-  OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../data/ATARI'
+  OBJ3D_SMALL: 'data/OBJ3D_SMALL'
+  OBJ3D_LARGE: 'data/OBJ3D_LARGE'
+  ATARI: 'data/ATARI'
 
 
 train:
-  batch_size: 12
-  max_epochs: 1000
+  batch_size: 16
+  max_epochs: 20
   max_steps: 100000
-  print_every: 500
+  print_every: 100
   save_every: 1000
-  num_workers: 4
+  num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: false

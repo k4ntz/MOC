@@ -33,26 +33,24 @@ class TcSpace(nn.Module):
         for i in range(x.shape[1]):
             over_time.append(self.space(x[:, i], global_step))
         # (T, B, G*G, D)
-        z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
-        z_what_deltas = sqDelta(z_whats[1:], z_whats[:-1])
-        # (T, B, G*G, 1)
-        z_press = torch.stack([get_log(res)['z_pres'] for res in over_time])
-        # (T, B, G*G, 4)
-        z_wheres = torch.stack([get_log(res)['z_where'] for res in over_time])
-        # (T-2, B, G*G, 1)
-        z_pres_similarity = (1 - sqDelta(z_press[2:], z_press[:-2]))
-        z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
-        z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
+        # z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
+        # z_what_deltas = sqDelta(z_whats[1:], z_whats[:-1])
+        # # (T, B, G*G, 1)
+        # z_press = torch.stack([get_log(res)['z_pres'] for res in over_time])
+        # # (T, B, G*G, 4)
+        # z_wheres = torch.stack([get_log(res)['z_where'] for res in over_time])
+        # # (T-2, B, G*G, 1)
+        # z_pres_similarity = (1 - sqDelta(z_press[2:], z_press[:-2]))
+        # z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
+        # z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
 
         losses = torch.tensor([get_loss(res) for res in over_time])
-        loss = losses.mean() \
-               + self.adjacency_weight * z_what_deltas.mean() \
-               + self.pres_inconsistency_weight * z_pres_inconsistencies.mean()
+        loss = losses.mean()
         log = {
-            'z_what_deltas': z_what_deltas,
-            'z_pres_inconsistencies': z_pres_inconsistencies,
-            'z_pres_similarity': z_pres_similarity,
-            'z_pres_deltas': z_pres_deltas,
+            # 'z_what_deltas': z_what_deltas,
+            # 'z_pres_inconsistencies': z_pres_inconsistencies,
+            # 'z_pres_similarity': z_pres_similarity,
+            # 'z_pres_deltas': z_pres_deltas,
             'space_log': [get_log(res) for res in over_time]
         }
         return loss, log
