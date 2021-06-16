@@ -108,7 +108,7 @@ def train(cfg):
     model = SPACE_Classifier()
     model = model.to(cfg.device)
     criterion = nn.MSELoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
 
     # parallelize on multiple devices
     if cfg.parallel:
@@ -160,6 +160,8 @@ def train(cfg):
                         'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, batch time: {:.4f}s, log time: {:.4f}s'.format(
                             exp_name, epoch + 1, i + 1, len(trainloader), global_step, loss.mean(),
                             batch_time, end - start))
+                    print(outputs[0])
+                    print(labels[0])
                 if (global_step) % cfg.train.save_every == 0:
                     save_model(model_name, model, optimizer, global_step)
                     print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
