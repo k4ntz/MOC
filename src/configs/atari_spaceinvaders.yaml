@@ -2,7 +2,7 @@ seed: 1
 model: 'SPACE'
 resume: false
 resume_ckpt: ''
-parallel: true
+parallel: false
 device_ids: [0, 1, 2, 3, 4, 5]
 device: 'cuda:0'
 logdir: 'output/logs'
