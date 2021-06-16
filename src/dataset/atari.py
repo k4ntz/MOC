@@ -4,6 +4,8 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 import skvideo.io as skv
+from PIL import Image
+import PIL
 
 
 class Atari(Dataset):
