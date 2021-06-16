@@ -73,5 +73,4 @@ def get_log(res):
 
 def get_loss(res):
     loss = res[0]
-    loss.requires_grad = True
     return loss
