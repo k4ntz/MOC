@@ -64,6 +64,18 @@ sh scripts/show_atari_spaceinvaders.sh 'cpu'  # otherwise
 
 ## :space_invader: AIML SCRIPTS :space_invader:
 
+Depending on your setup you might have to do further installations:
+
+```
+pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio===0.9.0 -f https://download.pytorch.org/whl/torch_stable.html // tried with nvcc -V == 11.2
+pip install git+git://github.com/mila-iqia/atari-representation-learning.git
+git clone https://github.com/ml-research/mushroom-rl && cd mushroom-rl
+pip install --no-use-pep517 -e .[all]
+pip install airspeed
+git clone https://github.com/ml-research/rational_activations && rational_activations
+python3 setup.py develop --user
+```
+
 We have our own scripts:
 * To create a dataset for the game pong (`train` folder): <br/>
 `python3 create_dataset.py -f train -g Pong`
