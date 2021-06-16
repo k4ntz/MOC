@@ -47,37 +47,37 @@ from utils import Checkpointer
 from solver import get_optimizers
 from eval.ap import convert_to_boxes
 
-cfg, _ = get_config()
+cfg, space_cfg = get_config()
 
 # if gpu is to be used
 device = cfg.device
 
 print('Experiment name:', cfg.exp_name)
-print('Resume:', cfg.resume)
-if cfg.resume:
-    print('Checkpoint:', cfg.resume_ckpt if cfg.resume_ckpt else 'last checkpoint')
+print('Resume:', space_cfg.resume)
+if space_cfg.resume:
+    print('Checkpoint:', space_cfg.resume_ckpt if space_cfg.resume_ckpt else 'last checkpoint')
 print('Using device:', cfg.device)
 if 'cuda' in cfg.device:
     print('Using parallel:', cfg.parallel)
 if cfg.parallel:
     print('Device ids:', cfg.device_ids)
 
-model = get_model(cfg)
+model = get_model(space_cfg)
 model = model.to(cfg.device)
 
-if len(cfg.gamelist) == 1:
-    suffix = cfg.gamelist[0]
+if len(space_cfg.gamelist) == 1:
+    suffix = space_cfg.gamelist[0]
     print(f"Using SPACE Model on {suffix}")
-elif len(cfg.gamelist) == 2:
-    suffix = cfg.gamelist[0] + "_" + cfg.gamelist[1]
+elif len(space_cfg.gamelist) == 2:
+    suffix = space_cfg.gamelist[0] + "_" + cfg.gamelist[1]
     print(f"Using SPACE Model on {suffix}")
 else:
     print("Can't train")
     exit(1)
-checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.space_model_name), max_num=4)
+checkpointer = Checkpointer(osp.join(space_cfg.checkpointdir, suffix, space_cfg.exp_name), max_num=4)
 use_cpu = 'cpu' in cfg.device
 
-checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
+checkpoint = checkpointer.load_last(space_cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 

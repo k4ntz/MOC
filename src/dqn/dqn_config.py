@@ -6,32 +6,22 @@ cfg = CfgNode({
     # exp name
     'exp_name': '', 
 
-    ### space stuff ###
-    'model': 'SPACE',
-    # exp model name for space
-    'space_model_name': 'atari_ball_joint_v1',
-    # For Atari and using matching SPACE model
     'gamelist': [
-        'Pong-v0',
         'Tennis-v0',
+        'Pong-v0',
     ],
-
-    # gym env name
-    'env_name': '',
-
     # Resume training or not
     'resume': True,
-    # If resume is true, then we load this checkpoint. If '', we load the last checkpoint
-    'resume_ckpt': '',
+
+    'env_name': '',
+
+
     # Whether to use multiple GPUs
     'parallel': False,
     # Device ids to use
     'device_ids': [0, 1, 2, 3],
     'device': 'cuda:0',
     'logdir': '/dqn/logs/',
-
-    # space stuff
-    'checkpointdir': '../output/checkpoints/',
 
     'video_steps': 10,
 
