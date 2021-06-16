@@ -18,7 +18,7 @@ Transition = namedtuple('Transition',
 
 class Agent:
     def __init__(self, batch_size, gamma, eps_start, eps_end, eps_decay, 
-                    lr, n_actions, memory_min_size, device, log_steps,  use_space):
+                    lr, n_actions, memory_min_size, device, log_steps,  use_space, use_enemy):
         self.batch_size = batch_size
         self.gamma = gamma
         self.eps_start = eps_start
@@ -36,9 +36,12 @@ class Agent:
         # init neural nets
         self.policy_net = None
         self.target_net = None
+
+        n_inputs = 3 if use_enemy else 2
+
         if self.use_space:
-            self.policy_net = LinearNN(n_actions).to(device)
-            self.target_net = LinearNN(n_actions).to(device)
+            self.policy_net = LinearNN(n_inputs, n_actions).to(device)
+            self.target_net = LinearNN(n_inputs, n_actions).to(device)
         else:
             self.policy_net = DuelCNN(64, 64, n_actions).to(device)
             self.target_net = DuelCNN(64, 64, n_actions).to(device)

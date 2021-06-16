@@ -53,6 +53,8 @@ cfg = CfgNode({
 
         'black_background': True,  
         'dilation': True,
+
+        'use_enemy': True,
     },
 })
 
