@@ -38,7 +38,6 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
-    print(f'device: {model.dummy_param.device}')
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
                                 load_time_consistency=cfg.load_time_consistency)
     model.train()
@@ -74,7 +73,6 @@ def train(cfg):
             model.train()
             # print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             vids = data.to(cfg.device)
-            print(f'device: {model.dummy_param.device} cfg.de {cfg.device}')
             # print("Post to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             loss, log = model(vids, global_step)
             # In case of using DataParallel

@@ -30,7 +30,6 @@ class TcSpace(nn.Module):
             loss: a scalar. Note it will be better to return (B,)
             log: a dictionary for visualization
         """
-        print(x.shape, )
 
         # over_time = []
         # for i in range(x.shape[1]):
