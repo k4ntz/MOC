@@ -2,7 +2,7 @@ seed: 1
 model: 'SPACE'
 resume: false
 resume_ckpt: ''
-parallel: false
+parallel: true
 device_ids: [0, 1, 2, 3, 4, 5]
 device: 'cuda:0'
 logdir: 'output/logs'
@@ -20,9 +20,9 @@ train:
   batch_size: 2
   max_epochs: 20
   max_steps: 100000
-  print_every: 100
+  print_every: 1
   save_every: 1000
-  num_workers: 6
+  num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: false
