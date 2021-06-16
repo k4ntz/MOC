@@ -56,7 +56,7 @@ class TcSpace(nn.Module):
         #     'space_log': [get_log(res) for res in over_time]
         # }
         y = [x[:, i] for i in range(4)]
-        responses = [self.space(y1, global_step), y1 in y]
+        responses = [self.space(y1, global_step) for y1 in y]
         log = {
             'space_log': [get_log(r) for r in responses]
         }
