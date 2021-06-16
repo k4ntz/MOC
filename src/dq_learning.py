@@ -23,6 +23,15 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as T
 
+#from mushroom_rl.algorithms.value import DQN, DoubleDQN, CategoricalDQN
+#from mushroom_rl.algorithms.value import DuelingDQN
+#from mushroom_rl.approximators.parametric import TorchApproximator
+#from mushroom_rl.core import Core
+#from mushroom_rl.environments import Atari
+#from mushroom_rl.policy import EpsGreedy
+#from mushroom_rl.utils.parameters import Parameter, ExponentialParameter
+#from mushroom_rl.utils.replay_memory import PrioritizedReplayMemory as PriorityReplay
+
 import dqn.dqn_saver as saver
 import dqn.dqn_logger
 import dqn.dqn_agent as dqn_agent
@@ -33,19 +42,17 @@ import argparse
 import os.path as osp
 
 from model import get_model
-from engine.utils import get_config
+from dqn.utils import get_config
 from utils import Checkpointer
 from solver import get_optimizers
 from eval.ap import convert_to_boxes
 
-cfg, task = get_config()
+cfg, _ = get_config()
 
 # if gpu is to be used
 device = cfg.device
 
 print('Experiment name:', cfg.exp_name)
-print('Dataset:', cfg.dataset)
-print('Model name:', cfg.model)
 print('Resume:', cfg.resume)
 if cfg.resume:
     print('Checkpoint:', cfg.resume_ckpt if cfg.resume_ckpt else 'last checkpoint')
@@ -58,10 +65,7 @@ if cfg.parallel:
 model = get_model(cfg)
 model = model.to(cfg.device)
 
-if len(cfg.gamelist) >= 10:
-    print("Using SPACE Model on every game")
-    suffix = 'all'
-elif len(cfg.gamelist) == 1:
+if len(cfg.gamelist) == 1:
     suffix = cfg.gamelist[0]
     print(f"Using SPACE Model on {suffix}")
 elif len(cfg.gamelist) == 2:
@@ -70,15 +74,15 @@ elif len(cfg.gamelist) == 2:
 else:
     print("Can't train")
     exit(1)
-checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), max_num=cfg.train.max_ckpt)
+checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.space_model_name), max_num=4)
 use_cpu = 'cpu' in cfg.device
-if cfg.resume:
-    checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
+
+checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
 # init env
-env = gym.make('PongDeterministic-v4')
+env = gym.make(cfg.env_name)
 env.reset()
 
 # set up matplotlib
@@ -115,7 +119,7 @@ resize = T.Compose([T.ToPILImage(),
 
 i_episode = 0
 global_step = 0
-video_every = 10
+video_every = cfg.video_steps
 
 # preprocessing flags
 black_bg = getattr(cfg, "train").black_background
@@ -230,28 +234,32 @@ env.reset()
 
 # some hyperparameters
 
-BATCH_SIZE = 128
-GAMMA = 0.97
-EPS_START = 1
-EPS_END = 0.01
-EPS_DECAY = 100000
-lr = 0.00025
+BATCH_SIZE = cfg.train.batch_size
+GAMMA = cfg.train.gamma
+EPS_START = cfg.train.eps_start
+EPS_END = cfg.train.eps_end
+EPS_DECAY = cfg.train.eps_decay
+lr = cfg.train.learning_rate
 
-USE_SPACE = True
+USE_SPACE = cfg.use_space
 
-liveplot = False
-DEBUG = False
+liveplot = cfg.liveplot
+DEBUG = cfg.debug
 
-SAVE_EVERY = 5
+print('Use Space:', USE_SPACE)
+print('Liveplot:', liveplot)
+print('Debug Mode:', DEBUG)
+
+SAVE_EVERY = cfg.train.save_every
 if not USE_SPACE:
-    SAVE_EVERY = 25
+    SAVE_EVERY = SAVE_EVERY * 5
 
-num_episodes = 1000
+num_episodes = cfg.train.num_episodes
 
-skip_frames = 1
+skip_frames = cfg.train.skip_frames
 
-MEMORY_SIZE = 50000
-MEMORY_MIN_SIZE = 25000
+MEMORY_SIZE = cfg.train.memory_size
+MEMORY_MIN_SIZE = cfg.train.memory_min_size
 
 # for debugging nn stuff
 if DEBUG:
@@ -260,12 +268,12 @@ if DEBUG:
     MEMORY_MIN_SIZE = BATCH_SIZE
 
 
-exp_name = "DQ-Learning-Pong-v9-zw"
+exp_name = cfg.exp_name
 
 # init tensorboard
-log_path = os.getcwd() + "/dqn/logs/"
+log_path = os.getcwd() + cfg.logdir
 log_name = exp_name
-log_steps = 500
+log_steps = cfg.train.log_steps
 logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name)
 
 # Get number of actions from gym action space
