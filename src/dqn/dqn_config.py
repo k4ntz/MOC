@@ -54,6 +54,10 @@ cfg = CfgNode({
         'black_background': True,  
         'dilation': True,
 
+        # settings for input
+        'use_zwhat': False,
+        'cnn_features': False,
+
         'use_enemy': True,
     },
 })

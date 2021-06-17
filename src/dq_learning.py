@@ -35,6 +35,7 @@ import torchvision.transforms as T
 import dqn.dqn_saver as saver
 import dqn.dqn_logger
 import dqn.dqn_agent as dqn_agent
+import dqn.utils as utils
 
 import argparse
 
@@ -42,12 +43,10 @@ import argparse
 import os.path as osp
 
 from model import get_model
-from dqn.utils import get_config
 from utils import Checkpointer
 from solver import get_optimizers
-from eval.ap import convert_to_boxes
 
-cfg, space_cfg = get_config()
+cfg, space_cfg = utils.get_config()
 
 # if gpu is to be used
 device = cfg.device
@@ -153,85 +152,6 @@ def get_screen():
     image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float().to(device)
     return image_t.unsqueeze(0)
 
-# helper function to normalize tensor values to 0-1
-def normalize_tensors(t):
-    dim1 = t.shape[0]
-    dim2 = t.shape[1]
-    dim3 = t.shape[2]
-    t = t.view(t.size(0), -1)
-    t -= t.min(1, keepdim=True)[0]
-    t /= t.max(1, keepdim=True)[0]
-    t = t.view(dim1, dim2, dim3)
-    return t
-
-boxes_len = 16
-
-# helper function to process a single frame of z stuff
-def process_z_stuff(z_where, z_pres_prob, z_what):
-    z_stuff = torch.zeros_like(torch.rand((3, 4)), device=device)
-    if not cfg.train.use_enemy:
-        z_stuff = torch.zeros_like(torch.rand((2, 4)), device=device)
-    z_where = z_where.to(device)
-    z_pres_prob = z_pres_prob.to(device)
-    z_what = z_what.to(device)
-    # clean up
-    torch.cuda.empty_cache()
-    # create z pres < 0.5
-    z_pres = (z_pres_prob.detach().cpu().squeeze() > 0.5)
-    # get z whats with z pres
-    z_what_pres = z_what[z_pres]
-    ## same with z where 
-    z_where_pres = z_where[z_pres]
-    # get coordinates
-    coord_x = torch.FloatTensor([i % boxes_len for i, x in enumerate(z_pres) if x]).to(device)
-    coord_y = torch.FloatTensor([math.floor(i / boxes_len) for i, x in enumerate(z_pres) if x]).to(device)
-    # normalize z where centers to [0:1], add coordinates to its center values and normalize again
-    z_where_pres[:, 2] = (((z_where_pres[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
-    z_where_pres[:, 3] = (((z_where_pres[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
-    # define what is player, ball and enemy
-    indices = []
-    for i, z_obj in enumerate(z_where_pres):
-        x_pos = z_obj[2]
-        y_pos = z_obj[3]
-        size_relation = z_obj[0]/z_obj[1]
-        # if in slot of right paddle
-        if x_pos < 0.9315 and x_pos > 0.9305 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
-            # put right paddle at first
-            z_stuff[0] = z_obj
-            indices.append(0)
-        # if its in slot of left paddle
-        elif x_pos < 0.0702 and x_pos > 0.0687 and (size_relation < 0.9 or (y_pos < 0.21 or y_pos > 0.86)):
-            # put left paddle at last
-            if cfg.train.use_enemy:
-                z_stuff[2] = z_obj
-                indices.append(2)
-            else:
-                indices.append(3)
-        # if it is no paddle and has roughly size relation of ball
-        elif size_relation > 0.7:
-            # put ball in the middle
-            z_stuff[1] = z_obj
-            indices.append(1)
-        else:
-            # append black cause 4th box or sth like that
-            indices.append(3)
-    # log video with given classes
-    if i_episode % video_every == 0:
-        boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
-        logger.draw_bounding_box(boxes_batch, indices)
-    z_stuff = z_stuff.unsqueeze(0).cpu()
-    return z_stuff
-
-
-# use SPACE model
-def get_z_stuff(image):
-    # TODO: treat global_step in a more elegant way
-    with torch.no_grad():
-        loss, log = model(image, global_step=100000000)
-        # (B, N, 4), (B, N, 1), (B, N, D)
-        z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
-        return process_z_stuff(z_where[0], z_pres_prob[0], z_what[0])
-    return None
 
 env.reset()
 
@@ -298,7 +218,7 @@ agent = dqn_agent.Agent(
     device,
     log_steps,
     USE_SPACE, 
-    cfg.train.use_enemy
+    cfg
 )
 
 total_max_q = 0
@@ -324,7 +244,7 @@ else:
 # helper function to get state, whether to use SPACE or not
 def get_state():
     if USE_SPACE:
-        return get_z_stuff(get_screen())
+        return utils.get_z_stuff(get_screen(), model, cfg, i_episode, logger)
     else:
         screen = env.render(mode='rgb_array')
         pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)

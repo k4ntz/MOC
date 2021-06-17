@@ -12,19 +12,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class LinearNN(nn.Module):
 
-    def __init__(self, n_inputs, outputs):
+    def __init__(self, n_inputs, n_features, outputs):
         super(LinearNN, self).__init__()
         # x consecutive frames
         # y elements in sparse representation
         # z elements per object
-        self.input_size = 4 * n_inputs * 4
+        self.input_size = 4 * n_inputs * n_features
+        
+        self.lin1 = nn.Linear(self.input_size, n_features * 32)
 
-        self.lin1 = nn.Linear(self.input_size, 128)
-
-        self.Alin1 = nn.Linear(128, 128) 
+        self.Alin1 = nn.Linear(n_features * 32, 128) 
         self.Alin2 = nn.Linear(128, outputs)
 
-        self.Vlin1 = nn.Linear(128, 128)
+        self.Vlin1 = nn.Linear(n_features * 32, 128)
         self.Vlin2 = nn.Linear(128, 1)
 
     # Called with one element to determine next action
