@@ -99,7 +99,7 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
         z_where_what = torch.cat((z_where.unsqueeze(0), z_what.unsqueeze(0)), 2).to(device)
         # get z stuff with z pres
         z_stuff[z_pres] = z_where_what[z_pres]
-        return z_stuff.squeeze(0)
+        return z_stuff.squeeze(0).cpu()
     else:
         # use linear network and use spare representation with coordinates
         z_temp = z_where[z_pres]
