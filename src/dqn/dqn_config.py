@@ -56,6 +56,8 @@ cfg = CfgNode({
 
         # settings for input
         'use_zwhat': False,
+
+        # when true use zwhat is always true
         'cnn_features': False,
 
         'use_enemy': True,

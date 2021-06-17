@@ -24,5 +24,6 @@ train:
   save_every: 5
 
   use_zwhat: True
+  # reminder: when cnn true, use_zwhat is always true
   cnn_features: True
 

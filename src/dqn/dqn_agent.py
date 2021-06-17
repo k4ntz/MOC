@@ -10,6 +10,7 @@ import torch.optim as optim
 from collections import namedtuple
 
 from dqn.dqn_networks import LinearNN
+from dqn.dqn_networks import SPACEDuelCNN
 from dqn.dqn_networks import DuelCNN
 
 ### replay memory stuff
@@ -41,8 +42,12 @@ class Agent:
         n_features = 4 if not cfg.train.use_zwhat else 36
 
         if self.use_space:
-            self.policy_net = LinearNN(n_inputs, n_features, n_actions).to(device)
-            self.target_net = LinearNN(n_inputs, n_features, n_actions).to(device)
+            if cfg.train.cnn_features:
+                self.policy_net = SPACEDuelCNN(n_actions).to(device)
+                self.target_net = SPACEDuelCNN(n_actions).to(device)
+            else:
+                self.policy_net = LinearNN(n_inputs, n_features, n_actions).to(device)
+                self.target_net = LinearNN(n_inputs, n_features, n_actions).to(device)
         else:
             self.policy_net = DuelCNN(64, 64, n_actions).to(device)
             self.target_net = DuelCNN(64, 64, n_actions).to(device)
