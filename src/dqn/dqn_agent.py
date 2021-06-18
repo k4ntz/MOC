@@ -93,7 +93,7 @@ class Agent:
         batch.action - tuple of all the actions (each action is an int)    
         """
         batch = Transition(*zip(*transitions))
-
+        
         # Convert them to tensors
         state = torch.from_numpy(np.array(batch.state)).float().to(self.device)
         next_state = torch.from_numpy(np.array(batch.next_state)).float().to(self.device)
