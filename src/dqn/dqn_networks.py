@@ -50,25 +50,25 @@ class SPACEDuelCNN(nn.Module):
     """
     CNN with Duel Algo. https://arxiv.org/abs/1511.06581
     """
-    def __init__(self, output_size):
+    def __init__(self, output_size, cnn_scale = 1):
         super(SPACEDuelCNN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32, kernel_size=8, stride=4) #out 128
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2) #out 256
-        self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1) #out 256
-        self.bn3 = nn.BatchNorm2d(64)
+        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32 * cnn_scale, kernel_size=8, stride=4) #out 128
+        self.bn1 = nn.BatchNorm2d(32  * cnn_scale)
+        self.conv2 = nn.Conv2d(in_channels=32  * cnn_scale, out_channels=64  * cnn_scale, kernel_size=4, stride=2) #out 256
+        self.bn2 = nn.BatchNorm2d(64  * cnn_scale)
+        self.conv3 = nn.Conv2d(in_channels=64  * cnn_scale, out_channels=64  * cnn_scale, kernel_size=3, stride=1) #out 256
+        self.bn3 = nn.BatchNorm2d(64  * cnn_scale)
 
-        linear_input_size = 1792 #7168
+        linear_input_size = 1792  * cnn_scale #7168
         # Action layer
-        self.Alinear1 = nn.Linear(in_features=linear_input_size, out_features=128) # 512
+        self.Alinear1 = nn.Linear(in_features=linear_input_size, out_features=128  * cnn_scale) # 512
         self.Alrelu = nn.LeakyReLU()  # Linear 1 activation funct
-        self.Alinear2 = nn.Linear(in_features=128, out_features=output_size)
+        self.Alinear2 = nn.Linear(in_features=128  * cnn_scale, out_features=output_size)
 
         # State Value layer
-        self.Vlinear1 = nn.Linear(in_features=linear_input_size, out_features=128) # 512
+        self.Vlinear1 = nn.Linear(in_features=linear_input_size, out_features=128  * cnn_scale) # 512
         self.Vlrelu = nn.LeakyReLU()  # Linear 1 activation funct
-        self.Vlinear2 = nn.Linear(in_features=128, out_features=1)  # Only 1 node
+        self.Vlinear2 = nn.Linear(in_features=128  * cnn_scale, out_features=1)  # Only 1 node
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -93,29 +93,29 @@ class DuelCNN(nn.Module):
     """
     CNN with Duel Algo. https://arxiv.org/abs/1511.06581
     """
-    def __init__(self, h, w, output_size):
+    def __init__(self, h, w, output_size, cnn_scale = 1):
         super(DuelCNN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32, kernel_size=8, stride=4)
-        self.bn1 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32  * cnn_scale, kernel_size=8, stride=4)
+        self.bn1 = nn.BatchNorm2d(32  * cnn_scale)
         convw, convh = self.conv2d_size_calc(w, h, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
-        self.bn2 = nn.BatchNorm2d(64)
+        self.conv2 = nn.Conv2d(in_channels=32  * cnn_scale, out_channels=64  * cnn_scale, kernel_size=4, stride=2)
+        self.bn2 = nn.BatchNorm2d(64  * cnn_scale)
         convw, convh = self.conv2d_size_calc(convw, convh, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
-        self.bn3 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(in_channels=64  * cnn_scale, out_channels=64  * cnn_scale, kernel_size=3, stride=1)
+        self.bn3 = nn.BatchNorm2d(64  * cnn_scale)
         convw, convh = self.conv2d_size_calc(convw, convh, kernel_size=3, stride=1)
 
-        linear_input_size = convw * convh * 64  # Last conv layer's out sizes
+        linear_input_size = convw * convh * 64 * cnn_scale # Last conv layer's out sizes
 
         # Action layer
-        self.Alinear1 = nn.Linear(in_features=linear_input_size, out_features=128)
+        self.Alinear1 = nn.Linear(in_features=linear_input_size, out_features=128  * cnn_scale)
         self.Alrelu = nn.LeakyReLU()  # Linear 1 activation funct
-        self.Alinear2 = nn.Linear(in_features=128, out_features=output_size)
+        self.Alinear2 = nn.Linear(in_features=128  * cnn_scale, out_features=output_size)
 
         # State Value layer
-        self.Vlinear1 = nn.Linear(in_features=linear_input_size, out_features=128)
+        self.Vlinear1 = nn.Linear(in_features=linear_input_size, out_features=128  * cnn_scale)
         self.Vlrelu = nn.LeakyReLU()  # Linear 1 activation funct
-        self.Vlinear2 = nn.Linear(in_features=128, out_features=1)  # Only 1 node
+        self.Vlinear2 = nn.Linear(in_features=128  * cnn_scale, out_features=1)  # Only 1 node
 
     def conv2d_size_calc(self, w, h, kernel_size=5, stride=2):
         """

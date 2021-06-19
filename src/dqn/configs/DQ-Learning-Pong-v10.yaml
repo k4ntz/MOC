@@ -26,4 +26,5 @@ train:
   use_zwhat: True
   # reminder: when cnn true, use_zwhat is always true
   cnn_features: True
+  cnn_scale: 4
 

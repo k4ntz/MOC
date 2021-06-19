@@ -7,6 +7,7 @@ import numpy as np
 import torch.nn.functional as F
 import torch.optim as optim
 
+from torchinfo import summary
 from collections import namedtuple
 
 from dqn.dqn_networks import LinearNN
@@ -43,14 +44,17 @@ class Agent:
 
         if self.use_space:
             if cfg.train.cnn_features:
-                self.policy_net = SPACEDuelCNN(n_actions).to(device)
-                self.target_net = SPACEDuelCNN(n_actions).to(device)
+                self.policy_net = SPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(device)
+                self.target_net = SPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(device)
+                summary(self.target_net, (cfg.train.batch_size, 4, 256, 36))
             else:
                 self.policy_net = LinearNN(n_inputs, n_features, n_actions).to(device)
                 self.target_net = LinearNN(n_inputs, n_features, n_actions).to(device)
+                summary(self.target_net, (cfg.train.batch_size, 4 * n_inputs * n_features))
         else:
-            self.policy_net = DuelCNN(64, 64, n_actions).to(device)
-            self.target_net = DuelCNN(64, 64, n_actions).to(device)
+            self.policy_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(device)
+            self.target_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(device)
+            summary(self.target_net, (cfg.train.batch_size, 4, 64, 64))
 
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
