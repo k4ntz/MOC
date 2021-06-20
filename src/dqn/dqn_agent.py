@@ -19,41 +19,42 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
 
 class Agent:
-    def __init__(self, batch_size, gamma, eps_start, eps_end, eps_decay, 
-                    lr, n_actions, memory_min_size, device, log_steps,  use_space, cfg):
+    def __init__(self, batch_size, eps_start, eps_end, n_actions, memory_min_size, logger, cfg):
         self.batch_size = batch_size
-        self.gamma = gamma
+        self.gamma = cfg.train.gamma
         self.eps_start = eps_start
         self.eps_end = eps_end
-        self.eps_decay = eps_decay
-        self.lr = lr
+        self.eps_decay = cfg.train.eps_decay
+        self.lr = cfg.train.learning_rate
         self.n_actions = n_actions
         self.memory_min_size = memory_min_size
 
-        self.device = device
-        self.log_steps = log_steps
+        self.device = cfg.device
+        self.log_steps = cfg.train.log_steps
         
-        self.use_space = use_space
+        self.use_space = cfg.use_space
 
         # init neural nets
         self.policy_net = None
         self.target_net = None
 
-        n_inputs = 3 if cfg.train.use_enemy else 2
-        n_features = 4 if not cfg.train.use_zwhat else 36
+        self.model_logged = False
 
         if self.use_space:
             if cfg.train.cnn_features:
-                self.policy_net = SPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(device)
-                self.target_net = SPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(device)
+                input_channels = 36 if cfg.train.reshape_input else 4
+                self.policy_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
+                self.target_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
                 summary(self.target_net, (cfg.train.batch_size, 4, 256, 36))
             else:
-                self.policy_net = LinearNN(n_inputs, n_features, n_actions).to(device)
-                self.target_net = LinearNN(n_inputs, n_features, n_actions).to(device)
+                n_inputs = 3 if cfg.train.use_enemy else 2
+                n_features = 4 if not cfg.train.use_zwhat else 36
+                self.policy_net = LinearNN(n_inputs, n_features, n_actions).to(self.device)
+                self.target_net = LinearNN(n_inputs, n_features, n_actions).to(self.device)
                 summary(self.target_net, (cfg.train.batch_size, 4 * n_inputs * n_features))
         else:
-            self.policy_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(device)
-            self.target_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(device)
+            self.policy_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(self.device)
+            self.target_net = DuelCNN(64, 64, n_actions, cfg.train.cnn_scale).to(self.device)
             summary(self.target_net, (cfg.train.batch_size, 4, 64, 64))
 
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -105,6 +106,11 @@ class Agent:
         reward = torch.cat(batch.reward, dim=0).to(self.device)
         done = torch.tensor(batch.done, dtype=torch.float, device=self.device)
 
+        # log model once
+        if not self.model_logged:
+            logger.writer.add_graph(self.target_net, state)
+            self.model_logged = True
+        
         # Make predictions
         state_q_values = self.policy_net(state)
         next_states_q_values = self.policy_net(next_state)

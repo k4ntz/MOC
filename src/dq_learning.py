@@ -157,14 +157,11 @@ env.reset()
 
 ######## TRAINING ########
 
-# some hyperparameters
+# some hyperparameters which are modified here 
 
 BATCH_SIZE = cfg.train.batch_size
-GAMMA = cfg.train.gamma
 EPS_START = cfg.train.eps_start
 EPS_END = cfg.train.eps_end
-EPS_DECAY = cfg.train.eps_decay
-lr = cfg.train.learning_rate
 
 USE_SPACE = cfg.use_space
 
@@ -208,16 +205,11 @@ memory = ReplayMemory(MEMORY_SIZE)
 # init agent
 agent = dqn_agent.Agent(
     BATCH_SIZE,
-    GAMMA,
     EPS_START,
     EPS_END,
-    EPS_DECAY,
-    lr,
     n_actions,
     MEMORY_MIN_SIZE,
-    device,
-    log_steps,
-    USE_SPACE, 
+    logger, 
     cfg
 )
 

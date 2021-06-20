@@ -60,6 +60,7 @@ cfg = CfgNode({
         # when true use zwhat is always true
         'cnn_features': False,
         'cnn_scale': 1,
+        'reshape_input': False,
 
         'use_enemy': True,
     },
