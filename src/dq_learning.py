@@ -234,9 +234,10 @@ else:
     print("No prior checkpoints exists, starting fresh")
 
 # helper function to get state, whether to use SPACE or not
-def get_state():
+def get_state(old_state = None):
+    state = None
     if USE_SPACE:
-        return utils.get_z_stuff(get_screen(), model, cfg, i_episode, logger)
+        state = utils.get_z_stuff(get_screen(), model, cfg, i_episode, logger)
     else:
         screen = env.render(mode='rgb_array')
         pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
@@ -248,7 +249,25 @@ def get_state():
         # convert color
         opencv_img = cv2.resize(opencv_img, (64,64), interpolation = cv2.INTER_AREA)
         opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2GRAY)
-        return torch.from_numpy(opencv_img / 255).float()
+        state = torch.from_numpy(opencv_img / 255).float()
+    ### stack states to have 4 frames
+    if cfg.train.reshape_input:
+        # stack at last dimension, cause shape should be
+        # (batchsize, 36 (zstuff), 16, 16, 4 (stacked dimension))
+        if old_state is None:
+            state = torch.cat((state, state, state, state), 3)
+        else:
+            #add newest to front and deselect last state
+            old_state_t = torch.from_numpy(old_state).float()
+            state = torch.cat((state.detach().cpu(), old_state_t), 3).to(device)[:,:,:,:4]
+        return state.numpy()
+    else:
+        state = state.detach().cpu()
+        if old_state is None:
+            state = np.stack((state, state, state, state))
+        else:
+            state = np.stack((state, old_state[0], old_state[1], old_state[2]))
+    return state
 
 episode_durations = []
 
@@ -292,7 +311,6 @@ while i_episode < num_episodes:
     env.reset()
     # get z stuff for init
     state = get_state()
-    state = np.stack((state, state, state, state))
     # last done action
     action_item = None
     action = None
@@ -320,8 +338,7 @@ while i_episode < num_episodes:
         reward = torch.tensor([reward], device=device)
 
         # if skip frames are over, observe new state
-        next_state = get_state()
-        next_state = np.stack((next_state, state[0], state[1], state[2]))
+        next_state = get_state(state)
         # Store the transition in memory
         memory.push(state, action, next_state, reward, done)
         # Move to the next state

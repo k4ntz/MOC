@@ -12,6 +12,7 @@ from collections import namedtuple
 
 from dqn.dqn_networks import LinearNN
 from dqn.dqn_networks import SPACEDuelCNN
+from dqn.dqn_networks import UnshapedSPACEDuelCNN
 from dqn.dqn_networks import DuelCNN
 
 ### replay memory stuff
@@ -42,10 +43,15 @@ class Agent:
 
         if self.use_space:
             if cfg.train.cnn_features:
-                input_channels = 36 if cfg.train.reshape_input else 4
-                self.policy_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
-                self.target_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
-                summary(self.target_net, (cfg.train.batch_size, 4, 256, 36))
+                if cfg.train.reshape_input:
+                    input_channels = 36
+                    self.policy_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
+                    self.target_net = SPACEDuelCNN(n_actions, input_channels, cfg.train.cnn_scale).to(self.device)
+                    summary(self.target_net, (cfg.train.batch_size, 36, 16, 16, 4))
+                else:
+                    self.policy_net = UnshapedSPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(self.device)
+                    self.target_net = UnshapedSPACEDuelCNN(n_actions, cfg.train.cnn_scale).to(self.device)
+                    summary(self.target_net, (cfg.train.batch_size, 4, 256, 36))
             else:
                 n_inputs = 3 if cfg.train.use_enemy else 2
                 n_features = 4 if not cfg.train.use_zwhat else 36

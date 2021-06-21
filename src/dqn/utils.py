@@ -99,8 +99,14 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
         z_where_what = torch.cat((z_where.unsqueeze(0), z_what.unsqueeze(0)), 2).to(device)
         # get z stuff with z pres
         z_stuff[z_pres] = z_where_what[z_pres]
-        return z_stuff.squeeze(0).cpu()
+        z_stuff = z_stuff.squeeze(0)
+        if cfg.train.reshape_input: 
+            # reshape in useful structure
+            z_stuff = z_stuff.permute(1,0)
+            z_stuff = torch.reshape(z_stuff, (z_stuff.shape[0], boxes_len, boxes_len)).unsqueeze(3)
+        return z_stuff
     else:
+        ############################################################################################
         # use linear network and use spare representation with coordinates
         z_temp = z_where[z_pres]
         # normalize z where centers to [0:1], add coordinates to its center values and normalize again
@@ -146,7 +152,7 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
         if i_episode % cfg.video_steps == 0 and logger is not None:
             boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
             logger.draw_bounding_box(boxes_batch, indices)
-        z_stuff = z_stuff.unsqueeze(0).cpu()
+        z_stuff = z_stuff.unsqueeze(0)
         return z_stuff
 
 
