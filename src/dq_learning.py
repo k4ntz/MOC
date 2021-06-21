@@ -259,8 +259,8 @@ def get_state(old_state = None):
         else:
             #add newest to front and deselect last state
             old_state_t = torch.from_numpy(old_state).float()
-            state = torch.cat((state.detach().cpu(), old_state_t), 3).to(device)[:,:,:,:4]
-        return state.numpy()
+            state = torch.cat((state.detach().cpu(), old_state_t), 3)[:,:,:,:4]
+        return state.detach().cpu().numpy()
     else:
         state = state.detach().cpu()
         if old_state is None:
