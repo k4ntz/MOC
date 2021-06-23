@@ -76,6 +76,8 @@ def get_config():
 def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
     device = cfg.device
     boxes_len = int(math.sqrt(z_pres_prob.shape[0]))
+    z_stuff = None
+    indices = None
     # move z stuff to devices
     z_where = z_where.to(device)
     z_pres_prob = z_pres_prob.to(device)
@@ -91,24 +93,28 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
     n_features = 4
     if cfg.train.use_zwhat:
         n_features = 36
+    # for video stuff
+    z_temp = z_where[z_pres]
     if cfg.train.cnn_features:
         # use cnn for feature extraction so prepare as image of z stuff
-        z_pres = z_pres.unsqueeze(0)
+        z_pres_u = z_pres.unsqueeze(0)
         z_stuff = torch.zeros_like(torch.rand((1, boxes_len * boxes_len, n_features)), device=device)
         # cat z where and z what
         z_where_what = torch.cat((z_where.unsqueeze(0), z_what.unsqueeze(0)), 2).to(device)
         # get z stuff with z pres
-        z_stuff[z_pres] = z_where_what[z_pres]
+        z_stuff[z_pres_u] = z_where_what[z_pres_u]
         z_stuff = z_stuff.squeeze(0)
         if cfg.train.reshape_input: 
             # reshape in useful structure
             z_stuff = z_stuff.permute(1,0)
             z_stuff = torch.reshape(z_stuff, (z_stuff.shape[0], boxes_len, boxes_len)).unsqueeze(3)
-        return z_stuff
+        # fill video with boxes
+        indices = []
+        for i, z_obj in enumerate(z_temp):
+            indices.append(3)
     else:
-        ############################################################################################
+    ################################################################################################
         # use linear network and use spare representation with coordinates
-        z_temp = z_where[z_pres]
         # normalize z where centers to [0:1], add coordinates to its center values and normalize again
         z_temp[:, 2] = (((z_temp[:, 2] + 1.0) / 2.0) + coord_x) / boxes_len
         z_temp[:, 3] = (((z_temp[:, 3] + 1.0) / 2.0) + coord_y) / boxes_len
@@ -148,12 +154,13 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
             else:
                 # append black cause 4th box or sth like that
                 indices.append(3)
-        # log video with given classes
-        if i_episode % cfg.video_steps == 0 and logger is not None:
-            boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
-            logger.draw_bounding_box(boxes_batch, indices)
         z_stuff = z_stuff.unsqueeze(0)
-        return z_stuff
+    ################################################################################################
+    # log video with given classes
+    if i_episode % cfg.video_steps == 0 and logger is not None:
+        boxes_batch = convert_to_boxes(z_where.unsqueeze(0), z_pres.unsqueeze(0), z_pres_prob)
+        logger.draw_bounding_box(boxes_batch, indices)
+    return z_stuff
 
 
 # use SPACE model

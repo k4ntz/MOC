@@ -233,6 +233,10 @@ if saver.check_loading_model(exp_name):
 else:
     print("No prior checkpoints exists, starting fresh")
 
+if cfg.parallel:
+    agent.policy_net = nn.DataParallel(agent.policy_net, device_ids=cfg.device_ids)
+    agent.target_net = nn.DataParallel(agent.target_net, device_ids=cfg.device_ids)
+
 # helper function to get state, whether to use SPACE or not
 def get_state(old_state = None):
     state = None

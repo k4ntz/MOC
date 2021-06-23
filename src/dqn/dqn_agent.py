@@ -21,6 +21,7 @@ Transition = namedtuple('Transition',
 
 class Agent:
     def __init__(self, batch_size, eps_start, eps_end, n_actions, memory_min_size, logger, cfg):
+        self.cfg = cfg
         self.batch_size = batch_size
         self.gamma = cfg.train.gamma
         self.eps_start = eps_start
@@ -82,10 +83,15 @@ class Agent:
         if sample > eps_threshold:
             with torch.no_grad():
                 state = torch.tensor(state, dtype=torch.float, device=self.device).unsqueeze(0)
+                if self.cfg.parallel:
+                    state = torch.cat(len(self.cfg.device_ids)*[state])
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state).max(1)[1].view(1, 1)
+                tmp = self.policy_net(state).max(1)[1]
+                if self.cfg.parallel:
+                    tmp = tmp[0]
+                return tmp.view(1, 1)
         else:
             return torch.tensor([[random.randrange(self.n_actions)]], device=self.device, dtype=torch.long)
 
