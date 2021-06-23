@@ -2,6 +2,7 @@ import os
 import argparse
 import torch
 import math
+import time
 
 from argparse import ArgumentParser
 from dqn.dqn_config import cfg
@@ -167,7 +168,9 @@ def process_z_stuff(z_where, z_pres_prob, z_what, cfg, i_episode, logger=None):
 def get_z_stuff(image, space_model, cfg, i_episode, logger=None):
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():
+        start = time.perf_counter()
         loss, log = space_model(image, global_step=100000000)
+        print(time.perf_counter() - start)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
         return process_z_stuff(z_where[0], z_pres_prob[0], z_what[0], cfg, i_episode, logger)

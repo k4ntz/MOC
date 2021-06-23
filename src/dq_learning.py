@@ -1,6 +1,7 @@
 # deep q learning on pong (and later on tennis)
 # inspired by https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-# call with python dq_learning.py --config configs/atari_ball_joint_v1.yaml resume True device 'cpu'
+# call with:
+# python dq_learning.py --config dqn/configs/DQ-Learning-Tennis-v11r.yaml --space-config configs/atari_ball_joint_v1.yaml resume True device 'cpu'
 
 import sys
 import gym
@@ -50,6 +51,9 @@ cfg, space_cfg = utils.get_config()
 
 # if gpu is to be used
 device = cfg.device
+
+torch.backends.cudnn.enabled = True
+torch.backends.cudnn.benchmark = True
 
 print('Experiment name:', cfg.exp_name)
 print('Resume:', space_cfg.resume)
