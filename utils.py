@@ -250,12 +250,15 @@ def mark_point(image_array, x, y, color=(255, 0, 0), size=2, show=True, cross=Tr
         plt.show()
 
 
-def show_image(image_array):
+def show_image(image_array, save_path=None, save=False):
     """
     shows the image array using matplotlib.pyplot
     """
     plt.imshow(image_array)
-    plt.show()
+    if save:
+        plt.savefig(save_path)
+    else:
+        plt.show()
 
 
 # def dict_to_array(info_dict, game):

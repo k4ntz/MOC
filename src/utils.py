@@ -27,18 +27,19 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        "white_ghost": (214, 214, 214),
                        "blue_ghost": (66, 114, 194), "score0": (200, 50, 200),
                        "life": (70, 210, 70), "life2": (20, 150, 20)
-                      } #
+                       }  #
 
 RESTORE_COLORS = True
 
 turned = False
 
+
 def draw_bounding_boxes(image, boxes_batch, labels=None):
     _, imW, imH = image.shape
     if not torch.is_tensor(image):
         image = torch.tensor(image)
-    bb = (boxes_batch[0][:,:4] * (imW, imW, imH, imH)).round()
-    bb[:,[0, 1, 2, 3]] = bb[:,[2, 0, 3, 1]] # swapping xmin <-> ymax ... etc
+    bb = (boxes_batch[0][:, :4] * (imW, imW, imH, imH)).round()
+    bb[:, [0, 1, 2, 3]] = bb[:, [2, 0, 3, 1]]  # swapping xmin <-> ymax ... etc
     if imW == 128 and imH == 128 and RESTORE_COLORS:
         image = torch.tensor(np.flip(image.to("cpu").numpy(), axis=0).copy())
     else:
@@ -49,6 +50,7 @@ def draw_bounding_boxes(image, boxes_batch, labels=None):
         colors = ["red"] * 50
     image = draw_bb(image, torch.tensor(bb), colors=colors)
     return image
+
 
 class Checkpointer:
     def __init__(self, checkpointdir, max_num, load_time_consistency=False):
@@ -120,7 +122,6 @@ class Checkpointer:
         print('Checkpoint loaded.')
         return checkpoint
 
-
     def load_last(self, path, model, optimizer_fg, optimizer_bg, use_cpu=False):
         """
         If path is '', we load the last checkpoint
@@ -136,7 +137,7 @@ class Checkpointer:
 
         return self.load(path, model, optimizer_fg, optimizer_bg, use_cpu)
 
-    def save_best(self, metric_name, value, checkpoint,  min_is_better):
+    def save_best(self, metric_name, value, checkpoint, min_is_better):
         metric_file = os.path.join(self.checkpointdir, f'best_{metric_name}.json')
         checkpoint_file = os.path.join(self.checkpointdir, f'best_{metric_name}.pth')
 
@@ -240,9 +241,9 @@ def save_image(image, path, number=None):
     image_name = path.split("/")[-1]
     name, ext = image_name.split(".")
     if number is not None:
-        new_name = name + f"_{number}.png" # saved as png to avoid loosing
+        new_name = name + f"_{number}.png"  # saved as png to avoid loosing
     try:
-        Simage(image/255, f"{folder}/{new_name}")
+        Simage(image / 255, f"{folder}/{new_name}")
     except ValueError:
         print(f"Couldn't save {new_name}, continuing...")
 
@@ -253,7 +254,8 @@ def corners_to_wh(bbox):
     xmin, ymin, xmax, ymax -> top, left, height, width
     """
     xmin, ymin, xmax, ymax = bbox.to(torch.int)
-    xmin += 1; ymin += 1
+    xmin += 1;
+    ymin += 1
     height, width = (ymax - ymin), (xmax - xmin)
     return ymin, xmin, height, width
 
@@ -266,7 +268,7 @@ def image_pca(image, bbox, z_what, row_color=True):
     pca = PCA(n_components=2)
     z_what_emb = pca.fit_transform(z_what.detach().cpu().numpy())
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    selected_colors = np.array(colors[:len(z_what)])/255
+    selected_colors = np.array(colors[:len(z_what)]) / 255
     if row_color:
         for b, box in enumerate(bbox):
             row_group = int(box[1] / 10)
@@ -291,7 +293,7 @@ def place_labels(labels, boxes_batch, image):
     if len(image) == 3:
         turned = True
         image = np.moveaxis(image, 0, 2)
-    bb = (boxes_batch[0][:,:4] * (210, 210, 160, 160)).round().astype(int)
+    bb = (boxes_batch[0][:, :4] * (210, 210, 160, 160)).round().astype(int)
     for bbx, label in zip(bb, labels):
         image = draw_name(image, label, bbx)
     if turned:
@@ -305,9 +307,13 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
     return_form in `labels`, `labels_n`, or `one_hot`
     """
     enemy_list = ['sue', 'inky', 'pinky', 'blinky']
-    pieces = {"save_fruit": (170, 136), "life": (169, 21), \
-              "life2": (169, 38), "score0": (183, 81)}
-    bb = (boxes_batch[0][:,:4] * (210, 210, 160, 160)).round().astype(int)
+    pieces = {
+        "save_fruit": (170, 136),
+        "life": (169, 21),
+        "life2": (169, 38),
+        "score0": (183, 81)
+    }
+    bb = (boxes_batch[0][:, :4] * (210, 210, 160, 160)).round().astype(int)
     pieces["pacman"] = (serie['player_y'].item(), serie['player_x'].item())
     pieces["fruit"] = (serie['fruit_y'].item(), serie['fruit_x'].item())
     for en in enemy_list:
@@ -354,7 +360,6 @@ def draw_name(image, name, bbox):
     font = ImageFont.truetype("../fonts/arial.ttf", 10)
     draw.text((bbox[3], bbox[0]), name, (255, 255, 255), font=font)
     return np.array(img)
-
 
 
 def mark_point(image_array, x, y, color=(255, 0, 0), size=2, show=True):

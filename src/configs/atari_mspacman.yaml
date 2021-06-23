@@ -1,29 +1,31 @@
 seed: 1
 model: 'SPACE'
-resume: false
-resume_ckpt: ''
-parallel: false
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+resume: true
+load_time_consistency: false
+resume_ckpt: pretrained/atari_joint.pth
+# 'output/checkpoints/atari_mspacman/model_000079001.pth'
+parallel: true
+device_ids: [2, 3, 4, 5, 6, 7]
+device: 'cuda:2'
 
-logdir: '../output/logs'
-checkpointdir: '../output/checkpoints'
-evaldir: '../output/eval'
+logdir: 'output/logs'
+checkpointdir: 'output/checkpoints'
+evaldir: 'output/eval'
 
 dataset: 'ATARI'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../data/ATARI'
-  # ATARI: '../aiml_atari_data/space_like'
+  #ATARI: '../data/ATARI'
+  ATARI: 'aiml_atari_data/space_like'
 
 
 train:
-  batch_size: 12
-  max_epochs: 1000
-  max_steps: 160000
-  print_every: 500
-  save_every: 1000
+  batch_size: 36
+  max_epochs: 100
+  max_steps: 1600000
+  print_every: 100
+  save_every: 500
   num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4

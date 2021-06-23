@@ -9,7 +9,7 @@ def get_dataset(cfg, mode):
     assert mode in ['train', 'val', 'test']
     if cfg.dataset == 'ATARI':
         mode = 'validation' if mode == 'val' else mode
-        return Atari(cfg.dataset_roots.ATARI, mode, cfg, gamelist=cfg.gamelist)
+        return Atari(cfg.dataset_roots.ATARI, mode, gamelist=cfg.gamelist)
     elif cfg.dataset == 'OBJ3D_SMALL':
         return Obj3D(cfg.dataset_roots.OBJ3D_SMALL, mode)
     elif cfg.dataset == 'OBJ3D_LARGE':

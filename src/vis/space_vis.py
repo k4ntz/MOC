@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 import matplotlib
+
 matplotlib.use('Agg')
 
 from utils import spatial_transform
@@ -12,17 +13,16 @@ from attrdict import AttrDict
 from torchvision.utils import make_grid
 from torch.utils.data import Subset, DataLoader
 import matplotlib.pyplot as plt
+from collections import Counter
 
 
 class SpaceVis:
-    def __init__(self):
-        pass
-
-
     @torch.no_grad()
     def train_vis(self, writer: SummaryWriter, log, global_step, mode, num_batch=10):
         """
         """
+        writer.add_scalar(f'{mode}_sum/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/total_loss', log['loss'], global_step=global_step)
         B = num_batch
         for i, img in enumerate(log['space_log']):
             for key, value in img.items():
@@ -51,7 +51,7 @@ class SpaceVis:
             grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
             nrow = grid.size(1)
             B, N, _, H, W = grid.size()
-            grid = grid.reshape(B*N, 3, H, W)
+            grid = grid.reshape(B * N, 3, H, W)
 
             grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
             writer.add_image(f'{mode}{i}/#0-separations', grid_image, global_step)
@@ -85,7 +85,27 @@ class SpaceVis:
             writer.add_scalar(f'{mode}{i}/Pres_KL', kl_z_pres.item(), global_step=global_step)
             writer.add_scalar(f'{mode}{i}/Depth_KL', kl_z_depth.item(), global_step=global_step)
             writer.add_scalar(f'{mode}{i}/Bg_KL', kl_bg.item(), global_step=global_step)
-    
+        summed = Counter()
+        for i, img in enumerate(log['space_log']):
+            for key, value in img.items():
+                if isinstance(value, torch.Tensor):
+                    img[key] = value.detach().cpu()
+                    if isinstance(img[key], torch.Tensor) and img[key].ndim > 0:
+                        img[key] = img[key][:num_batch]
+            log_img = AttrDict(img)
+            mse = (log_img.y - log_img.imgs) ** 2
+            mse = mse.flatten(start_dim=1).sum(dim=1).mean(dim=0)
+            summed['mse'] += mse
+            for key in ['log_like', 'kl_z_what', 'kl_z_where', 'kl_z_pres', 'kl_z_depth', 'kl_bg']:
+                summed[key] += log_img[key].mean()
+        writer.add_scalar(f'{mode}_sum/mse', summed['mse'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/log_like', summed['log_like'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/What_KL', summed['kl_z_what'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/Where_KL', summed['kl_z_where'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/Pres_KL', summed['kl_z_pres'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/Depth_KL', summed['kl_z_depth'], global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/Bg_KL', summed['kl_bg'], global_step=global_step)
+
     @torch.no_grad()
     def show_vis(self, model, dataset, indices, path, device):
         dataset = Subset(dataset, indices)
@@ -113,10 +133,10 @@ class SpaceVis:
         masks = log.masks.expand_as(comps)
         masked_comps = comps * masks
         alpha_map = log.alpha_map[:, None].expand_as(imgs)
-        grid = torch.cat([imgs, recon,  fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
+        grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
         nrow = grid.size(1)
         B, N, _, H, W = grid.size()
-        grid = grid.view(B*N, 3, H, W)
+        grid = grid.view(B * N, 3, H, W)
 
         # (3, H, W)
         grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
@@ -151,6 +171,6 @@ class SpaceVis:
         masks = log.masks.expand_as(comps)
         masked_comps = comps * masks
         alpha_map = log.alpha_map[:, None].expand_as(imgs)
-        grid = torch.cat([imgs, recon,  fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
+        grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
         plt.imshow(fg_box[0][0].permute(1, 2, 0))
         plt.show()

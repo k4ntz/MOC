@@ -12,7 +12,7 @@ import time
 import torch
 from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
-
+from tqdm import tqdm
 
 def train(cfg):
 
@@ -73,19 +73,15 @@ def train(cfg):
 
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
-    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
-                max_iterations=cfg.train.max_epochs)
-    rtpt.start()
     for epoch in range(start_epoch, cfg.train.max_epochs):
+        pbar = tqdm(total=len(trainloader))
         if end_flag:
             break
         start = time.perf_counter()
-        epoch_loss = 0
         for i, data in enumerate(trainloader):
             end = time.perf_counter()
             data_time = end - start
             start = end
-
             model.train()
             # print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             vids = data.to(cfg.device)
@@ -96,7 +92,6 @@ def train(cfg):
             optimizer_fg.zero_grad()
             optimizer_bg.zero_grad()
             loss.backward()
-            epoch_loss += loss.item()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
             # print("Before Step", torch.cuda.memory_summary(device=4, abbreviated=False))
@@ -121,11 +116,14 @@ def train(cfg):
                 })
                 vis_logger.train_vis(writer, log, global_step, 'train')
                 end = time.perf_counter()
-
+                print()
                 print(
-                    'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, batch time: {:.4f}s, data time: {:.4f}s, log time: {:.4f}s'.format(
+                    'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f}, batch time: '
+                    '{:.4f}s, data time: {:.4f}s, log time: {:.4f}s'.format(
                         cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
-                        metric_logger['batch_time'].avg, metric_logger['data_time'].avg, end - start))
+                        torch.sum(log['z_what_loss']).item(), metric_logger['batch_time'].avg,
+                        metric_logger['data_time'].avg, end - start))
+                print()
 
             if global_step % cfg.train.save_every == 0:
                 start = time.perf_counter()
@@ -139,10 +137,10 @@ def train(cfg):
                 evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, checkpoint,
                                      checkpointer)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
-
+            pbar.update(1)
             start = time.perf_counter()
             global_step += 1
             if global_step > cfg.train.max_steps:
                 end_flag = True
                 break
-        rtpt.step(subtitle=f"loss={epoch_loss:2.4f}")
+        rtpt.step()

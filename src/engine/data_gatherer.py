@@ -39,7 +39,7 @@ class RandomAgent(object):
 
 
 def gather_agent(cfg, agent_id):
-    args_env_id = 'Pong-v0'
+    args_env_id = 'SpaceInvaders-v0'
     env = gym.make(args_env_id)
 
     agent = RandomAgent(env.action_space)

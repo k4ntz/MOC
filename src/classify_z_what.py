@@ -23,12 +23,15 @@ args = parser.parse_args()
 
 device = torch.device('cuda' if torch.cuda.is_available() and args.type=="nn" else 'cpu')
 
-nb_used_sample = 60000
+nb_used_sample = 100
 
-z_what_train = torch.load("labeled/z_what_train.pt").to(device)[:nb_used_sample]
-train_labels = torch.load("labeled/labels_train.pt").to(device)[:nb_used_sample]
-z_what_test = torch.load("labeled/z_what_test.pt").to(device)[:nb_used_sample]
-test_labels = torch.load("labeled/labels_test.pt").to(device)[:nb_used_sample]
+z_what_train = torch.stack(torch.load("labeled_tr/z_what_validation.pt")).to(device)[:nb_used_sample]
+train_labels = torch.stack(torch.load("labeled_tr/labels_validation.pt")).to(device)[:nb_used_sample]
+
+print(train_labels)
+print(z_what_train.shape)
+# z_what_test = torch.load("labeled/z_what_test.pt").to(device)[:nb_used_sample]
+# test_labels = torch.load("labeled/labels_test.pt").to(device)[:nb_used_sample]
 
 label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
               "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]

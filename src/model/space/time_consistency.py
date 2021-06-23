@@ -34,9 +34,8 @@ class TcSpace(nn.Module):
         # over_time = []
         # for i in range(x.shape[1]):
         #     over_time.append(self.space(x[:, i], global_step))
-        # (T, B, G*G, D)
-        # z_whats = torch.stack([get_log(res)['z_what'] for res in over_time])
-        # z_what_deltas = sqDelta(z_whats[1:], z_whats[:-1])
+
+
         # # (T, B, G*G, 1)
         # z_press = torch.stack([get_log(res)['z_pres'] for res in over_time])
         # # (T, B, G*G, 4)
@@ -57,13 +56,22 @@ class TcSpace(nn.Module):
         # }
         y = [x[:, i] for i in range(4)]
         responses = [self.space(y1, global_step) for y1 in y]
+        # (T, B, G*G, D)
+        z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+        # (T-1, B, G*G, D)
+        z_what_deltas = sq_delta(z_whats[1:], z_whats[:-1])
+        z_what_loss = torch.sum(z_what_deltas)
+
         log = {
-            'space_log': [get_log(r) for r in responses]
+            'space_log': [get_log(r) for r in responses],
+            'z_what_loss': z_what_loss
         }
-        return sum([get_loss(r) for r in responses]), log
+        loss = sum([get_loss(r) for r in responses])
+        # print(f'z_what_magnitude: {z_what_loss}')
+        return loss, log
 
 
-def sqDelta(t1, t2):
+def sq_delta(t1, t2):
     return (t1 - t2).square()
 
 
@@ -74,3 +82,19 @@ def get_log(res):
 def get_loss(res):
     loss = res[0]
     return loss
+
+
+def z_what_consistency(responses):
+    # (T, B, G*G, D)
+    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+    B = z_whats.shape[1]
+    T = z_whats.shape[0]
+    # (T, B, G*G, 1) -> (T * B, 1, G, G)
+    z_pres = torch.stack([get_log(r)['z_pres_prob'] for r in responses]).reshape((T * B, 1, arch.G, arch.G))
+    conv = nn.Conv2d(1, 1, 3, stride=1)
+    z_pres_smoothed = conv(z_pres)
+    z_what_weighted = z_whats * z_pres.reshape(T, B, G*G, 1)
+    z_what_smoothed = z_whats * z_pres_smoothed.reshape(T, B, G*G, 1)
+    # (T-1, B, G, G)
+    cos = nn.CosineSimilarity(dim=4, eps=1e-6)(z_what_smoothed[:-1], z_what_weighted[1:])
+    return -torch.sum(cos)
