@@ -170,7 +170,7 @@ def get_z_stuff(image, space_model, cfg, i_episode, logger=None):
     with torch.no_grad():
         start = time.perf_counter()
         loss, log = space_model(image, global_step=100000000)
-        print(time.perf_counter() - start)
+        #print(time.perf_counter() - start)
         # (B, N, 4), (B, N, 1), (B, N, D)
         z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
         return process_z_stuff(z_where[0], z_pres_prob[0], z_what[0], cfg, i_episode, logger)
