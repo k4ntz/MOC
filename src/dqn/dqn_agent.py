@@ -119,7 +119,7 @@ class Agent:
         done = torch.tensor(batch.done, dtype=torch.float, device=self.device)
 
         # log model once
-        if not self.model_logged:
+        if not self.model_logged and not self.cfg.parallel:
             logger.writer.add_graph(self.target_net, state)
             self.model_logged = True
         
