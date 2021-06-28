@@ -72,7 +72,7 @@ pip3 install git+git://github.com/mila-iqia/atari-representation-learning.git
 git clone https://github.com/ml-research/mushroom-rl && cd mushroom-rl
 pip3 install --no-use-pep517 -e .[all]
 pip3 install airspeed
-git clone https://github.com/ml-research/rational_activations && rational_activations
+git clone https://github.com/ml-research/rational_activations && cd rational_activations
 python3 setup.py develop --user
 ```
 
