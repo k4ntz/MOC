@@ -78,9 +78,9 @@ class Agent:
             eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
                 math.exp(-1. * (global_step - self.memory_min_size) / self.eps_decay)
         # log eps_treshold
-        if global_step % self.log_steps == 0:
+        if global_step % self.log_steps == 0 and self.cfg.mode == "train":
             logger.log_eps(eps_threshold, global_step)
-        if sample > eps_threshold:
+        if sample > eps_threshold or self.cfg.mode == "eval":
             with torch.no_grad():
                 state = torch.tensor(state, dtype=torch.float, device=self.device).unsqueeze(0)
                 if self.cfg.parallel:

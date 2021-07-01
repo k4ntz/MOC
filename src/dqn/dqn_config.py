@@ -5,6 +5,7 @@ from yacs.config import CfgNode
 cfg = CfgNode({
     # exp name
     'exp_name': '', 
+    'mode': 'train',
 
     'gamelist': [
         'Tennis-v0',

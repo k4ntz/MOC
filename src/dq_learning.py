@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 from itertools import count
 from PIL import Image
+from pytorch_grad_cam import GradCAM
 import PIL
 import cv2
 import os
@@ -134,7 +135,7 @@ def get_screen():
     # convert image to opencv
     opencv_img = np.asarray(pil_img).copy()
     # fill video buffer
-    if i_episode % video_every == 0:
+    if i_episode % video_every == 0 or cfg.mode == "eval":
         logger.fill_video_buffer(opencv_img)
     # convert color
     opencv_img = cv2.cvtColor(opencv_img, cv2.COLOR_RGB2BGR)
@@ -282,6 +283,7 @@ episode_durations = []
 
 ### plot stuff 
 
+gradcam_img = None
 # function to plot live while training
 def plot_screen(episode, step):
     plt.figure(3)
@@ -289,6 +291,11 @@ def plot_screen(episode, step):
     plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
     plt.imshow(env.render(mode='rgb_array'),
            interpolation='none')
+    if gradcam_img is not None:
+        plt.figure(4)
+        plt.clf()
+        plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
+        plt.imshow(gradcam_img)
     plt.plot()
     plt.pause(0.001)  # pause a bit so that plots are updated
     if is_ipython:
@@ -305,16 +312,117 @@ last_game = "None"
 rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
                 max_iterations=num_episodes)
 rtpt.start()
-while i_episode < num_episodes:
-    # reward logger
+##################################################
+# train mode
+if cfg.mode == "train":
+    while i_episode < num_episodes:
+        # reward logger
+        pos_reward_count = 0
+        neg_reward_count = 0
+        # timer stuff
+        start = time.perf_counter()
+        episode_start = start
+        episode_time = 0
+        # logger stuff
+        episode_steps = 0
+        # Initialize the environment and state
+        env.reset()
+        # get z stuff for init
+        state = get_state()
+        # last done action
+        action_item = None
+        action = None
+        for t in count():
+            # TODO: REMOVE
+            #debugs = time.perf_counter()
+            global_step += 1
+            # timer stuff
+            end = time.perf_counter()
+            episode_time = end - episode_start
+            start = end
+            if liveplot:
+                plot_screen(i_episode+1, t+1)
+            # If skipped frames are over, select action
+            if action_item is None or global_step % skip_frames == 0:
+                action = agent.select_action(state, global_step, logger)
+                action_item = action.item()
+            # perform action
+            _, reward, done, _ = env.step(action_item)
+
+            if reward > 0:
+                pos_reward_count += 1
+            if reward < 0:
+                neg_reward_count += 1
+            reward = torch.tensor([reward], device=device)
+
+            # if skip frames are over, observe new state
+            next_state = get_state(state)
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward, done)
+            # Move to the next state
+            state = next_state
+            # TODO: REMOVE
+            #print(time.perf_counter() - debugs)
+
+            # Perform one step of the optimization (on the policy network)
+            if len(memory) > MEMORY_MIN_SIZE:
+                total_max_q, total_loss = agent.optimize_model(memory, total_max_q, total_loss, logger, global_step)
+            elif global_step % log_steps == 0:
+                logger.log_loss(0, global_step)
+                logger.log_max_q(0, global_step)
+
+            # timer stuff
+            end = time.perf_counter()
+            step_time = end - start
+
+            #TODO: Remove
+            #if t % 60 == 0:
+            #    logger.save_video(exp_name)
+
+            if (t) % 10 == 0: # print every 100 steps
+                start = time.perf_counter()
+                end = time.perf_counter()
+                print(
+                    'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, s-time: {:.4f}s, e-time: {:.4f}s, w: {}, l:{}, last_game:{}        '.format(
+                        exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count,
+                        step_time, episode_time, wins, loses, last_game), end="\r")
+            if done:
+                episode_durations.append(t + 1)
+                episode_steps = t + 1
+                #plot_durations()
+                break
+        # Update the target network, copying all weights and biases in DQN
+        if len(memory) > MEMORY_MIN_SIZE:
+            agent.target_net.load_state_dict(agent.policy_net.state_dict())
+        # update wins and loses
+        if pos_reward_count >= neg_reward_count:
+            wins += 1
+            last_game = "Win"
+        else:
+            loses += 1
+            last_game = "Lose"
+        # log episode
+        logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
+        # if video step, create video
+        if i_episode % video_every == 0:
+            logger.save_video(exp_name)
+        # iterate to next episode
+        i_episode += 1
+        # checkpoint saver
+        if i_episode % SAVE_EVERY == 0:
+            saver.save_models(exp_name, agent.policy_net, agent.target_net, agent.optimizer, memory, i_episode, global_step, total_max_q, total_loss)
+        rtpt.step()
+##################################################
+# eval mode
+elif cfg.mode == "eval":
+    print("Evaluating...")
+    exp_name = exp_name + "-eval"
     pos_reward_count = 0
     neg_reward_count = 0
     # timer stuff
     start = time.perf_counter()
     episode_start = start
     episode_time = 0
-    # logger stuff
-    episode_steps = 0
     # Initialize the environment and state
     env.reset()
     # get z stuff for init
@@ -322,86 +430,53 @@ while i_episode < num_episodes:
     # last done action
     action_item = None
     action = None
+    # init gradcam
+    target_layer = agent.policy_net.conv3
+    print(target_layer)
+    grad_cam = GradCAM(model=agent.policy_net, target_layer=target_layer, use_cuda=('cuda' in cfg.device))
+    # single episode for eval
     for t in count():
-        # TODO: REMOVE
-        #debugs = time.perf_counter()
         global_step += 1
         # timer stuff
         end = time.perf_counter()
         episode_time = end - episode_start
         start = end
         if liveplot:
-            plot_screen(i_episode+1, t+1)
+            plot_screen("eval", t+1)
         # If skipped frames are over, select action
         if action_item is None or global_step % skip_frames == 0:
             action = agent.select_action(state, global_step, logger)
             action_item = action.item()
+            # convert state to tensor and then get grad cam
+            state_t = torch.tensor(state, dtype=torch.float, device=device).unsqueeze(0)
+            #print(state_t.shape)
+            gradcam_img = grad_cam(input_tensor=state_t, target_category=action_item)[0, :]
+            #print(gradcam_img.shape)
         # perform action
         _, reward, done, _ = env.step(action_item)
-        
         if reward > 0:
             pos_reward_count += 1
         if reward < 0:
             neg_reward_count += 1
-        reward = torch.tensor([reward], device=device)
-
-        # if skip frames are over, observe new state
-        next_state = get_state(state)
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward, done)
-        # Move to the next state
-        state = next_state
-        # TODO: REMOVE
-        #print(time.perf_counter() - debugs)
-
-        # Perform one step of the optimization (on the policy network)
-        if len(memory) > MEMORY_MIN_SIZE:
-            total_max_q, total_loss = agent.optimize_model(memory, total_max_q, total_loss, logger, global_step)
-        elif global_step % log_steps == 0:
-            logger.log_loss(0, global_step)
-            logger.log_max_q(0, global_step)
-
+        # reward = torch.tensor([reward], device=device)
+        state = get_state(state)
         # timer stuff
         end = time.perf_counter()
         step_time = end - start
-
         #TODO: Remove
         #if t % 60 == 0:
         #    logger.save_video(exp_name)
-
         if (t) % 10 == 0: # print every 100 steps
             start = time.perf_counter()
             end = time.perf_counter()
             print(
-                'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, s-time: {:.4f}s, e-time: {:.4f}s, w: {}, l:{}, last_game:{}        '.format(
-                    exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count,
-                    step_time, episode_time, wins, loses, last_game), end="\r")
+                'exp: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, s-time: {:.4f}s, e-time: {:.4f}s        '.format(
+                    exp_name, t + 1, pos_reward_count, neg_reward_count,
+                    step_time, episode_time), end="\r")
         if done:
-            episode_durations.append(t + 1)
-            episode_steps = t + 1
-            #plot_durations()
             break
-    # Update the target network, copying all weights and biases in DQN
-    if len(memory) > MEMORY_MIN_SIZE:
-        agent.target_net.load_state_dict(agent.policy_net.state_dict())
-    # update wins and loses
-    if pos_reward_count >= neg_reward_count:
-        wins += 1
-        last_game = "Win"
-    else:
-        loses += 1
-        last_game = "Lose"
-    # log episode
-    logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
-    # if video step, create video
-    if i_episode % video_every == 0:
-        logger.save_video(exp_name)
-    # iterate to next episode
-    i_episode += 1
-    # checkpoint saver
-    if i_episode % SAVE_EVERY == 0:
-        saver.save_models(exp_name, agent.policy_net, agent.target_net, agent.optimizer, memory, i_episode, global_step, total_max_q, total_loss)
-    rtpt.step()
+    # create video
+    logger.save_video(exp_name)
 
 print('Complete')
 env.render()
