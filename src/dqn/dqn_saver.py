@@ -4,7 +4,6 @@ import torch
 import os
 
 PATH_TO_OUTPUTS = os.getcwd() + "/dqn/checkpoints/"
-print(PATH_TO_OUTPUTS)
 
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 

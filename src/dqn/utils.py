@@ -30,7 +30,7 @@ def get_config():
     parser.add_argument(
         '--space-config-file',
         type=str,
-        default='',
+        default='configs/atari_ball_joint_v1.yaml',
         metavar='FILE',
         help='Path to SPACE config file'
     )

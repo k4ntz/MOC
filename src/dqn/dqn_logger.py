@@ -19,13 +19,15 @@ class DQN_Logger:
         self.writer = SummaryWriter(logpath + logname)
         self.video_buffer = []
 
-    def log_episode(self, episode_steps, pos_reward, neg_reward, episode, global_step):
+    def log_episode(self, episode_steps, pos_reward, neg_reward, episode, global_step, q_table_len = None):
         if self.writer == None:
             print("Logger is not initialized...")
             return
         self.writer.add_scalar('Train/episode_steps', episode_steps, episode)
         self.writer.add_scalar('Train/reward', pos_reward - neg_reward, global_step)
         self.writer.add_scalar('Train/reward_episode', pos_reward - neg_reward, episode)
+        if q_table_len is not None:
+            self.writer.add_scalar('Train/Q-table_size', q_table_len, global_step)
 
     def log_eps(self, eps, global_step):
         if self.writer == None:
