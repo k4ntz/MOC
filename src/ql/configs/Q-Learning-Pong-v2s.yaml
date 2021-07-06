@@ -16,7 +16,7 @@ train:
   memory_size: 50000
   memory_min_size: 25000
 
-  num_episodes: 100000
+  num_episodes: 50000
   max_steps: 100000
 
   skip_frames: 1

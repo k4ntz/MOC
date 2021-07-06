@@ -23,6 +23,6 @@ train:
   
   log_steps: 500
   # save every is for episodes
-  save_every: 20
+  save_every: 100
 
 

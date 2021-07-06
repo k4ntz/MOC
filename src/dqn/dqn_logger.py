@@ -9,11 +9,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils import draw_bounding_boxes
 
-FOLDER_TO_VIDEO = "/dqn/video/"
-PATH_TO_VIDEO = os.getcwd() + FOLDER_TO_VIDEO
-
 class DQN_Logger:
-    def __init__(self, logpath, logname):
+    def __init__(self, logpath, logname, vfolder="/dqn/video/"):
+        self.PATH_TO_VIDEO = os.getcwd() + vfolder
         if not os.path.exists(logpath):
             os.makedirs(logpath)
         self.writer = SummaryWriter(logpath + logname)
@@ -65,10 +63,10 @@ class DQN_Logger:
         self.video_buffer.append(last_frame)
 
     def save_video(self, model_name, fps=25.0):
-        if not os.path.exists(PATH_TO_VIDEO):
-            os.makedirs(PATH_TO_VIDEO)
+        if not os.path.exists(self.PATH_TO_VIDEO):
+            os.makedirs(self.PATH_TO_VIDEO)
         if len(self.video_buffer) > fps:
-            file_path = PATH_TO_VIDEO + model_name + ".avi"
+            file_path = self.PATH_TO_VIDEO + model_name + ".avi"
             # do video saving stuff
             fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
             writer = cv2.VideoWriter(file_path, fourcc, fps, (128, 128))

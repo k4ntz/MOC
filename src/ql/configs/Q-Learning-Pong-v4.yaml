@@ -11,7 +11,7 @@ train:
   eps_start: 1.0
   eps_end: 0.01
   eps_decay: 1000000
-  learning_rate: 0.005
+  learning_rate: 0.05
 
   memory_size: 50000
   memory_min_size: 25000
