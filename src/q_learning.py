@@ -68,7 +68,8 @@ def convert_to_state(env_info):
     divide_factor = 10
     labels = env_info["labels"]
     state.append(int(labels["player_y"]/divide_factor))
-    state.append(int(labels["enemy_y"]/divide_factor))
+    if (cfg.train.use_enemy):
+        state.append(int(labels["enemy_y"]/divide_factor))
     state.append(int(labels["ball_x"]/divide_factor))
     state.append(int(labels["ball_y"]/divide_factor))
     return str(state)
@@ -168,7 +169,7 @@ if cfg.mode == "train":
                 #plot_durations()
                 break
         # log episode
-        if i_episode % 10 == 0:
+        if i_episode % 20 == 0:
             logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step, len(Q))
         # iterate to next episode
         i_episode += 1
@@ -227,10 +228,13 @@ if cfg.mode == "eval":
     Q_df["States"] = Q_df["States"].str.replace("[", "")
     Q_df["States"] = Q_df["States"].str.replace("]", "")
     cols = ["player_y", "enemy_y", "ball_x", "ball_y"]
+    if not cfg.train.use_enemy:
+        cols = ["player_y", "ball_x", "ball_y"]
     Q_df[cols] = Q_df["States"].str.split(",", expand=True)
     Q_df[cols] = Q_df[cols].apply(pd.to_numeric, errors='coerce')
     # combine up and down to plot both
     Q_df["combinedQ"] = Q_df.iloc[:,2] - Q_df.iloc[:,5] 
+    Q_df["ball_y - player_y"] = Q_df["ball_y"] - Q_df["player_y"]
     print(Q_df.head(5))
     print(Q_df.describe(include='all'))
     
@@ -243,8 +247,9 @@ if cfg.mode == "eval":
     ax4 = fig.add_subplot(244)
     ax5 = fig.add_subplot(245)
     ax6 = fig.add_subplot(246)
-    ax7 = fig.add_subplot(247)
-    ax8 = fig.add_subplot(248)
+    if cfg.train.use_enemy:
+        ax7 = fig.add_subplot(247)
+        ax8 = fig.add_subplot(248)
     ax1.hist2d(Q_df["ball_x"], Q_df["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
     ax1.set_title('Ball-X and Up Histogram')
     ax1.set_xlabel('ball_x')
@@ -253,35 +258,38 @@ if cfg.mode == "eval":
     ax2.set_title('Ball-X and Down Histogram')
     ax2.set_xlabel('ball_x')
     ax2.set_ylabel('down')
-    ax3.hist2d(Q_df["ball_y"], Q_df["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax3.set_title('Ball-Y and Up Histogram')
-    ax3.set_xlabel('ball_y')
+    tmp = Q_df[Q_df["ball_x"] <= 10]
+    ax3.hist2d(tmp["ball_y - player_y"], tmp["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+    ax3.set_title('ball_y - player_y (x<=10) and Up Histogram')
+    ax3.set_xlabel('ball_y - player_y')
     ax3.set_ylabel('up')
-    ax4.hist2d(Q_df["ball_y"], Q_df["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax4.set_title('Ball-Y and Down Histogram')
-    ax4.set_xlabel('ball_y')
+    ax4.hist2d(tmp["ball_y - player_y"], tmp["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+    ax4.set_title('ball_y - player_y (x<=10)  and Down Histogram')
+    ax4.set_xlabel('ball_y - player_y')
     ax4.set_ylabel('down')
-    ax5.hist2d(Q_df["player_y"], Q_df["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax5.set_title('Player-Y and Up Histogram')
-    ax5.set_xlabel('player_y')
+    tmp = Q_df[Q_df["ball_x"] > 10]
+    ax5.hist2d(tmp["ball_y - player_y"], tmp["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+    ax5.set_title('ball_y - player_y (x>10)  and Up Histogram')
+    ax5.set_xlabel('ball_y - player_y')
     ax5.set_ylabel('up')
-    ax6.hist2d(Q_df["player_y"], Q_df["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax6.set_title('Player-Y and Down Histogram')
-    ax6.set_xlabel('player_y')
+    ax6.hist2d(tmp["ball_y - player_y"], tmp["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+    ax6.set_title('ball_y - player_y (x>10)  and Down Histogram')
+    ax6.set_xlabel('ball_y - player_y')
     ax6.set_ylabel('down')
-    ax7.hist2d(Q_df["enemy_y"], Q_df["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax7.set_title('enemy-Y and Up Histogram')
-    ax7.set_xlabel('enemy_y')
-    ax7.set_ylabel('up')
-    ax8.hist2d(Q_df["enemy_y"], Q_df["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
-    ax8.set_title('enemy-Y and Down Histogram')
-    ax8.set_xlabel('enemy_y')
-    ax8.set_ylabel('down')
+    if cfg.train.use_enemy:
+        ax7.hist2d(Q_df["enemy_y"], Q_df["up"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+        ax7.set_title('enemy-Y and Up Histogram')
+        ax7.set_xlabel('enemy_y')
+        ax7.set_ylabel('up')
+        ax8.hist2d(Q_df["enemy_y"], Q_df["down"], norm=matplotlib.colors.LogNorm(), bins=(20, 100))
+        ax8.set_title('enemy-Y and Down Histogram')
+        ax8.set_xlabel('enemy_y')
+        ax8.set_ylabel('down')
     plt.show()
 
-    corrMatrix = Q_df.corr()
-    sn.heatmap(corrMatrix, annot=True)
-    plt.show()
+    #corrMatrix = Q_df.corr()
+    #sn.heatmap(corrMatrix, annot=True)
+    #plt.show()
     
 
         
