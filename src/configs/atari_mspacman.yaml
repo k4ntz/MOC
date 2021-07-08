@@ -1,27 +1,29 @@
 seed: 1
 model: 'SPACE'
+exp_name: mspacman_atari+z_area_object_5e0_scaling
 resume: true
-load_time_consistency: false
-resume_ckpt: pretrained/atari_joint.pth
+load_time_consistency: true
+resume_ckpt: '../output/checkpoints/mspacman_atari+z_area_object_5e0_scaling/model_000020501.pth'
+# 'result_checkpoints/base_z_what_model_000078001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 parallel: true
-device_ids: [2, 3, 4, 5, 6, 7]
-device: 'cuda:2'
+device_ids: [4, 5, 3, 7]
+device: 'cuda:4'
 
-logdir: 'output/logs'
-checkpointdir: 'output/checkpoints'
-evaldir: 'output/eval'
+logdir: '../output/logs'
+checkpointdir: '../output/checkpoints'
+evaldir: '../output/eval'
 
 dataset: 'ATARI'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
   #ATARI: '../data/ATARI'
-  ATARI: 'aiml_atari_data/space_like'
+  ATARI: '../aiml_atari_data/space_like'
 
 
 train:
-  batch_size: 36
+  batch_size: 40
   max_epochs: 100
   max_steps: 1600000
   print_every: 100
@@ -41,7 +43,6 @@ train:
 arch:
   G: 16
   fg_sigma: 0.20
-
   z_pres_start_step: 10000
   z_pres_end_step: 15000
   z_pres_start_value: 0.1

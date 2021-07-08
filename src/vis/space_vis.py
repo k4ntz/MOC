@@ -22,6 +22,11 @@ class SpaceVis:
         """
         """
         writer.add_scalar(f'{mode}_sum/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/z_what_loss_pool', torch.sum(log['z_what_loss_pool']).item(),
+                          global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/z_what_loss_objects', torch.sum(log['z_what_loss_objects']).item(),
+                          global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
         writer.add_scalar(f'{mode}_sum/total_loss', log['loss'], global_step=global_step)
         B = num_batch
         for i, img in enumerate(log['space_log']):

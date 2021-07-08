@@ -14,8 +14,8 @@ from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
 from tqdm import tqdm
 
-def train(cfg):
 
+def train(cfg):
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -38,7 +38,7 @@ def train(cfg):
         evaluator = get_evaluator(cfg)
     model = get_model(cfg)
     model = model.to(cfg.device)
-    
+
     if len(cfg.gamelist) >= 10:
         print("Training on every game")
         suffix = 'all'
@@ -67,12 +67,14 @@ def train(cfg):
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed)), flush_secs=30, purge_step=global_step)
+    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed)), flush_secs=30,
+                           purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
 
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
+    start_log = 2
     for epoch in range(start_epoch, cfg.train.max_epochs):
         pbar = tqdm(total=len(trainloader))
         if end_flag:
@@ -116,14 +118,12 @@ def train(cfg):
                 })
                 vis_logger.train_vis(writer, log, global_step, 'train')
                 end = time.perf_counter()
-                print()
-                print(
-                    'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f}, batch time: '
-                    '{:.4f}s, data time: {:.4f}s, log time: {:.4f}s'.format(
-                        cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
-                        torch.sum(log['z_what_loss']).item(), metric_logger['batch_time'].avg,
-                        metric_logger['data_time'].avg, end - start))
-                print()
+                print(f'Log duration: {end - start}')
+                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
+
+            if cfg.resume and global_step - checkpoint['global_step'] < 100 and global_step % start_log == 0:
+                start_log = int(start_log * 1.6)
+                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
             if global_step % cfg.train.save_every == 0:
                 start = time.perf_counter()
@@ -144,3 +144,17 @@ def train(cfg):
                 end_flag = True
                 break
         rtpt.step()
+
+
+def log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader):
+    print()
+    print(
+        'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
+        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, batch time: '
+        '{:.4f}s, data time: {:.4f}s'.format(
+            cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
+            torch.sum(log['z_what_loss']).item(), torch.sum(log['z_pres_loss']).item(),
+            torch.sum(log['z_what_loss_pool']).item(),
+            torch.sum(log['z_what_loss_objects']).item(),
+            metric_logger['batch_time'].avg, metric_logger['data_time'].avg))
+    print()

@@ -60,7 +60,7 @@ class Checkpointer:
         if not osp.exists(checkpointdir):
             os.makedirs(checkpointdir)
         self.listfile = osp.join(checkpointdir, 'model_list.pkl')
-
+        print(f'Listfile: {self.listfile}')
         if not osp.exists(self.listfile):
             with open(self.listfile, 'wb') as f:
                 model_list = []
@@ -134,7 +134,8 @@ class Checkpointer:
                     return None
                 else:
                     path = model_list[-1]
-
+        if not path.startswith('../'):
+            path = '../' + path
         return self.load(path, model, optimizer_fg, optimizer_bg, use_cpu)
 
     def save_best(self, metric_name, value, checkpoint, min_is_better):

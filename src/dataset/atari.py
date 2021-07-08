@@ -10,9 +10,8 @@ import PIL
 
 class Atari(Dataset):
     def __init__(self, root, mode, gamelist=None):
-        assert mode in ['train', 'validation', 'test'], f'Invalid dataset mode "{mode}"'
+        assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'
         
-        # self.image_path = os.checkpointdir.join(root, f'{key_word}')
         self.image_path = root
         
         image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root) \
@@ -51,3 +50,9 @@ class Atari(Dataset):
 
         image = np.array(pil_img)
         return torch.from_numpy(image / 255).permute(2, 0, 1).float()
+
+    @property
+    def bb_path(self):
+        path = osp.join(self.root, self.mode, 'bb')
+        assert osp.exists(path), f'Bounding box path {path} does not exist.'
+        return path
