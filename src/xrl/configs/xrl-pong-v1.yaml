@@ -6,6 +6,9 @@ parallel: False
 logdir: '/xrl/logs/'
 
 train:
+  gamma: 0.97
+  learning_rate: 0.00005
+
   num_episodes: 50000
   max_steps: 100000
   

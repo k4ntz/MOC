@@ -12,6 +12,11 @@ import os
 import pandas as pd
 import seaborn as sn
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Categorical
+
 from itertools import count
 from PIL import Image
 from atariari.benchmark.wrapper import AtariARIWrapper
@@ -22,6 +27,20 @@ import dqn.dqn_logger
 import dqn.utils as utils
 
 cfg, _ = utils.get_config()
+
+# define policy network
+class policy_net(nn.Module):
+    def __init__(self, nS, nH, nA): # nS: state space size, nH: n. of neurons in hidden layer, nA: size action space
+        super(policy_net, self).__init__()
+        self.h = nn.Linear(nS, nH)
+        self.out = nn.Linear(nH, nA)
+
+    # define forward pass with one hidden layer with ReLU activation and sofmax after output layer
+    def forward(self, x):
+        x = F.relu(self.h(x))
+        x = F.softmax(self.out(x), dim=1)
+        return x
+
 
 # function to plot live while training
 def plot_screen(env, episode, step):
@@ -44,10 +63,12 @@ def get_target_x(x1, x2, y1, y2, player_x):
     return np.int16(m * player_x + c)
 
 # helper function to convert env info into custom list
-# state contains player x, y, ball x, y, oldplayer x, y, oldball x, y, 
+# raw_features contains player x, y, ball x, y, oldplayer x, y, oldball x, y, 
 # features are processed stuff for policy
-def preprocess_state(env_info, last_state=None):
+def preprocess_raw_features(env_info, last_raw_features=None):
     features = []
+    norm_factor = 250
+    # extract raw features
     labels = env_info["labels"]
     player_x = labels["player_x"].astype(np.int16)
     player_y = labels["player_y"].astype(np.int16)
@@ -55,54 +76,58 @@ def preprocess_state(env_info, last_state=None):
     enemy_y = labels["enemy_y"].astype(np.int16)
     ball_x = labels["ball_x"].astype(np.int16)
     ball_y = labels["ball_y"].astype(np.int16)
-    # set new state
-    state = last_state
-    if state is None:
-        state = [player_x, player_y, ball_x, ball_y, 
-            np.int16(0), np.int16(0), np.int16(0), np.int16(0)]
+    # set new raw_features
+    raw_features = last_raw_features
+    if raw_features is None:
+        raw_features = [player_x, player_y, ball_x, ball_y, enemy_x, enemy_y
+            ,np.int16(0), np.int16(0), np.int16(0), np.int16(0), np.int16(0), np.int16(0)]
         features.append(0)
     else:
-        # refresh state with new coordiates
-        state[4] = state[0]
-        state[5] = state[1]
-        state[6] = state[2]
-        state[7] = state[3]
-        state[0] = player_y
-        state[1] = player_y
-        state[2] = ball_x
-        state[3] = ball_y   
+        # move up old values in list
+        raw_features = np.roll(raw_features, 6)
+        raw_features[0] = player_y
+        raw_features[1] = player_y
+        raw_features[2] = ball_x
+        raw_features[3] = ball_y  
+        raw_features[4] = enemy_x
+        raw_features[5] = enemy_y 
         # calc target point and put distance in features
-        target_y = get_target_x(state[6], ball_x, state[7], ball_y, player_x) 
-        features.append(target_y - player_y)
+        target_y = get_target_x(raw_features[6], ball_x, raw_features[7], ball_y, player_x) 
+        features.append((target_y - player_y)/ norm_factor)
     # append other distances
-    features.append(ball_x - player_x) # distance x ball and player
-    features.append(ball_y - player_y) # distance y ball and player
+    features.append((player_x - ball_x)/ norm_factor)# distance x ball and player
+    features.append((player_y - ball_y)/ norm_factor)# distance y ball and player
+    features.append((player_x - enemy_y)/ norm_factor) # distance x player and enemy
+    features.append((player_y - enemy_y)/ norm_factor) # distance y player and enemy
     # euclidean distance between old and new ball coordinates to represent current speed per frame
-    features.append(math.sqrt((ball_x - state[6])**2 + (ball_y - state[7])**2)) 
-    return state, features
+    features.append(math.sqrt((ball_x - raw_features[8])**2 + (ball_y - raw_features[9])**2) / 25) 
+    return raw_features, features
 
-# helper function to get state
-def get_state(env, action=1, state=None):
+# helper function to get features
+def get_features(env, action=1, last_raw_features=None):
+    if action == 1:
+        action = 2
+    elif action == 2:
+        action = 5
     obs, reward, done, info = env.step(action)
-    state, features = preprocess_state(info, state)
-    return state, features, reward, done
+    raw_features, features = preprocess_raw_features(info, last_raw_features)
+    return raw_features, features, reward, done
 
-# function to select action by given state
+# function to select action by given features
 # 0: "NOOP",
 # 1: "FIRE",
 # 2: "UP",
 # 3: "RIGHT",
 # 4: "LEFT",
 # 5: "DOWN",
-def select_action(n_actions, features, global_step, logger):
-    disty = features[0]
-    buffery = 6
-    if disty > buffery:
-        return 5
-    elif disty < -buffery:
-        return 2
-    else:
-        return 0
+def select_action(n_actions, features, policy, global_step, logger):
+    # calculate probabilities of taking each action
+    probs = policy(torch.tensor(features).unsqueeze(0).float())
+    # sample an action from that set of probs
+    sampler = Categorical(probs)
+    action = sampler.sample()
+    # return action
+    return action
 
 # train main function
 def train():
@@ -111,6 +136,11 @@ def train():
     env = AtariARIWrapper(gym.make(cfg.env_name))
     _ = env.reset()
     _, _, done, info = env.step(1)
+
+    # instantiate the policy: #input_shape #hidden_node_size #action_size
+    policy = policy_net(6, 32, 3) #env.action_space.n
+    # create an optimizer
+    optimizer = torch.optim.Adam(policy.parameters(), lr=cfg.train.learning_rate)
 
     i_episode = 0
     global_step = 0
@@ -146,8 +176,13 @@ def train():
     # train mode
     if cfg.mode == "train":
         while i_episode < num_episodes:
+            # init lists
+            rewards = []
+            actions = []
+            states  = []
+            # reset env
             obs = env.reset()
-            state, features, _, _ = get_state(env)
+            raw_features, features, _, _ = get_features(env)
             # timer stuff
             start = time.perf_counter()
             episode_start = start
@@ -164,15 +199,17 @@ def train():
                 episode_time = end - episode_start
                 start = end
                 # select action
-                action = select_action(n_actions, features, global_step, logger)
-                #Taking the action and getting the reward and outcome state
-                next_state, features, current_reward, done = get_state(env, action, state)
-                #TODO: optimize??
-                state = next_state
+                action = select_action(n_actions, features, policy, global_step, logger)
+                #Taking the action and getting the reward and outcome raw_features
+                raw_features, features, reward, done = get_features(env, action, raw_features)
+                #buffer features actions and reward
+                states.append(features)
+                actions.append(action)
+                rewards.append(reward)
                 # for logging
-                if current_reward > 0:
+                if reward > 0:
                     pos_reward_count += 1
-                if current_reward < 0:
+                if reward < 0:
                     neg_reward_count += 1
                 # timer stuff
                 end = time.perf_counter()
@@ -186,9 +223,30 @@ def train():
                             step_time, episode_time), end="\r")
                     episode_steps = t + 1
                     break
+            # optimize after done
+            # preprocess rewards
+            rewards = np.array(rewards)
+            # calculate rewards to go for less variance
+            R = torch.tensor([np.sum(rewards[i:] * (cfg.train.gamma ** np.array(range(i, len(rewards))))) for i in range(len(rewards))])
+            # or uncomment following line for normal rewards
+            #R = torch.sum(torch.tensor(rewards))
+
+            # preprocess states and actions
+            states = torch.tensor(states).float()
+            actions = torch.tensor(actions)
+
+            # calculate gradient
+            probs = policy(states)
+            sampler = Categorical(probs)
+            log_probs = -sampler.log_prob(actions)   # "-" because it was built to work with gradient descent, but we are using gradient ascent
+            pseudo_loss = torch.sum(log_probs * R) # loss that when differentiated with autograd gives the gradient of J(θ)
+            # update policy weights
+            optimizer.zero_grad()
+            pseudo_loss.backward()
+            optimizer.step()
             # log episode
             if i_episode % 20 == 0:
-                #logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step, len(Q))
+                logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
                 None
             # iterate to next episode
             i_episode += 1
@@ -198,11 +256,12 @@ def train():
                 None
             rtpt.step()
     # now eval
+    # TODO: still buggy
     if cfg.mode == "eval":
         print("Evaluating...")
         # Initialize the environment and state
         obs = env.reset()
-        state, _, _ = get_state(env)
+        raw_features, features, _, _ = get_features(env)
         pos_reward_count = 0
         neg_reward_count = 0
         for t in count():
@@ -215,14 +274,13 @@ def train():
             if i_episode % video_every == 0:
                 logger.fill_video_buffer(opencv_img)
             # select action
-            action = select_action(n_actions, state, global_step, logger)
+            action = select_action(n_actions, features, policy, global_step, logger)
             #Taking the action and getting the reward and outcome state
-            next_state, current_reward, done = get_state(env, action)
-            state = next_state
+            raw_features, features, reward, done = get_features(env, action, raw_features)
             # for logging
-            if current_reward > 0:
+            if reward > 0:
                 pos_reward_count += 1
-            if current_reward < 0:
+            if reward < 0:
                 neg_reward_count += 1
             if done:
                 print(
