@@ -28,6 +28,12 @@ import dqn.utils as utils
 
 cfg, _ = utils.get_config()
 
+PATH_TO_OUTPUTS = os.getcwd() + "/xrl/checkpoints/"
+if not os.path.exists(PATH_TO_OUTPUTS):
+    os.makedirs(PATH_TO_OUTPUTS)
+
+model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
+
 # define policy network
 class policy_net(nn.Module):
     def __init__(self, nS, nH, nA): # nS: state space size, nH: n. of neurons in hidden layer, nA: size action space
@@ -43,12 +49,17 @@ class policy_net(nn.Module):
 
 
 # function to plot live while training
-def plot_screen(env, episode, step):
+def plot_screen(env, episode, step, second_img=None):
     plt.figure(3)
     plt.clf()
-    plt.title('Training - Episode: ' + str(episode) + " - Step: " + str(step))
+    plt.title('Episode: ' + str(episode) + " - Step: " + str(step))
     plt.imshow(env.render(mode='rgb_array'),
            interpolation='none')
+    if second_img is not None:
+        plt.figure(2)
+        plt.clf()
+        plt.title('X - Episode: ' + str(episode) + " - Step: " + str(step))
+        plt.imshow(second_img)
     plt.plot()
     plt.pause(0.0001)  # pause a bit so that plots are updated
 
@@ -96,9 +107,11 @@ def preprocess_raw_features(env_info, last_raw_features=None):
         features.append((target_y - player_y)/ norm_factor)
     # append other distances
     features.append((player_x - ball_x)/ norm_factor)# distance x ball and player
-    features.append((player_y - ball_y)/ norm_factor)# distance y ball and player
-    features.append((player_x - enemy_y)/ norm_factor) # distance x player and enemy
-    features.append((player_y - enemy_y)/ norm_factor) # distance y player and enemy
+    features.append(0) 
+    # not needed, bc target pos y is already calculated
+    # features.append((player_y - ball_y)/ norm_factor)# distance y ball and player
+    features.append((ball_x - enemy_x)/ norm_factor) # distance x ball and enemy
+    features.append((ball_y - enemy_y)/ norm_factor) # distance y ball and enemy
     # euclidean distance between old and new ball coordinates to represent current speed per frame
     features.append(math.sqrt((ball_x - raw_features[8])**2 + (ball_y - raw_features[9])**2) / 25) 
     return raw_features, features
@@ -129,6 +142,20 @@ def select_action(n_actions, features, policy, global_step, logger):
     # return action
     return action
 
+# save model helper function
+def save_model(training_name, policy, optimizer, episode, global_step):
+    if not os.path.exists(PATH_TO_OUTPUTS):
+        os.makedirs(PATH_TO_OUTPUTS)
+    model_path = model_name(training_name)
+    print("Saving {}".format(model_path))
+    torch.save({
+            'policy_state_dict': policy.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'episode': episode,
+            'global_step': global_step
+            }, model_path)
+
+
 # train main function
 def train():
     print('Experiment name:', cfg.exp_name)
@@ -138,12 +165,27 @@ def train():
     _, _, done, info = env.step(1)
 
     # instantiate the policy: #input_shape #hidden_node_size #action_size
-    policy = policy_net(6, 32, 3) #env.action_space.n
+    policy = policy_net(6, 30, 3) #env.action_space.n
     # create an optimizer
     optimizer = torch.optim.Adam(policy.parameters(), lr=cfg.train.learning_rate)
 
     i_episode = 0
     global_step = 0
+
+    # load if available
+    model_path = model_name(cfg.exp_name)
+    if not os.path.isfile(model_path):
+        print("{} does not exist, starting fresh ... ".format(model_path))
+    else:
+        print("Loading {} ...".format(model_path))
+        # folder and file exists, so load and return
+        model_path = model_name(cfg.exp_name) 
+        checkpoint = torch.load(model_path)
+        policy.load_state_dict(checkpoint['policy_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        i_episode = checkpoint['episode']
+        global_step = checkpoint['global_step']
+
     video_every = cfg.video_steps
 
     LIVEPLOT = cfg.liveplot
@@ -151,14 +193,12 @@ def train():
     print('Liveplot:', LIVEPLOT)
     print('Debug Mode:', DEBUG)
 
-    exp_name = cfg.exp_name
     num_episodes = cfg.train.num_episodes
     log_steps = cfg.train.log_steps
 
     # init tensorboard
     log_path = os.getcwd() + cfg.logdir
-    log_name = exp_name
-    logger = dqn.dqn_logger.DQN_Logger(log_path, exp_name, vfolder="/xrl/video/")
+    logger = dqn.dqn_logger.DQN_Logger(log_path, cfg.exp_name, vfolder="/xrl/video/")
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
@@ -168,13 +208,14 @@ def train():
     print("State Space {}".format(env.observation_space))
     print("State {}".format(info))
 
-    i_episode = 0
-
-    rtpt = RTPT(name_initials='DV', experiment_name=exp_name,
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=num_episodes)
     rtpt.start()
     # train mode
     if cfg.mode == "train":
+        sum_pos_reward = 0
+        sum_neg_reward = 0
+        sum_ep_steps = 0
         while i_episode < num_episodes:
             # init lists
             rewards = []
@@ -194,6 +235,15 @@ def train():
             for t in count():
                 # logging stuff
                 global_step += 1
+                # log video 
+                if i_episode % cfg.video_steps == 0:
+                    # log current frame
+                    screen = env.render(mode='rgb_array')
+                    pil_img = Image.fromarray(screen).resize((128, 128), PIL.Image.BILINEAR)
+                    # convert image to opencv
+                    opencv_img = np.asarray(pil_img).copy()
+                    # fill video buffer
+                    logger.fill_video_buffer(opencv_img)
                 # timer stuff
                 end = time.perf_counter()
                 episode_time = end - episode_start
@@ -219,41 +269,26 @@ def train():
                 if done:
                     print(
                         'exp: {}, episode: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}, s-time: {:.4f}s, e-time: {:.4f}s        '.format(
-                            exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count, 
+                            cfg.exp_name, i_episode + 1, t + 1, pos_reward_count, neg_reward_count, 
                             step_time, episode_time), end="\r")
                     episode_steps = t + 1
                     break
             # optimize after done
-            # preprocess rewards
-            rewards = np.array(rewards)
-            # calculate rewards to go for less variance
-            R = torch.tensor([np.sum(rewards[i:] * (cfg.train.gamma ** np.array(range(i, len(rewards))))) for i in range(len(rewards))])
-            # or uncomment following line for normal rewards
-            #R = torch.sum(torch.tensor(rewards))
-
-            # preprocess states and actions
-            states = torch.tensor(states).float()
-            actions = torch.tensor(actions)
-
-            # calculate gradient
-            probs = policy(states)
-            sampler = Categorical(probs)
-            log_probs = -sampler.log_prob(actions)   # "-" because it was built to work with gradient descent, but we are using gradient ascent
-            pseudo_loss = torch.sum(log_probs * R) # loss that when differentiated with autograd gives the gradient of J(θ)
-            # update policy weights
-            optimizer.zero_grad()
-            pseudo_loss.backward()
-            optimizer.step()
+            #TODO: which algo?
             # log episode
-            if i_episode % 20 == 0:
-                logger.log_episode(episode_steps, pos_reward_count, neg_reward_count, i_episode, global_step)
-                None
+            sum_pos_reward += pos_reward_count
+            sum_neg_reward += neg_reward_count
+            sum_ep_steps += episode_steps
+            if (i_episode + 1) % 20 == 0:
+                logger.log_episode(sum_ep_steps / 20, sum_pos_reward / 20, sum_neg_reward / 20, i_episode, global_step)
+                sum_pos_reward, sum_neg_reward, sum_ep_steps = 0, 0, 0
+            if i_episode % cfg.video_steps == 0:
+                logger.save_video(cfg.exp_name)
             # iterate to next episode
             i_episode += 1
             # checkpoint saver
             if i_episode % cfg.train.save_every == 0:
-                #TODO: saver?
-                None
+                save_model(cfg.exp_name, policy, optimizer, i_episode, global_step)
             rtpt.step()
     # now eval
     # TODO: still buggy
@@ -282,13 +317,15 @@ def train():
                 pos_reward_count += 1
             if reward < 0:
                 neg_reward_count += 1
+            if LIVEPLOT:
+                plot_screen(env, i_episode+1, t+1)
             if done:
                 print(
                     'exp: {}, step: {}, +reward: {:.2f}, -reward: {:.2f}        '.format(
-                        exp_name, t + 1, pos_reward_count, neg_reward_count))
+                        cfg.exp_name, t + 1, pos_reward_count, neg_reward_count))
                 episode_steps = t + 1
                 break
-        logger.save_video(exp_name)
+        logger.save_video(cfg.exp_name)
 
 
 if __name__ == '__main__':
