@@ -19,6 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 from itertools import count
 from PIL import Image
@@ -27,6 +28,7 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from rtpt import RTPT
 
 import dqn.dqn_logger
+from dqn.dqn_saver import save_models
 import dqn.utils as utils
 
 cfg, _ = utils.get_config()
@@ -196,8 +198,9 @@ def run_agents(env, agents):
 
 
 # returns average score of given agent when it runs n times
-def return_average_score(env, agent, runs):
+def return_average_score(agent, runs):
     score = 0.
+    env = AtariARIWrapper(gym.make(cfg.env_name))
     for i in range(runs):
         score += run_agents(env, [agent])[0]
     avg_score = score/runs
@@ -207,9 +210,8 @@ def return_average_score(env, agent, runs):
 # gets avg score of every agent running n runs 
 def run_agents_n_times(agents, runs):
     avg_score = []
-    env = AtariARIWrapper(gym.make(cfg.env_name))
-    for agent in tqdm(agents):
-        avg_score.append(return_average_score(env, agent, runs))
+    agents = tqdm(agents)
+    avg_score = Parallel(n_jobs=8)(delayed(return_average_score)(agent, runs) for agent in agents)
     return avg_score
 
 
@@ -241,9 +243,8 @@ def add_elite(agents, sorted_parent_indexes, elite_index=None, only_consider_top
         candidate_elite_index = np.append(candidate_elite_index,[elite_index]) 
     top_score = None
     top_elite_index = None
-    env = AtariARIWrapper(gym.make(cfg.env_name))
     for i in candidate_elite_index:
-        score = return_average_score(env, agents[i], runs=5)
+        score = return_average_score(agents[i], runs=5)
         print("Score for elite i ", i, " is ", score)
         if(top_score is None):
             top_score = score
@@ -276,15 +277,14 @@ def softmax(x):
 
 
 # save model helper function
-def save_model(training_name, policy, episode, global_step):
+def save_agents(training_name, agents, generation):
     if not os.path.exists(PATH_TO_OUTPUTS):
         os.makedirs(PATH_TO_OUTPUTS)
     model_path = model_name(training_name)
     print("Saving {}".format(model_path))
     torch.save({
-            'policy_state_dict': policy.state_dict(),
-            'episode': episode,
-            'global_step': global_step
+            'agents': agents,
+            'generation': generation
             }, model_path)
 
 
@@ -307,6 +307,15 @@ def train():
     num_agents = 500
     print('Number of agents:', num_agents)
     agents = return_random_agents(num_agents)
+    generation = 0
+
+    # load if exists
+    model_path = model_name(cfg.exp_name)
+    if os.path.isfile(model_path):
+        print("{} does exist, loading ... ".format(model_path))
+        checkpoint = torch.load(model_path)
+        agents = checkpoint['agents']
+        generation = checkpoint['generation']
 
     # How many top agents to consider as parents
     top_limit = 20
@@ -321,7 +330,7 @@ def train():
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=generations)
     rtpt.start()
-    for generation in range(generations):
+    while generation < generations:
         print("Starting generation", generation)
         # return rewards of agents
         rewards = run_agents_n_times(agents, n_gen_runs) #return average of 3 runs
@@ -346,7 +355,12 @@ def train():
  
         # kill all agents, and replace them with their children
         agents = children_agents
+        # save generation
+        save_agents(cfg.exp_name, agents, generation)
+        # make rtpt step
+        generation += 1
         rtpt.step()
+
 
 
 if __name__ == '__main__':
