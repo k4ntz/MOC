@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
@@ -179,7 +180,6 @@ def select_action(features, policy):
 
 # function to run list of agents in given env
 def run_agents(env, agents):
-    start = time.perf_counter()
     reward_agents = []
     _ = env.reset()
     _, _, done, info = env.step(1)
@@ -292,10 +292,7 @@ def save_agents(training_name, agents, generation):
 def train():
     print('Experiment name:', cfg.exp_name)
 
-    LIVEPLOT = cfg.liveplot
-    DEBUG = cfg.debug
-    print('Liveplot:', LIVEPLOT)
-    print('Debug Mode:', DEBUG)
+    writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
 
     generations = cfg.train.num_episodes
     print('Generations:', generations)
@@ -355,14 +352,68 @@ def train():
  
         # kill all agents, and replace them with their children
         agents = children_agents
+
+        #log stuff
+        writer.add_scalar('Train/Mean rewards', np.mean(rewards), generation)
+        writer.add_scalar('Train/Mean of top 5', np.mean(top_rewards[:5]), generation)
         # save generation
+        generation += 1
         save_agents(cfg.exp_name, agents, generation)
         # make rtpt step
-        generation += 1
         rtpt.step()
+
+
+# function to eval best agent of last generation
+def play_agent():
+    print('Experiment name:', cfg.exp_name)
+    print('Evaluating Mode')
+    # disable gradients as we will not use them
+    torch.set_grad_enabled(False)
+    # initialize N number of agents
+    num_agents = 500
+    print('Number of agents:', num_agents)
+    agents = return_random_agents(num_agents)
+    generation = 0
+
+    # load if exists
+    model_path = model_name(cfg.exp_name)
+    if os.path.isfile(model_path):
+        print("{} does exist, loading ... ".format(model_path))
+        checkpoint = torch.load(model_path)
+        agents = checkpoint['agents']
+        generation = checkpoint['generation']
+    
+    # How many top agents to consider as parents
+    top_limit = 20
+    print('Number of top agents:', top_limit)
+    # runs per generation
+    n_gen_runs = 3
+    print('Number of runs per generation:', n_gen_runs)
+
+    elite_index = 409 # SET FOR ELITE INDEX FROM LOADED GENERATION
+    elite_agent = agents[elite_index]
+
+    # play with elite agent
+    env = AtariARIWrapper(gym.make(cfg.env_name))
+    _ = env.reset()
+    _, _, done, info = env.step(1)
+    elite_agent.eval()
+    raw_features, features, _, _ = do_step(env)
+    r = 0
+    for t in count():
+        action = select_action(features, elite_agent)
+        raw_features, features, reward, done = do_step(env, action, raw_features)
+        if cfg.liveplot:
+            plot_screen(env, generation, t)
+        r = r + reward
+        if(done):
+            break
+    print("Elite agent with index {} - final reward: {}".format(elite_index, r))
 
 
 
 if __name__ == '__main__':
     if cfg.mode == "train":
         train()
+    elif cfg.mode == "eval":
+        play_agent()
