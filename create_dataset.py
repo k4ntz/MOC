@@ -37,7 +37,7 @@ parser.add_argument('-f', '--folder', type=str, choices=folder_sizes.keys(),
                     help='folder to write to: train, test or validation')
 args = parser.parse_args()
 
-# args.folder = None
+# arguments.folder = None
 
 """
 If you look at the atari_env source code, essentially:
@@ -51,7 +51,7 @@ There is also NoFrameskip-v4 with no frame skip and no action repeat
 vstochasticity.
 """
 
-# env = AtariARIWrapper(gym.make(f'{args.game}Deterministic-v4'))
+# env = AtariARIWrapper(gym.make(f'{arguments.game}Deterministic-v4'))
 with open(f'configs/{args.game.lower()}_config.json', 'r') as f:
     data = f'{json.load(f)}'.replace("'", '"')
     config = json.loads(data, object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
@@ -78,7 +78,7 @@ if args.random:
     np.random.shuffle(index)
 image_count = 0
 series = []
-# if args.game == "MsPacman":
+# if arguments.game == "MsPacman":
 for _ in range(200):
     action = agent.draw_action(state)
     # action = env.action_space.sample()

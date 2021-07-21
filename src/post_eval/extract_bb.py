@@ -62,7 +62,6 @@ def process_image(log, image_rgb, idx):
     z_pres = z_pres_prob > 0.5
     z_what_pres = z_what[z_pres.unsqueeze(0)]
     boxes_batch = convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))
-    # boxes_batch, zwhats = boxes_and_what(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0), z_what)
     labels = get_labels(table.iloc[[idx]], boxes_batch)
     if action == "visu":
         visu = place_labels(labels, boxes_batch, image_rgb)
@@ -78,7 +77,6 @@ def process_image(log, image_rgb, idx):
 def img_path_to_tensor(path):
     pil_img = Image.open(path).convert('RGB')
     pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
-
     image = np.array(pil_img)
     return torch.from_numpy(image / 255).permute(2, 0, 1).float()
 

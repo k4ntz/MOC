@@ -10,6 +10,8 @@ from rtpt import RTPT
 from .arch import arch
 
 
+
+
 class TcSpace(nn.Module):
 
     def __init__(self):
@@ -70,13 +72,14 @@ class TcSpace(nn.Module):
         z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
         z_pres_loss = torch.sum(z_pres_inconsistencies)
         z_what_loss_pool = z_what_consistency_pool(responses)
-        z_what_loss_objects = self.z_what_consistency_objects(responses)
+        z_what_loss_objects, objects_detected = z_what_consistency_objects(responses)
         log = {
             'space_log': [get_log(r) for r in responses],
             'z_what_loss': z_what_loss,
             'z_what_loss_pool': z_what_loss_pool,
             'z_what_loss_objects': z_what_loss_objects,
-            'z_pres_loss': z_pres_loss
+            'z_pres_loss': z_pres_loss,
+            'objects_detected': objects_detected
         }
         area_object_scaling = min(1, global_step / arch.full_object_weight)
         loss = sum([get_loss(r) for r in responses]) \
@@ -86,42 +89,6 @@ class TcSpace(nn.Module):
                + z_what_loss_objects * area_object_scaling * arch.area_object_weight
 
         return loss, log
-
-    def z_what_consistency_objects(self, responses):
-        # (T, B, G*G, 1)
-        cos = nn.CosineSimilarity(dim=1)
-        z_pres = torch.stack([get_log(r)['z_pres_prob'] for r in responses])
-        # (T, B, G*G, D)
-        z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
-        B = z_whats.shape[1]
-        T = z_whats.shape[0]
-        D = z_whats.shape[3]
-        z_pres = z_pres.reshape(T, B, arch.G, arch.G)
-        z_pres_idx = (z_pres[:-1] > arch.object_threshold).nonzero(as_tuple=False)
-        z_whats = z_whats.reshape(T, B, arch.G, arch.G, D)
-        # (T, B, G+2, G+2)
-        z_pres_same_padding = torch.nn.functional.pad(z_pres, (1, 1, 1, 1), mode='circular')
-        # (T, B, G+2, G+2, D)
-        z_what_same_padding = torch.nn.functional.pad(z_whats, (0, 0, 1, 1, 1, 1), mode='circular')
-        # idx: (4,)
-        object_consistency_loss = torch.tensor(0.0).to(z_whats.device)
-        for idx in z_pres_idx[:-1]:
-            # (3, 3)
-            z_pres_area = z_pres_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
-            # (3, 3, D)
-            z_what_area = z_what_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
-            # Tuple((#hits,) (#hits,))
-            z_what_idx = (z_pres_area > arch.object_threshold).nonzero(as_tuple=True)
-            # (1, D)
-            z_what_prior = z_whats[idx.tensor_split(4)]
-            # (#hits, D)
-            z_whats_now = z_what_area[z_what_idx]
-            if z_whats_now.nelement() == 0:
-                continue
-            # (#hits,)
-            z_cos = cos(z_what_prior, z_whats_now)
-            object_consistency_loss += -arch.z_cos_match_weight * torch.max(z_cos) + torch.sum(z_cos)
-        return object_consistency_loss
 
 
 def sq_delta(t1, t2):
@@ -138,7 +105,41 @@ def get_loss(res):
 
 
 
-
+def z_what_consistency_objects(responses):
+    # (T, B, G*G, 1)
+    cos = nn.CosineSimilarity(dim=1)
+    z_pres = torch.stack([get_log(r)['z_pres_prob'] for r in responses])
+    # (T, B, G*G, D)
+    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+    B = z_whats.shape[1]
+    T = z_whats.shape[0]
+    D = z_whats.shape[3]
+    z_pres = z_pres.reshape(T, B, arch.G, arch.G)
+    z_pres_idx = (z_pres[:-1] > arch.object_threshold).nonzero(as_tuple=False)
+    z_whats = z_whats.reshape(T, B, arch.G, arch.G, D)
+    # (T, B, G+2, G+2)
+    z_pres_same_padding = torch.nn.functional.pad(z_pres, (1, 1, 1, 1), mode='circular')
+    # (T, B, G+2, G+2, D)
+    z_what_same_padding = torch.nn.functional.pad(z_whats, (0, 0, 1, 1, 1, 1), mode='circular')
+    # idx: (4,)
+    object_consistency_loss = torch.tensor(0.0).to(z_whats.device)
+    for idx in z_pres_idx:
+        # (3, 3)
+        z_pres_area = z_pres_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
+        # (3, 3, D)
+        z_what_area = z_what_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
+        # Tuple((#hits,) (#hits,))
+        z_what_idx = (z_pres_area > arch.object_threshold).nonzero(as_tuple=True)
+        # (1, D)
+        z_what_prior = z_whats[idx.tensor_split(4)]
+        # (#hits, D)
+        z_whats_now = z_what_area[z_what_idx]
+        if z_whats_now.nelement() == 0:
+            continue
+        # (#hits,)
+        z_cos = cos(z_what_prior, z_whats_now)
+        object_consistency_loss += -arch.z_cos_match_weight * torch.max(z_cos) + torch.sum(z_cos)
+    return object_consistency_loss, torch.tensor(len(z_pres_idx)).to(z_whats.device)
 
 def z_what_consistency_pool(responses):
     # O(n^2) matching of only high z_pres
@@ -146,6 +147,7 @@ def z_what_consistency_pool(responses):
     # By Flow
     # (T, B, G*G, D)
     z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+    z_whats = torch.abs(z_whats)
     B = z_whats.shape[1]
     T = z_whats.shape[0]
     D = z_whats.shape[3]

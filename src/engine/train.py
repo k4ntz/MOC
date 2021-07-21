@@ -31,6 +31,7 @@ def train(cfg):
     print('Loading data')
     rtpt = RTPT(name_initials='TRo', experiment_name='Train TcSP', max_iterations=cfg.train.max_epochs)
     rtpt.start()
+    dataset = get_dataset(cfg, 'train')
     trainloader = get_dataloader(cfg, 'train')
     if cfg.train.eval_on:
         valset = get_dataset(cfg, 'val')
@@ -116,7 +117,7 @@ def train(cfg):
                 log.update({
                     'loss': metric_logger['loss'].median,
                 })
-                vis_logger.train_vis(writer, log, global_step, 'train')
+                vis_logger.train_vis(model, writer, log, global_step, 'train', cfg, dataset)
                 end = time.perf_counter()
                 print(f'Log duration: {end - start}')
                 log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
@@ -133,9 +134,9 @@ def train(cfg):
             if global_step % cfg.train.eval_every == 0 and cfg.train.eval_on:
                 print('Validating...')
                 start = time.perf_counter()
-                checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
-                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, checkpoint,
-                                     checkpointer)
+                eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
+                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
+                                     checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
             pbar.update(1)
             start = time.perf_counter()

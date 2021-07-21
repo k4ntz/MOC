@@ -141,8 +141,7 @@ def _augment_dict_pong(obs, info):
 def assert_in(observed, target, tol):
     if type(tol) is int:
         tol = (tol, tol)
-    return np.all([observed[i] < target[i] + tol[i] and
-                   observed[i] > target[i] - tol[i] for i in range(2)])
+    return np.all([target[i] + tol[i] > observed[i] > target[i] - tol[i] for i in range(2)])
 
 
 def _augment_dict_mspacman(obs, info):

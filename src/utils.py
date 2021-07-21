@@ -314,7 +314,7 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
         "life2": (169, 38),
         "score0": (183, 81)
     }
-    bb = (boxes_batch[0][:, :4] * (210, 210, 160, 160)).round().astype(int)
+    bb = (boxes_batch[:, :4] * (210, 210, 160, 160)).round().astype(int)
     pieces["pacman"] = (serie['player_y'].item(), serie['player_x'].item())
     pieces["fruit"] = (serie['fruit_y'].item(), serie['fruit_x'].item())
     for en in enemy_list:

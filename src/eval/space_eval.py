@@ -1,17 +1,17 @@
 from utils import MetricLogger
 import numpy as np
 import torch
-import math
-import os, sys
+import os
+import sys
 from datetime import datetime
 from torch.utils.data import Subset, DataLoader
 import os.path as osp
 from tqdm import tqdm
-import json
 from .eval_cfg import eval_cfg
 from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from torch.utils.tensorboard import SummaryWriter
-
+from PIL import Image
+from post_eval import classify_z_what, get_labels_validation
 
 class SpaceEval():
     def __init__(self):
@@ -37,20 +37,27 @@ class SpaceEval():
         
 
     @torch.no_grad()
-    def train_eval(self, model, valset, bb_path, writer, global_step, device, checkpoint, checkpointer):
+    def train_eval(self, model, valset, bb_path, writer, global_step, device, checkpoint, checkpointer, cfg):
         """
         Evaluation during training. This includes:
             - mse evaluated on validation set
             - ap and accuracy evaluated on validation set
+            - cluster metrics evaluated on validation set
         :return:
         """
+        if 'cluster' in eval_cfg.train.metrics:
+            results = self.train_eval_clustering(model, valset, bb_path, writer, global_step, device, cfg)
+            print("Cluster result: ", results)
         if 'mse' in eval_cfg.train.metrics:
-            self.train_eval_mse(model, valset, writer, global_step, device)
+            mse = self.train_eval_mse(model, valset, writer, global_step, device)
+            print("MSE result: ", mse)
         if 'ap' in eval_cfg.train.metrics:
             results = self.train_eval_ap_and_acc(model, valset, bb_path, writer, global_step, device)
+            print("AP result: ", results['APs'], results['error_rate'])
             checkpointer.save_best('ap_dot5', results['APs'][0], checkpoint, min_is_better=False)
             checkpointer.save_best('ap_avg', np.mean(results['APs']), checkpoint, min_is_better=False)
             checkpointer.save_best('error_rate', results['error_rate'], checkpoint, min_is_better=True)
+
         
     @torch.no_grad()
     def train_eval_ap_and_acc(self, model, valset, bb_path, writer: SummaryWriter, global_step, device):
@@ -72,7 +79,7 @@ class SpaceEval():
         error_rate = result_dict['error_rate']
         
         for ap, thres in zip(APs, iou_thresholds):
-            writer.add_scalar(f'val/ap_{thres}', ap, global_step)
+            writer.add_scalar(f'val_aps/ap_{thres}', ap, global_step)
         writer.add_scalar(f'val/ap_avg', np.mean(APs), global_step)
         writer.add_scalar('val/accuracy', accuracy, global_step)
         writer.add_scalar('val/perfect', perfect, global_step)
@@ -98,17 +105,17 @@ class SpaceEval():
         metric_logger = MetricLogger()
     
         print(f'Evaluating MSE using {num_samples} samples.')
-        with tqdm(total=num_samples) as pbar:
+        with tqdm(total=len(dataloader)) as pbar:
             for batch_idx, sample in enumerate(dataloader):
                 imgs = sample.to(device)
                 loss, log = model(imgs, global_step)
                 B = imgs.size(0)
                 for b in range(B):
                     metric_logger.update(
-                        mse=log['mse'][b],
+                        mse=log['space_log'][0]['mse'][b],
                     )
                 metric_logger.update(loss=loss.mean())
-                pbar.update(B)
+                pbar.update(1)
     
         assert metric_logger['mse'].count == num_samples
         # Add last log
@@ -119,6 +126,83 @@ class SpaceEval():
         model.train()
         
         return mse
+
+    @torch.no_grad()
+    def train_eval_clustering(self, model, valset, bb_path, writer: SummaryWriter, global_step, device, cfg):
+        """
+        Evaluate clustering during training
+        :return: result_dict
+        """
+        result_dict, img_path = self.eval_clustering(
+            model, valset, bb_path, eval_cfg.train.batch_size, eval_cfg.train.num_workers,
+            device, cfg, num_samples=eval_cfg.train.num_samples.cluster
+        )
+
+        writer.add_image('Clustering PCA', np.array(Image.open(img_path)), global_step, dataformats='HWC')
+        for score in result_dict:
+            writer.add_scalar(f'val/{score}', result_dict[score], global_step)
+        return result_dict
+
+    def eval_clustering(
+            self,
+            model,
+            dataset,
+            bb_path,
+            batch_size,
+            num_workers,
+            device,
+            cfg,
+            num_samples=None
+    ):
+        """
+        Evaluate clustering metrics
+
+        :param model: Space
+        :param dataset: dataset
+        :param bb_path: directory containing the gt bounding boxes.
+        :param batch_size: batch size
+        :param num_workers: num_workers
+        :param device: device
+        :param num_samples: number of samples for evaluating it. If None use all samples
+        :return metrics: a list of metrics describing the cluster, based on the ground truth
+        :return pca of the data involved
+        """
+
+        from tqdm import tqdm
+
+        model.eval()
+
+        if num_samples is None:
+            num_samples = len(dataset)
+        dataset = Subset(dataset, indices=range(num_samples))
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+
+        z_whats = []
+        all_labels = []
+        model.eval()
+        with torch.no_grad():
+            print('Computing boxes...')
+            pbar = tqdm(total=len(dataloader))
+            for i, imgs in enumerate(dataloader):
+                imgs = imgs.to(device)
+                loss, log = model(imgs, global_step=100000000)
+                img = log['space_log'][0]
+                z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
+                z_where = z_where.detach().cpu()
+                z_pres_prob = z_pres_prob.detach().cpu().squeeze()
+                z_pres = z_pres_prob > 0.5
+                z_what_pres = z_what[z_pres]
+                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+                z_whats.extend(z_what_pres)
+                all_labels.extend(get_labels_validation(range(i * batch_size, (i + 1) * batch_size), boxes_batch))
+                pbar.update(1)
+        print()
+        print('================================')
+        print(len(all_labels), len(all_labels[0]))
+        print(len(z_whats), len(z_whats[0]))
+        model.train()
+        args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation'}
+        return classify_z_what(args, torch.stack(z_whats).detach().cpu(), torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
 
     def eval_ap_and_acc(
             self,
@@ -140,15 +224,13 @@ class SpaceEval():
         :param batch_size: batch size
         :param num_workers: num_workers
         :param device: device
-        :param output_path: checkpointdir to output result json file
         :param num_samples: number of samples for evaluating it. If None use all samples
         :param iou_thresholds:
         :return ap: a list of average precisions, corresponding to each iou_thresholds
         """
         
         from tqdm import tqdm
-        import sys
-    
+
         model.eval()
         
         if num_samples is None:
@@ -161,6 +243,8 @@ class SpaceEval():
         boxes_gt = read_boxes(bb_path, 128)
     
         boxes_pred = []
+        rgb_folder_src = f"../aiml_atari_data/rgb/MsPacman-v0/validation"
+        rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/validation"
         model.eval()
         with torch.no_grad():
             print('Computing boxes...')
@@ -168,23 +252,38 @@ class SpaceEval():
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
             
-                # TODO: treat global_step in a more elegant way
-                loss, log = \
-                    model(imgs, global_step=100000000)
-            
+                loss, log = model(imgs, global_step=100000000)
+                img = log['space_log'][0]
                 # (B, N, 4), (B, N, 1), (B, N, 1)
-                z_where, z_pres_prob = log['z_where'], log['z_pres_prob']
+                z_where, z_pres_prob = img['z_where'], img['z_pres_prob']
                 # (B, N, 4), (B, N), (B, N)
                 z_where = z_where.detach().cpu()
                 z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-                # TODO: look at this
+
                 z_pres = z_pres_prob > 0.5
-            
-                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob)
+
+                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+
                 boxes_pred.extend(boxes_batch)
                 pbar.update(1)
-        
+
+            # print('Drawing bounding boxes for eval...')
+            # for idx, (pred, gt) in enumerate(zip(boxes_pred, boxes_gt)):
+            #     pil_img = Image.open(f'{rgb_folder_src}/{idx:05}.png', ).convert('RGB')
+            #     pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
+            #     image = np.array(pil_img)
+            #     torch_img = torch.from_numpy(image).permute(2, 1, 0)
+            #     pred_tensor = torch.FloatTensor(pred) * 128
+            #     pred_tensor = torch.index_select(pred_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
+            #     gt_tensor = torch.FloatTensor(gt) * 128
+            #     gt_tensor = torch.index_select(gt_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
+            #     bb_img = draw_bb(torch_img, gt_tensor, colors=['red']*50)
+            #     bb_img = draw_bb(bb_img, pred_tensor, colors=['green']*50)
+            #     result = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
+            #     result.save(f'{rgb_folder}/temp_from_eval_objects_{idx:05}.png')
+
             print('Computing error rates and counts...')
+
             # Four numbers
             error_rate, perfect, overcount, undercount = compute_counts(boxes_pred, boxes_gt)
             accuracy = perfect / (perfect + overcount + undercount)

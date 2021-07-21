@@ -48,7 +48,7 @@ if __name__ == '__main__':
     make_deterministic(args.seed, env)
 
 
-    # agent_f = f"{args.algo}_{args.act_f}_{args.game}_s{args.seed}_e{args.epoch}.zip"
+    # agent_f = f"{arguments.algo}_{arguments.act_f}_{arguments.game}_s{arguments.seed}_e{arguments.epoch}.zip"
     print(f"Using agent from {args.agent_path}")
     agent = load_agent(args.agent_path)
 

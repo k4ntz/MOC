@@ -5,7 +5,7 @@ arch = CfgNode({
     'adjacent_consistency_weight': 0,
     'pres_inconsistency_weight': 0,
     'area_pool_weight': 0,
-    'area_object_weight': 6.0,
+    'area_object_weight': 0,
     'object_threshold': 0.5,
     'z_cos_match_weight': 5.0,
     'full_object_weight': 20000,

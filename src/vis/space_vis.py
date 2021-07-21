@@ -4,21 +4,24 @@ import numpy as np
 import torch
 
 import matplotlib
-
-matplotlib.use('Agg')
-
 from utils import spatial_transform
 from .utils import bbox_in_one, colored_bbox_in_one_image
 from attrdict import AttrDict
 from torchvision.utils import make_grid
 from torch.utils.data import Subset, DataLoader
-import matplotlib.pyplot as plt
 from collections import Counter
+from torchvision.utils import draw_bounding_boxes as draw_bb
+from PIL import Image
+import PIL
+from eval import convert_to_boxes, read_boxes
+
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 class SpaceVis:
     @torch.no_grad()
-    def train_vis(self, writer: SummaryWriter, log, global_step, mode, num_batch=10):
+    def train_vis(self, model, writer: SummaryWriter, log, global_step, mode, cfg, dataset, num_batch=10):
         """
         """
         writer.add_scalar(f'{mode}_sum/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
@@ -27,6 +30,8 @@ class SpaceVis:
         writer.add_scalar(f'{mode}_sum/z_what_loss_objects', torch.sum(log['z_what_loss_objects']).item(),
                           global_step=global_step)
         writer.add_scalar(f'{mode}_sum/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}_sum/objects_detected', torch.sum(log['objects_detected']).item(),
+                          global_step=global_step)
         writer.add_scalar(f'{mode}_sum/total_loss', log['loss'], global_step=global_step)
         B = num_batch
         for i, img in enumerate(log['space_log']):
@@ -110,6 +115,9 @@ class SpaceVis:
         writer.add_scalar(f'{mode}_sum/Pres_KL', summed['kl_z_pres'], global_step=global_step)
         writer.add_scalar(f'{mode}_sum/Depth_KL', summed['kl_z_depth'], global_step=global_step)
         writer.add_scalar(f'{mode}_sum/Bg_KL', summed['kl_bg'], global_step=global_step)
+        bb_image = draw_image_bb(model, cfg, dataset)
+        grid_image = make_grid(bb_image, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}_sum/4-bounding_boxes', grid_image, global_step)
 
     @torch.no_grad()
     def show_vis(self, model, dataset, indices, path, device):
@@ -179,3 +187,37 @@ class SpaceVis:
         grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
         plt.imshow(fg_box[0][0].permute(1, 2, 0))
         plt.show()
+
+
+def draw_image_bb(model, cfg, dataset):
+    indices = np.random.choice(len(dataset), size=10, replace=False)
+    dataset = Subset(dataset, indices)
+    dataloader = DataLoader(dataset, batch_size=len(indices), shuffle=False)
+    data = next(iter(dataloader))
+    data = data.to(cfg.device)
+    loss, log = model(data, 100000000)
+    space_log = log['space_log'][0]
+    bb_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/train/bb"
+    rgb_folder = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/train"
+    boxes_gt = read_boxes(bb_path, 128, indices=indices)
+    boxes_pred = []
+    z_where, z_pres_prob = space_log['z_where'], space_log['z_pres_prob']
+    z_where = z_where.detach().cpu()
+    z_pres_prob = z_pres_prob.detach().cpu().squeeze()
+    z_pres = z_pres_prob > 0.5
+    boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+    boxes_pred.extend(boxes_batch)
+    result = []
+    for idx, gt, pred in zip(indices, boxes_gt, boxes_pred):
+        pil_img = Image.open(f'{rgb_folder}/{idx:05}.png', ).convert('RGB')
+        pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
+        image = np.array(pil_img)
+        torch_img = torch.from_numpy(image).permute(2, 1, 0)
+        pred_tensor = torch.FloatTensor(pred) * 128
+        pred_tensor = torch.index_select(pred_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
+        gt_tensor = torch.FloatTensor(gt) * 128
+        gt_tensor = torch.index_select(gt_tensor, 1, torch.LongTensor([1, 3, 0, 2]))
+        bb_img = draw_bb(torch_img, gt_tensor, colors=['red']*50)
+        bb_img = draw_bb(bb_img, pred_tensor, colors=['green']*50)
+        result.append(bb_img.permute(0, 2, 1))
+    return torch.stack(result)

@@ -70,29 +70,31 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
 
     return boxes
 
-def read_boxes(path, size):
+
+def read_boxes(path, size, indices=None):
     """
     Read bounding boxes and normalize to (0, 1)
+    Note BB files structure was changed to left, top coordinates + width and height
     :param path: checkpointdir to bounding box root
     :param size: image width
+    :param indices: relevant indices of the dataset
     :return: A list of list [[y_min, y_max, x_min, x_max] * N] * B
     """
     from glob import glob
     filenames = glob(os.path.join(path, 'bb_*.txt'))
 
     boxes_all = []
-    for i in range(len(filenames)):
+    for i in indices if (indices is not None) else range(240):  # len(filenames)):
         boxes = []
         filename = os.path.join(path, 'bb_{}.txt'.format(i))
         with open(filename, 'r') as f:
             for line in f:
                 if line.strip():
                     center_x, center_y, width, height = [float(x) for x in line.split(',')]
-                    y_min = center_y - height / 2.0
-                    y_max = center_y + height / 2.0
-                    x_min = center_x - width / 2.0
-                    x_max = center_x + width / 2.0
-
+                    y_min = center_y
+                    y_max = center_y + height
+                    x_min = center_x
+                    x_max = center_x + width
                     boxes.append([y_min, y_max, x_min, x_max])
         boxes = np.array(boxes) / size
         boxes_all.append(boxes)
