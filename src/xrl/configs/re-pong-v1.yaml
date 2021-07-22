@@ -3,7 +3,7 @@ env_name: 'PongDeterministic-v4'
 device: 'cuda:0'
 parallel: False
 
-logdir: '/xrl/logs/'
+logdir: '/xrl/relogs/'
 
 video_steps: 100
 
@@ -14,6 +14,6 @@ train:
   num_episodes: 50000
   max_steps: 100000
   
-  log_steps: 500
+  log_steps: 100
   # save every is for episodes
   save_every: 100

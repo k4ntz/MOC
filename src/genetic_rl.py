@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import seaborn as sn
 import copy
+import multiprocessing
 
 import torch
 import torch.nn as nn
@@ -111,8 +112,12 @@ def run_agents(env, agents):
 def return_average_score(agent, runs):
     score = 0.
     env = AtariARIWrapper(gym.make(cfg.env_name))
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
+                    max_iterations=runs)
+    rtpt.start()
     for i in range(runs):
         score += run_agents(env, [agent])[0]
+        rtpt.step()
     avg_score = score/runs
     return avg_score
 
@@ -121,7 +126,8 @@ def return_average_score(agent, runs):
 def run_agents_n_times(agents, runs):
     avg_score = []
     agents = tqdm(agents)
-    avg_score = Parallel(n_jobs=8)(delayed(return_average_score)(agent, runs) for agent in agents)
+    cpu_cores = min(multiprocessing.cpu_count(), 100)
+    avg_score = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agent, runs) for agent in agents)
     return avg_score
 
 
