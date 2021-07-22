@@ -3,7 +3,7 @@ env_name: 'PongDeterministic-v4'
 device: 'cuda:0'
 parallel: False
 
-logdir: '/xrl/logs/'
+logdir: '/xrl/genlogs/'
 
 video_steps: 100
 
