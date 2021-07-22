@@ -159,8 +159,10 @@ def add_elite(agents, sorted_parent_indexes, elite_index=None, only_consider_top
         candidate_elite_index = np.append(candidate_elite_index,[elite_index]) 
     top_score = None
     top_elite_index = None
-    for i in candidate_elite_index:
-        score = return_average_score(agents[i], runs=5)
+    candidate_elite_index = tqdm(candidate_elite_index)
+    cpu_cores = min(100, max(multiprocessing.cpu_count(), only_consider_top_n))
+    scores = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agents[i], runs=5) for i in candidate_elite_index)
+    for i, score in enumerate(scores):
         print("Score for elite i ", i, " is ", score)
         if(top_score is None):
             top_score = score
