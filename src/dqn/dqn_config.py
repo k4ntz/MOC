@@ -24,6 +24,7 @@ cfg = CfgNode({
     'device': 'cuda:0',
     'logdir': '/dqn/logs/',
 
+    'make_video': False,
     'video_steps': 10,
 
     'use_space': True,

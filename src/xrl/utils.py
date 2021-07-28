@@ -1,12 +1,18 @@
 import math
+import torch
+import cv2
 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sn
+import pandas as pd
+
+# Use Agg backend for canvas
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # function to plot live while training
 def plot_screen(env, episode, step, second_img=None):
     plt.figure(3)
-    plt.clf()
     plt.title('Episode: ' + str(episode) + " - Step: " + str(step))
     plt.imshow(env.render(mode='rgb_array'),
            interpolation='none')
@@ -17,6 +23,46 @@ def plot_screen(env, episode, step, second_img=None):
         plt.imshow(second_img)
     plt.plot()
     plt.pause(0.0001)  # pause a bit so that plots are updated
+
+
+# function to get integrated gradients
+def get_integrated_gradients(ig, input, target_class):
+    # get attributions and print
+    attributions, approximation_error = ig.attribute(torch.tensor(input).unsqueeze(0).float(), 
+        target=target_class, return_convergence_delta=True)
+    #print(attributions)
+    attr = attributions[0].cpu().detach().numpy()
+    attr_df = pd.DataFrame({"Values": attr},
+                  index=["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"])
+    #print(attr_df)
+    return attr_df
+
+
+# helper function to get integrated gradients of given features as plotable image
+def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
+    attr_df = get_integrated_gradients(ig, input, target_class)
+    #print(attr_df)
+    env_img = env.render(mode='rgb_array')
+    # plot both next to each other
+    plt.clf()
+    plt.cla()
+    plt.close()
+    fig, (ax1, ax2) = plt.subplots(ncols=2)
+    ax1.imshow(env_img)
+    sn.heatmap(attr_df, ax=ax2, vmin=-0.2, vmax=1)
+    plt.title(exp_name)
+    plt.tight_layout()
+    # convert fig to cv2 img
+    # put pixel buffer in numpy array
+    canvas = FigureCanvas(fig)
+    canvas.draw()
+    mat = np.array(canvas.renderer._renderer)
+    mat = cv2.cvtColor(mat, cv2.COLOR_RGB2BGR)
+    resized = cv2.resize(mat, (480, 480), interpolation = cv2.INTER_AREA)
+    if plot:
+        plt.plot()
+        plt.pause(0.0001)
+    return resized
 
 
 # helper function to calc linear equation

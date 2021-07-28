@@ -1,4 +1,5 @@
 import argparse
+from captum import attr
 import gym
 import numpy as np
 import os
@@ -10,11 +11,13 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical
 from atariari.benchmark.wrapper import AtariARIWrapper
+from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
 
 import xrl.utils as xutils
 import dqn.utils as utils
+import dqn.dqn_logger as vlogger
 
 cfg, _ = utils.get_config()
 
@@ -148,6 +151,7 @@ def eval():
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
     env = AtariARIWrapper(gym.make(cfg.env_name))
+    logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
     policy = Policy()
     i_episode = 1
     # load if exists
@@ -157,21 +161,29 @@ def eval():
         checkpoint = torch.load(model_path)
         policy.load_state_dict(checkpoint['policy'])
         i_episode = checkpoint['episode']
+    policy.eval()
     # init env
     _, ep_reward = env.reset(), 0
     _, _, done, _ = env.step(1)
     raw_features, features, _, _ = xutils.do_step(env)
+    # init intgrad
+    ig = IntegratedGradients(policy)
     # env loop
     for t in range(1, 10000):  # Don't infinite loop while learning
         action, _ = select_action(features, policy)
+        if cfg.liveplot or cfg.make_video:
+            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, action, env, cfg.liveplot)
+            logger.fill_video_buffer(img)
+            print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
+                i_episode, ep_reward, t), end="\r")
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
-        if cfg.liveplot:
-            xutils.plot_screen(env, i_episode, t)
         ep_reward += reward
         if done:
             break
-    print('Episode {}\tReward: {:.2f}}'.format(
-        i_episode, ep_reward), end="\r")
+    print('Episode {}\tReward: {:.2f}'.format(
+        i_episode, ep_reward))
+    if cfg.liveplot or cfg.make_video:
+        logger.save_video(cfg.exp_name)
 
 
 if __name__ == '__main__':

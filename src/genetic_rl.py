@@ -19,11 +19,13 @@ from joblib import Parallel, delayed
 from itertools import count
 from PIL import Image
 from atariari.benchmark.wrapper import AtariARIWrapper
+from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
 
 import xrl.utils as xutils
 import dqn.utils as utils
+import dqn.dqn_logger as vlogger
 
 cfg, _ = utils.get_config()
 
@@ -306,6 +308,8 @@ def play_agent():
 
     # play with elite agent
     env = AtariARIWrapper(gym.make(cfg.env_name))
+    logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
+    ig = IntegratedGradients(elite_agent)
     _ = env.reset()
     _, _, done, info = env.step(1)
     elite_agent.eval()
@@ -314,12 +318,17 @@ def play_agent():
     for t in count():
         action = select_action(features, elite_agent)
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
-        if cfg.liveplot:
-            xutils.plot_screen(env, generation, t)
+        if cfg.liveplot or cfg.make_video:
+            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, action, env, cfg.liveplot)
+            logger.fill_video_buffer(img)
+            print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
+                generation, r, t), end="\r")
         r = r + reward
         if(done):
             break
     print("Elite agent with index {} - final reward: {}".format(elite_index, r))
+    if cfg.liveplot or cfg.make_video:
+        logger.save_video(cfg.exp_name)
 
 
 

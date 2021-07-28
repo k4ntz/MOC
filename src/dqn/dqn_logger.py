@@ -10,12 +10,13 @@ from torch.utils.tensorboard import SummaryWriter
 from utils import draw_bounding_boxes
 
 class DQN_Logger:
-    def __init__(self, logpath, logname, vfolder="/dqn/video/"):
+    def __init__(self, logpath, logname, vfolder="/dqn/video/", size=(128, 128)):
         self.PATH_TO_VIDEO = os.getcwd() + vfolder
         if not os.path.exists(logpath):
             os.makedirs(logpath)
         self.writer = SummaryWriter(logpath + logname)
         self.video_buffer = []
+        self.size = size
 
     def log_episode(self, episode_steps, pos_reward, neg_reward, episode, global_step, q_table_len = None):
         if self.writer == None:
@@ -69,7 +70,7 @@ class DQN_Logger:
             file_path = self.PATH_TO_VIDEO + model_name + ".avi"
             # do video saving stuff
             fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-            writer = cv2.VideoWriter(file_path, fourcc, fps, (128, 128))
+            writer = cv2.VideoWriter(file_path, fourcc, fps, self.size)
             # fill buffer of video writer
             for frame in self.video_buffer:
                 writer.write(frame)
