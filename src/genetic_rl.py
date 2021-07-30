@@ -303,13 +303,15 @@ def play_agent():
         agents = checkpoint['agents']
         generation = checkpoint['generation']
 
-    elite_index = 269 # SET FOR ELITE INDEX FROM LOADED GENERATION
+    elite_index = 7 # SET FOR ELITE INDEX FROM LOADED GENERATION
     elite_agent = agents[elite_index]
 
     # play with elite agent
     env = AtariARIWrapper(gym.make(cfg.env_name))
     logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
     ig = IntegratedGradients(elite_agent)
+    ig_sum = []
+    # init env
     _ = env.reset()
     _, _, done, info = env.step(1)
     elite_agent.eval()
@@ -323,12 +325,19 @@ def play_agent():
             logger.fill_video_buffer(img)
             print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 generation, r, t), end="\r")
+        else:
+            #TODO: REMOVE!!
+            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
         r = r + reward
         if(done):
             break
-    print("Elite agent with index {} - final reward: {}".format(elite_index, r))
+    ig_sum = np.asarray(ig_sum)
     if cfg.liveplot or cfg.make_video:
         logger.save_video(cfg.exp_name)
+        print("Elite agent with index {} - final reward: {}".format(elite_index, r))
+    else:
+        print("Elite agent with index {} - final reward: {} - IG-Mean: {}".format(
+            elite_index, r, np.mean(ig_sum, axis=0)))
 
 
 

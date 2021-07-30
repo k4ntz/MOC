@@ -32,15 +32,15 @@ def get_integrated_gradients(ig, input, target_class):
         target=target_class, return_convergence_delta=True)
     #print(attributions)
     attr = attributions[0].cpu().detach().numpy()
-    attr_df = pd.DataFrame({"Values": attr},
-                  index=["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"])
     #print(attr_df)
-    return attr_df
+    return attr
 
 
 # helper function to get integrated gradients of given features as plotable image
 def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
-    attr_df = get_integrated_gradients(ig, input, target_class)
+    attr = get_integrated_gradients(ig, input, target_class)
+    attr_df = pd.DataFrame({"Values": attr},
+                  index=["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"])
     #print(attr_df)
     env_img = env.render(mode='rgb_array')
     # plot both next to each other

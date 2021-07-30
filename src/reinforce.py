@@ -30,8 +30,8 @@ model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pt
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
-        self.affine1 = nn.Linear(6, 128)
-        self.affine2 = nn.Linear(128, 3)
+        self.affine1 = nn.Linear(6, 32) # v1 had 128 hidden nodes
+        self.affine2 = nn.Linear(32, 3)
 
         self.saved_log_probs = []
         self.rewards = []
@@ -168,6 +168,7 @@ def eval():
     raw_features, features, _, _ = xutils.do_step(env)
     # init intgrad
     ig = IntegratedGradients(policy)
+    ig_sum = []
     # env loop
     for t in range(1, 10000):  # Don't infinite loop while learning
         action, _ = select_action(features, policy)
@@ -176,14 +177,21 @@ def eval():
             logger.fill_video_buffer(img)
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
+        else:
+            #TODO: REMOVE!!
+            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         ep_reward += reward
         if done:
             break
-    print('Episode {}\tReward: {:.2f}'.format(
-        i_episode, ep_reward))
+    ig_sum = np.asarray(ig_sum)
     if cfg.liveplot or cfg.make_video:
         logger.save_video(cfg.exp_name)
+        print('Episode {}\tReward: {:.2f}'.format(
+        i_episode, ep_reward))
+    else:
+        print('Episode {}\tReward: {:.2f}\t IG-Mean: {}'.format(
+        i_episode, ep_reward, np.mean(ig_sum, axis=0)))
 
 
 if __name__ == '__main__':
