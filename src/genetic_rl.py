@@ -331,13 +331,14 @@ def play_agent():
         r = r + reward
         if(done):
             break
-    ig_sum = np.asarray(ig_sum)
     if cfg.liveplot or cfg.make_video:
         logger.save_video(cfg.exp_name)
         print("Elite agent with index {} - final reward: {}".format(elite_index, r))
     else:
+        ig_sum = np.asarray(ig_sum)
         print("Elite agent with index {} - final reward: {} - IG-Mean: {}".format(
             elite_index, r, np.mean(ig_sum, axis=0)))
+        xutils.plot_igs(ig_sum)
 
 
 

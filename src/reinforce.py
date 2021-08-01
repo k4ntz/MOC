@@ -184,14 +184,15 @@ def eval():
         ep_reward += reward
         if done:
             break
-    ig_sum = np.asarray(ig_sum)
     if cfg.liveplot or cfg.make_video:
         logger.save_video(cfg.exp_name)
         print('Episode {}\tReward: {:.2f}'.format(
         i_episode, ep_reward))
     else:
+        ig_sum = np.asarray(ig_sum)
         print('Episode {}\tReward: {:.2f}\t IG-Mean: {}'.format(
         i_episode, ep_reward, np.mean(ig_sum, axis=0)))
+        xutils.plot_igs(ig_sum)
 
 
 if __name__ == '__main__':

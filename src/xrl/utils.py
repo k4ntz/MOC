@@ -10,6 +10,8 @@ import pandas as pd
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
+features = ["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"]
+
 # function to plot live while training
 def plot_screen(env, episode, step, second_img=None):
     plt.figure(3)
@@ -40,7 +42,7 @@ def get_integrated_gradients(ig, input, target_class):
 def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
     attr = get_integrated_gradients(ig, input, target_class)
     attr_df = pd.DataFrame({"Values": attr},
-                  index=["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"])
+                  index=features)
     #print(attr_df)
     env_img = env.render(mode='rgb_array')
     # plot both next to each other
@@ -63,6 +65,22 @@ def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
         plt.plot()
         plt.pause(0.0001)
     return resized
+
+
+# helper function to plot igs of each feature over whole episode
+def plot_igs(ig_sum, plot_titles = features):
+    for i, igs in enumerate(ig_sum.T):
+        plt.plot(igs)
+        plt.xlabel("Steps")
+        plt.ylabel("Integrated Gradient Value")
+        if plot_titles is not None:
+            plt.title(plot_titles[i])
+        plt.show()
+        plt.hist(igs, bins=20)
+        plt.xlabel("Integrated Gradient Value")
+        if plot_titles is not None:
+            plt.title(plot_titles[i])
+        plt.show()
 
 
 # helper function to calc linear equation
