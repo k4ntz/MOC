@@ -101,7 +101,7 @@ def run_agents(env, agents):
         agent.eval()
         raw_features, features, _, _ = xutils.do_step(env)
         r = 0
-        for t in count():
+        for t in range(1, 50000):
             action = select_action(features, agent)
             raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             r = r + reward
