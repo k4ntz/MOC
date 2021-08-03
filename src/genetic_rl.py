@@ -107,6 +107,8 @@ def run_agents(env, agents):
             r = r + reward
             if(done):
                 break
+            if t == 49999:
+                r = -30
         reward_agents.append(r)
     return reward_agents
 

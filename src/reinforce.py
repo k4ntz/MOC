@@ -129,6 +129,8 @@ def train():
             ep_reward += reward
             if done:
                 break
+            if t == 49999:
+                ep_reward = -30
         # finish episode and optimize nn
         # replace first running reward with last reward for loaded models
         if running_reward is None:
