@@ -28,23 +28,22 @@ if not os.path.exists(PATH_TO_OUTPUTS):
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 
 class Policy(nn.Module):
-    def __init__(self):
+    def __init__(self, input, hidden, actions): 
         super(Policy, self).__init__()
-        self.affine1 = nn.Linear(6, 32) # v1 had 128 hidden nodes
-        self.affine2 = nn.Linear(32, 3)
+        self.h = nn.Linear(input, hidden)
+        self.out = nn.Linear(hidden, actions)
 
         self.saved_log_probs = []
         self.rewards = []
 
     def forward(self, x):
-        x = self.affine1(x)
-        x = F.relu(x)
-        x = self.affine2(x)
-        return F.softmax(x, dim=1)
+        x = F.relu(self.h(x))
+        return F.softmax(self.out(x), dim=1)
 
 
 def select_action(features, policy):
     probs = policy(torch.tensor(features).unsqueeze(0).float())
+    #print(list(np.around(probs.detach().numpy(), 3)))
     m = Categorical(probs)
     action = m.sample()
     log_prob = m.log_prob(action)
@@ -86,8 +85,14 @@ def save_policy(training_name, policy, episode, optimizer):
 def train():
     print('Experiment name:', cfg.exp_name)
     writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
+    # init env to get params for policy net
     env = AtariARIWrapper(gym.make(cfg.env_name))
-    policy = Policy()
+    n_actions = env.action_space.n
+    _ = env.reset()
+    _, features, _, _ = xutils.do_step(env)
+    # init policy net
+    print("Policy net has", len(features), "input nodes, 32 hidden nodes and", n_actions, "output nodes")
+    policy = Policy(len(features), 128, n_actions)
     optimizer = optim.Adam(policy.parameters(), lr=cfg.train.learning_rate) 
     eps = np.finfo(np.float32).eps.item()
     i_episode = 1

@@ -82,16 +82,38 @@ def plot_igs(ig_sum, plot_titles = features):
             plt.title(plot_titles[i])
         plt.show()
 
+### processing features ###
+
+
+# function to get raw features and order them by 
+def get_raw_features(env_info, last_raw_features=None):
+    # extract raw features
+    labels = env_info["labels"]
+    player = [labels["player_x"].astype(np.int16), 
+            labels["player_y"].astype(np.int16)]
+    enemy = [labels["enemy_x"].astype(np.int16), 
+            labels["enemy_y"].astype(np.int16)]
+    ball = [labels["ball_x"].astype(np.int16), 
+            labels["ball_y"].astype(np.int16)]
+    # set new raw_features
+    raw_features = last_raw_features
+    if raw_features is None:
+        raw_features = [player, enemy, ball, None, None, None]
+    else:
+        raw_features = np.roll(raw_features, 3)
+        raw_features[0] = player
+        raw_features[1] = enemy
+        raw_features[2] = ball
+    return raw_features
+
 
 # helper function to calc linear equation
-def get_target_x(x1, x2, y1, y2, player_x):
-    x = [x1, x2]
-    y = [y1, y2]
+def get_lineq_param(obj1, obj2):
+    x = obj1
+    y = obj2
     A = np.vstack([x, np.ones(len(x))]).T
     m, c = np.linalg.lstsq(A, y, rcond=None)[0]
-    # now calc target pos
-    # y = mx + c
-    return np.int16(m * player_x + c)
+    return m, c
 
 
 # helper function to convert env info into custom list
@@ -99,51 +121,45 @@ def get_target_x(x1, x2, y1, y2, player_x):
 # features are processed stuff for policy
 def preprocess_raw_features(env_info, last_raw_features=None):
     features = []
-    norm_factor = 250
-    # extract raw features
-    labels = env_info["labels"]
-    player_x = labels["player_x"].astype(np.int16)
-    player_y = labels["player_y"].astype(np.int16)
-    enemy_x = labels["enemy_x"].astype(np.int16)
-    enemy_y = labels["enemy_y"].astype(np.int16)
-    ball_x = labels["ball_x"].astype(np.int16)
-    ball_y = labels["ball_y"].astype(np.int16)
-    # set new raw_features
-    raw_features = last_raw_features
-    if raw_features is None:
-        raw_features = [player_x, player_y, ball_x, ball_y, enemy_x, enemy_y
-            ,np.int16(0), np.int16(0), np.int16(0), np.int16(0), np.int16(0), np.int16(0)]
-        features.append(0)
-    else:
-        # move up old values in list
-        raw_features = np.roll(raw_features, 6)
-        raw_features[0] = player_y
-        raw_features[1] = player_y
-        raw_features[2] = ball_x
-        raw_features[3] = ball_y  
-        raw_features[4] = enemy_x
-        raw_features[5] = enemy_y 
-        # calc target point and put distance in features
-        target_y = get_target_x(raw_features[6], ball_x, raw_features[7], ball_y, player_x) 
-        features.append((target_y - player_y)/ norm_factor)
-    # append other distances
-    features.append((player_x - ball_x)/ norm_factor)# distance x ball and player
-    features.append(0) 
-    # not needed, bc target pos y is already calculated
-    # features.append((player_y - ball_y)/ norm_factor)# distance y ball and player
-    features.append((ball_x - enemy_x)/ norm_factor) # distance x ball and enemy
-    features.append((ball_y - enemy_y)/ norm_factor) # distance y ball and enemy
-    # euclidean distance between old and new ball coordinates to represent current speed per frame
-    features.append(math.sqrt((ball_x - raw_features[8])**2 + (ball_y - raw_features[9])**2) / 25) 
+    raw_features = get_raw_features(env_info, last_raw_features)
+    for i in range(0, 3):
+        obj1, obj1_past = raw_features[i], raw_features[i + 3]
+        # when object has moved and has history
+        if obj1_past is not None and not (obj1[0] == obj1_past[0] and obj1[1] == obj1_past[1]):
+            # append velocity of itself
+            features.append(math.sqrt((obj1_past[0] - obj1[0])**2 + (obj1_past[1] - obj1[1])**2))
+        else:
+            features.append(0)
+        for j in range(0, 3):
+            # apped all manhattan distances to all other objects
+            # which are not already calculated
+            if j > i:
+                obj2 = raw_features[j]
+                # append coord distances
+                features.append(obj2[0] - obj1[0]) # append x dist
+                features.append(obj2[1] - obj1[1]) # append y dist
+        for j in range(0, 3):
+            # calculate movement paths of all other objects
+            # and calculate distance to its x and y intersection
+            if i != j:
+                obj2, obj2_past = raw_features[j], raw_features[j + 3]
+                # if other object has moved
+                if obj2_past is not None and not (obj2[0] == obj2_past[0] and obj2[1] == obj2_past[1]):
+                    # append trajectory cutting points
+                    m, c = get_lineq_param(obj2, obj2_past)
+                    # now calc target pos
+                    # y = mx + c substracted from its y pos
+                    features.append(np.int16(m * obj1[0] + c) - obj1[1])
+                    # x = (y - c)/m substracted from its x pos
+                    features.append(np.int16((obj1[1] - c) / m)  - obj1[0])
+                else:
+                    features.append(0)
+                    features.append(0)
     return raw_features, features
 
 
 # helper function to get features
 def do_step(env, action=1, last_raw_features=None):
-    if action == 1:
-        action = 2
-    elif action == 2:
-        action = 5
     obs, reward, done, info = env.step(action)
     raw_features, features = preprocess_raw_features(info, last_raw_features)
     return raw_features, features, reward, done

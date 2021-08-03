@@ -63,10 +63,11 @@ def init_weights(m):
 
 
 # function to create random agents of given count
-def return_random_agents(num_agents):
+def return_random_agents(n_inputs, num_agents, n_actions):
     agents = []
+    print("Agents have", n_inputs, "input nodes, 32 hidden nodes and", n_actions, "output nodes")
     for _ in range(num_agents):
-        agent = policy_net(6, 32, 3)
+        agent = policy_net(n_inputs, 32, n_actions)
         for param in agent.parameters():
             param.requires_grad = False
         init_weights(agent)
@@ -191,11 +192,6 @@ def return_children(agents, sorted_parent_indexes, elite_index):
     return children_agents, elite_index
 
 
- # Compute softmax values for each sets of scores in x
-def softmax(x):
-    return np.exp(x) / np.sum(np.exp(x), axis=0)
-
-
 # save model helper function
 def save_agents(training_name, agents, generation):
     if not os.path.exists(PATH_TO_OUTPUTS):
@@ -220,10 +216,16 @@ def train():
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
 
+    # init env to get actions count and features space
+    env = AtariARIWrapper(gym.make(cfg.env_name))
+    n_actions = env.action_space.n
+    _ = env.reset()
+    _, features, _, _ = xutils.do_step(env)
+
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
-    agents = return_random_agents(num_agents)
+    agents = return_random_agents(len(features), num_agents, n_actions)
     generation = 0
 
     # load if exists
