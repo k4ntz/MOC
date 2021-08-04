@@ -17,3 +17,5 @@ train:
   log_steps: 100
   # save every is for episodes
   save_every: 100
+
+  hidden_layer_size: 128

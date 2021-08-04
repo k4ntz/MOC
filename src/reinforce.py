@@ -27,7 +27,6 @@ if not os.path.exists(PATH_TO_OUTPUTS):
 
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 
-hidden_layers = 32
 
 class Policy(nn.Module):
     def __init__(self, input, hidden, actions): 
@@ -93,8 +92,8 @@ def train():
     _ = env.reset()
     _, features, _, _ = xutils.do_step(env)
     # init policy net
-    print("Policy net has", len(features), "input nodes, 32 hidden nodes and", n_actions, "output nodes")
-    policy = Policy(len(features), hidden_layers, n_actions)
+    print("Policy net has", len(features), "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
     optimizer = optim.Adam(policy.parameters(), lr=cfg.train.learning_rate) 
     eps = np.finfo(np.float32).eps.item()
     i_episode = 1
@@ -167,7 +166,7 @@ def eval():
     _, ep_reward = env.reset(), 0
     _, _, done, _ = env.step(1)
     raw_features, features, _, _ = xutils.do_step(env)
-    policy = Policy(len(features), hidden_layers, n_actions)
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
     i_episode = 1
     # load if exists
     model_path = model_name(cfg.exp_name)

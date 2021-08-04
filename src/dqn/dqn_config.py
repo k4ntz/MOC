@@ -53,6 +53,10 @@ cfg = CfgNode({
         # save every is for episodes
         'save_every': 5,
 
+        ### XRL SPECIFIC
+        'hidden_layer_size': 32,
+
+        ### SPACE SPECIFIC
         'black_background': True,  
         'dilation': True,
 

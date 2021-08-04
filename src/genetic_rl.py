@@ -65,7 +65,7 @@ def init_weights(m):
 # function to create random agents of given count
 def return_random_agents(n_inputs, num_agents, n_actions):
     agents = []
-    print("Agents have", n_inputs, "input nodes, 32 hidden nodes and", n_actions, "output nodes")
+    print("Agents have", n_inputs, "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
     for _ in range(num_agents):
         agent = policy_net(n_inputs, 32, n_actions)
         for param in agent.parameters():

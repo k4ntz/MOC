@@ -18,4 +18,4 @@ train:
   # save every is for episodes
   save_every: 25
 
-  hidden_layer_size: 32
+  hidden_layer_size: 64
