@@ -27,6 +27,8 @@ if not os.path.exists(PATH_TO_OUTPUTS):
 
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 
+hidden_layers = 32
+
 class Policy(nn.Module):
     def __init__(self, input, hidden, actions): 
         super(Policy, self).__init__()
@@ -92,7 +94,7 @@ def train():
     _, features, _, _ = xutils.do_step(env)
     # init policy net
     print("Policy net has", len(features), "input nodes, 32 hidden nodes and", n_actions, "output nodes")
-    policy = Policy(len(features), 128, n_actions)
+    policy = Policy(len(features), hidden_layers, n_actions)
     optimizer = optim.Adam(policy.parameters(), lr=cfg.train.learning_rate) 
     eps = np.finfo(np.float32).eps.item()
     i_episode = 1
@@ -129,8 +131,8 @@ def train():
             ep_reward += reward
             if done:
                 break
-            if t == 49999:
-                ep_reward = -30
+            if t == 9999:
+                ep_reward = -25
         # finish episode and optimize nn
         # replace first running reward with last reward for loaded models
         if running_reward is None:
@@ -157,9 +159,15 @@ def eval():
     print('Evaluating Mode')
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
-    env = AtariARIWrapper(gym.make(cfg.env_name))
+    # init video logger
     logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
-    policy = Policy()
+    # init env 
+    env = AtariARIWrapper(gym.make(cfg.env_name))
+    n_actions = env.action_space.n
+    _, ep_reward = env.reset(), 0
+    _, _, done, _ = env.step(1)
+    raw_features, features, _, _ = xutils.do_step(env)
+    policy = Policy(len(features), hidden_layers, n_actions)
     i_episode = 1
     # load if exists
     model_path = model_name(cfg.exp_name)
@@ -169,10 +177,6 @@ def eval():
         policy.load_state_dict(checkpoint['policy'])
         i_episode = checkpoint['episode']
     policy.eval()
-    # init env
-    _, ep_reward = env.reset(), 0
-    _, _, done, _ = env.step(1)
-    raw_features, features, _, _ = xutils.do_step(env)
     # init intgrad
     ig = IntegratedGradients(policy)
     ig_sum = []
@@ -199,7 +203,7 @@ def eval():
         ig_sum = np.asarray(ig_sum)
         print('Episode {}\tReward: {:.2f}\t IG-Mean: {}'.format(
         i_episode, ep_reward, np.mean(ig_sum, axis=0)))
-        xutils.plot_igs(ig_sum)
+        #xutils.plot_igs(ig_sum)
 
 
 if __name__ == '__main__':

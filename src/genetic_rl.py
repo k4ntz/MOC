@@ -101,14 +101,14 @@ def run_agents(env, agents):
         agent.eval()
         raw_features, features, _, _ = xutils.do_step(env)
         r = 0
-        for t in range(1, 50000):
+        for t in range(1, 10000):
             action = select_action(features, agent)
             raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             r = r + reward
             if(done):
                 break
-            if t == 49999:
-                r = -30
+            if t == 9999:
+                r = -25
         reward_agents.append(r)
     return reward_agents
 
@@ -293,10 +293,15 @@ def play_agent():
     print('Evaluating Mode')
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
+    # init env
+    env = AtariARIWrapper(gym.make(cfg.env_name))
+    n_actions = env.action_space.n
+    _ = env.reset()
+    raw_features, features, _, _ = xutils.do_step(env)
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
-    agents = return_random_agents(num_agents)
+    agents = return_random_agents(len(features), num_agents, n_actions)
     generation = 0
 
     # load if exists
@@ -311,15 +316,10 @@ def play_agent():
     elite_agent = agents[elite_index]
 
     # play with elite agent
-    env = AtariARIWrapper(gym.make(cfg.env_name))
     logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
     ig = IntegratedGradients(elite_agent)
     ig_sum = []
-    # init env
-    _ = env.reset()
-    _, _, done, info = env.step(1)
     elite_agent.eval()
-    raw_features, features, _, _ = xutils.do_step(env)
     r = 0
     for t in count():
         action = select_action(features, elite_agent)
@@ -342,7 +342,7 @@ def play_agent():
         ig_sum = np.asarray(ig_sum)
         print("Elite agent with index {} - final reward: {} - IG-Mean: {}".format(
             elite_index, r, np.mean(ig_sum, axis=0)))
-        xutils.plot_igs(ig_sum)
+        #xutils.plot_igs(ig_sum)
 
 
 
