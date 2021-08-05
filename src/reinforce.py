@@ -106,6 +106,7 @@ def train():
         optimizer.load_state_dict(checkpoint['optimizer'])
         i_episode = checkpoint['episode']
     print('Episodes:', cfg.train.num_episodes)
+    print('Max Steps per Episode:', cfg.train.max_steps)
     print('Gamma:', cfg.train.gamma)
     print('Learning rate:', cfg.train.learning_rate)
     running_reward = None
@@ -120,7 +121,8 @@ def train():
         _, _, done, _ = env.step(1)
         raw_features, features, _, _ = xutils.do_step(env)
         # env loop
-        for t in range(1, 10000):  # Don't infinite loop while learning
+        t = 0
+        while t < cfg.train.max_steps:  # Don't infinite loop while learning
             action, log_prob = select_action(features, policy)
             policy.saved_log_probs.append(log_prob)
             raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
@@ -128,28 +130,32 @@ def train():
                 xutils.plot_screen(env, i_episode, t)
             policy.rewards.append(reward)
             ep_reward += reward
+            t += 1
             if done:
                 break
-            if t == 9999:
-                ep_reward = -25
-        # finish episode and optimize nn
-        # replace first running reward with last reward for loaded models
-        if running_reward is None:
-            running_reward = ep_reward
+        # only optimize when t < max ep steps
+        if t < cfg.train.max_steps:
+            # finish episode and optimize nn
+            # replace first running reward with last reward for loaded models
+            if running_reward is None:
+                running_reward = ep_reward
+            else:
+                running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+            reward_buffer += ep_reward
+            policy, optimizer = finish_episode(policy, optimizer, eps)
+            print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tSteps: {}'.format(
+                i_episode, ep_reward, running_reward, t), end="\r")
+            if i_episode % cfg.train.log_steps == 0:
+                avg_r = reward_buffer / cfg.train.log_steps
+                writer.add_scalar('Train/Avg reward', avg_r, i_episode)
+                reward_buffer = 0
+            if i_episode % cfg.train.save_every == 0:
+                save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
+            i_episode += 1
+            rtpt.step()
         else:
-            running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-        reward_buffer += ep_reward
-        policy, optimizer = finish_episode(policy, optimizer, eps)
-        print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}'.format(
-            i_episode, ep_reward, running_reward), end="\r")
-        if i_episode % cfg.train.log_steps == 0:
-            avg_r = reward_buffer / cfg.train.log_steps
-            writer.add_scalar('Train/Avg reward', avg_r, i_episode)
-            reward_buffer = 0
-        if i_episode % cfg.train.save_every == 0:
-            save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
-        i_episode += 1
-        rtpt.step()
+            print('Timeout with {} steps                                         '.format(
+                t),end="\r")
 
 
 # eval function 
@@ -180,7 +186,8 @@ def eval():
     ig = IntegratedGradients(policy)
     ig_sum = []
     # env loop
-    for t in range(1, 10000):  # Don't infinite loop while learning
+    t = 0
+    while t  < cfg.train.max_steps:  # Don't infinite loop while playing
         action, _ = select_action(features, policy)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, action, env, cfg.liveplot)
@@ -188,10 +195,10 @@ def eval():
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
         else:
-            #TODO: REMOVE!!
             ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         ep_reward += reward
+        t += 1
         if done:
             break
     if cfg.liveplot or cfg.make_video:
@@ -200,8 +207,8 @@ def eval():
         i_episode, ep_reward))
     else:
         ig_sum = np.asarray(ig_sum)
-        print('Episode {}\tReward: {:.2f}\t IG-Mean: {}'.format(
-        i_episode, ep_reward, np.mean(ig_sum, axis=0)))
+        print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
+        i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
         #xutils.plot_igs(ig_sum)
 
 

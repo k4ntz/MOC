@@ -101,14 +101,16 @@ def run_agents(env, agents):
         agent.eval()
         raw_features, features, _, _ = xutils.do_step(env)
         r = 0
-        for t in range(1, 10000):
+        t = 0
+        while t < cfg.train.max_steps:
             action = select_action(features, agent)
             raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             r = r + reward
             if(done):
                 break
-            if t == 9999:
-                r = -25
+            t += 1
+        if t == cfg.train.max_steps:
+            r = -25
         reward_agents.append(r)
     return reward_agents
 
@@ -215,6 +217,7 @@ def train():
 
     generations = cfg.train.num_episodes
     print('Generations:', generations)
+    print('Max Steps per Episode:', cfg.train.max_steps)
 
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)

@@ -12,10 +12,10 @@ train:
   learning_rate: 0.0001
 
   num_episodes: 50000
-  max_steps: 100000
+  max_steps: 50000
   
   log_steps: 25
   # save every is for episodes
   save_every: 25
 
-  hidden_layer_size: 64
+  hidden_layer_size: 128
