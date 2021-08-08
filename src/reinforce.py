@@ -134,28 +134,26 @@ def train():
             if done:
                 break
         # only optimize when t < max ep steps
-        if t < cfg.train.max_steps:
-            # finish episode and optimize nn
-            # replace first running reward with last reward for loaded models
-            if running_reward is None:
-                running_reward = ep_reward
-            else:
-                running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-            reward_buffer += ep_reward
-            policy, optimizer = finish_episode(policy, optimizer, eps)
-            print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tSteps: {}'.format(
-                i_episode, ep_reward, running_reward, t), end="\r")
-            if i_episode % cfg.train.log_steps == 0:
-                avg_r = reward_buffer / cfg.train.log_steps
-                writer.add_scalar('Train/Avg reward', avg_r, i_episode)
-                reward_buffer = 0
-            if i_episode % cfg.train.save_every == 0:
-                save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
-            i_episode += 1
-            rtpt.step()
+        if t >= cfg.train.max_steps:
+            ep_reward = -25 #TODO: change to automatically game specific
+        # finish episode and optimize nn
+        # replace first running reward with last reward for loaded models
+        if running_reward is None:
+            running_reward = ep_reward
         else:
-            print('Timeout with {} steps                                         '.format(
-                t),end="\r")
+            running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+        reward_buffer += ep_reward
+        policy, optimizer = finish_episode(policy, optimizer, eps)
+        print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tSteps: {}       '.format(
+            i_episode, ep_reward, running_reward, t), end="\r")
+        if i_episode % cfg.train.log_steps == 0:
+            avg_r = reward_buffer / cfg.train.log_steps
+            writer.add_scalar('Train/Avg reward', avg_r, i_episode)
+            reward_buffer = 0
+        if i_episode % cfg.train.save_every == 0:
+            save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
+        i_episode += 1
+        rtpt.step()
 
 
 # eval function 

@@ -1,5 +1,6 @@
 # q learning with given shallow representation of atari game
 
+from warnings import catch_warnings
 import gym
 import numpy as np
 import os
@@ -198,14 +199,15 @@ def return_children(agents, sorted_parent_indexes, elite_index):
 
 
 # save model helper function
-def save_agents(training_name, agents, generation):
+def save_agents(training_name, agents, generation, elite_index):
     if not os.path.exists(PATH_TO_OUTPUTS):
         os.makedirs(PATH_TO_OUTPUTS)
     model_path = model_name(training_name)
     print("Saving {}".format(model_path))
     torch.save({
             'agents': agents,
-            'generation': generation
+            'generation': generation,
+            'elite_index': elite_index
             }, model_path)
 
 
@@ -286,7 +288,7 @@ def train():
         writer.add_scalar('Train/Mean of top 5', np.mean(top_rewards[:5]), generation)
         # save generation
         generation += 1
-        save_agents(cfg.exp_name, agents, generation)
+        save_agents(cfg.exp_name, agents, generation, elite_index)
         # make rtpt step
         rtpt.step()
 
@@ -307,6 +309,7 @@ def play_agent():
     print('Number of agents:', num_agents)
     agents = return_random_agents(len(features), num_agents, n_actions)
     generation = 0
+    elite_index = 7 # SET FOR ELITE INDEX FROM LOADED GENERATION
 
     # load if exists
     model_path = model_name(cfg.exp_name)
@@ -315,8 +318,10 @@ def play_agent():
         checkpoint = torch.load(model_path)
         agents = checkpoint['agents']
         generation = checkpoint['generation']
-
-    elite_index = 7 # SET FOR ELITE INDEX FROM LOADED GENERATION
+        try:
+            elite_index = checkpoint['elite_index']
+        except:
+            print("No elite index in save available...")
     elite_agent = agents[elite_index]
 
     # play with elite agent
