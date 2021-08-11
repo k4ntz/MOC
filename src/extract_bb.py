@@ -33,9 +33,8 @@ folder = "validation"
 
 action = ["visu", "extract"][1]
 
-folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
+folder_sizes = {"train": 50000, "test": 5000, "validation": 50}
 nb_images = folder_sizes[folder]
-nb_images = 5000
 cfg, task = get_config()
 
 TIME_CONSISTENCY = True
@@ -65,7 +64,7 @@ def process_image(log, image_rgb, idx):
     z_pres_prob = z_pres_prob.detach().cpu().squeeze()
     z_pres = z_pres_prob > 0.5
     z_what_pres = z_what[z_pres.unsqueeze(0)]
-    boxes_batch = convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))
+    boxes_batch = np.array(convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))).squeeze()
     labels = get_labels(table.iloc[[idx]], boxes_batch)
     if action == "visu":
         visu = place_labels(labels, boxes_batch, image_rgb)
@@ -108,10 +107,10 @@ for i in tqdm(range(0, nb_images, 4 if TIME_CONSISTENCY else 1)):
 
 if action == "extract":
     print(len(all_z_what), len(all_labels))
-    if not os.path.exists(f"labeled_tr/{cfg.exp_name}"):
-        os.makedirs(f"labeled_tr/{cfg.exp_name}")
-    torch.save(all_z_what, f"labeled_tr/{cfg.exp_name}/z_what_{folder}.pt")
-    torch.save(all_labels, f"labeled_tr/{cfg.exp_name}/labels_{folder}.pt")
+    if not os.path.exists(f"labeled/{cfg.exp_name}"):
+        os.makedirs(f"labeled/{cfg.exp_name}")
+    torch.save(all_z_what, f"labeled/{cfg.exp_name}/z_what_{folder}.pt")
+    torch.save(all_labels, f"labeled/{cfg.exp_name}/labels_{folder}.pt")
 
 # import ipdb; ipdb.set_trace()
 # image = (image[0] * 255).round().to(torch.uint8)  # for draw_bounding_boxes

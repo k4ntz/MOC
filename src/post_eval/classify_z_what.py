@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import pandas as pd
 from argparse import Namespace
+import os
 
 N_NEIGHBORS = 24
 DISPLAY_CENTROIDS = False
@@ -27,6 +28,7 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        "blue_ghost": (66, 114, 194), "score0": (200, 50, 200),
                        "life": (70, 210, 70), "life2": (20, 150, 20)
                        }
+
 
 def evaluate_z_what(arguments, z_what, labels, n, cfg):
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else range(
@@ -129,6 +131,10 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
                                c=colr,
                                edgecolors='black', s=100, linewidths=2)
         plt.legend(prop={'size': 6})
+        directory = f"../output/logs/{folder}"
+        if not os.path.exists(directory):
+            print(f"Writing PCA to {directory}")
+            os.makedirs(directory)
         plt.savefig(
             f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
     else:
@@ -174,6 +180,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
 
         axs[0].legend(prop={'size': 6})
         axs[1].legend(prop={'size': 6})
+        if not os.path.exists(f"../output/logs/{folder}"):
+            os.makedirs(f"../output/logs/{folder}")
         plt.tight_layout()
         plt.savefig(
             f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
@@ -188,11 +196,9 @@ all_validation_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/validat
 label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
               "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate the z_what encoding')
-    parser.add_argument('-folder', type=str, default="pca",
+    parser.add_argument('-folder', type=str, default="mspacman_atari_example",
                         help='the output folder')
     parser.add_argument('-indices', type=str, default=None,
                         help='The relevant objects by their index, e.g. \"0,1\" for Pacman and Sue')
@@ -209,7 +215,7 @@ if __name__ == "__main__":
 
     # z_what_train = torch.randn((400, 32))
     # train_labels = torch.randint(high=8, size=(400,))
-    torch.cat(torch.load(f"labeled/{args.folder}/z_what_validation.pt"))
-    torch.cat(torch.load(f"labeled/{args.folder}/labels_validation.pt"))
+    z_what_train = torch.cat(torch.load(f"labeled/{args.folder}/z_what_validation.pt"))
+    train_labels = torch.cat(torch.load(f"labeled/{args.folder}/labels_validation.pt"))
 
     evaluate_z_what(vars(args), z_what_train, train_labels, nb_used_sample, cfg=None)

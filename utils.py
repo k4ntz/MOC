@@ -154,7 +154,11 @@ def assert_in(observed, target, tol):
 
 
 def _augment_dict_carnival(obs, info):
-    labels = info['labels']
+    if 'labels' in info:
+        labels = info['labels']
+    else:
+        labels = {}
+        info['labels'] = labels
     base_objects_colors = {"duck": np.array([255, 255, 0]), "rabbit": np.array([240, 240, 240]),
                            "refill": np.array([0, 0, 0]), "shooter": np.array([0, 102, 102]),
                            "owl": np.array([255, 102, 102]), "pipes": np.array([153, 0, 153]),
