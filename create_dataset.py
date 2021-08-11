@@ -105,7 +105,7 @@ while True:
     if (not args.random) or np.random.rand() < 0.01:
         image_n = index[image_count]
         try:
-            if not augment_dict(obs, info, args.game):
+            if not augment_dict(obs if augmented else state, info, args.game):
                 if done:
                     env.reset()
                     for _ in range(200):

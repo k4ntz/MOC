@@ -1,6 +1,6 @@
 seed: 1
 model: 'SPACE'
-exp_name: mspacman_atari_hyper
+exp_name: mspacman_atari_example
 resume: true
 load_time_consistency: true
 add_flow: false
