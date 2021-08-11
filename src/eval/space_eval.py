@@ -206,8 +206,9 @@ class SpaceEval():
                 all_labels.extend(get_labels_validation(range(i * batch_size, (i + 1) * batch_size), boxes_batch))
                 # pbar.update(1)
         model.train()
-        args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation'}
-        return evaluate_z_what(args, torch.stack(z_whats).detach().cpu(), torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
+        args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation', 'edgecolors': True}
+        return evaluate_z_what(args, torch.stack(z_whats).detach().cpu(),
+                               torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
 
     def eval_ap_and_acc(
             self,

@@ -20,7 +20,7 @@ parser.add_argument('-f', '--folder', type=str, choices=folder_sizes.keys(),
                     required=True,
                     help='folder to write to: train, test or validation')
 args = parser.parse_args()
-
+some = vars(args)
 for flow_folder in ['flow', 'frame_flow', 'bgr_flow']:
     if not os.path.exists(f'../aiml_atari_data/{flow_folder}/{args.game}-v0/{args.folder}/'):
         os.makedirs(f'../aiml_atari_data/{flow_folder}/{args.game}-v0/{args.folder}/')
