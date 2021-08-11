@@ -33,7 +33,7 @@ folder = "validation"
 
 action = ["visu", "extract"][1]
 
-folder_sizes = {"train": 50000, "test": 5000, "validation": 50}
+folder_sizes = {"train": 50000, "test": 5000, "validation": 500}
 nb_images = folder_sizes[folder]
 cfg, task = get_config()
 
@@ -47,7 +47,7 @@ checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name),
                             max_num=cfg.train.max_ckpt, load_time_consistency=TIME_CONSISTENCY)
 use_cpu = 'cpu' in cfg.device
 if cfg.resume:
-    checkpoint = checkpointer.load_last('', model, None, None, use_cpu=use_cpu)
+    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
 
 table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}_labels.csv")
 # print(colored("Please change number of images !", "red"))

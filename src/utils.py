@@ -119,9 +119,9 @@ class Checkpointer:
                     B, C, H, W = checkpoint_model[key].size()
                     flow_weights = torch.randn((B, 2, H, W)).to(checkpoint_model[key].device)
                     checkpoint_model[key] = torch.cat((checkpoint_model[key], flow_weights), dim=1)
-        if self.load_time_consistency:
+        try:
             model.load_state_dict(checkpoint_model)
-        else:
+        except RuntimeError as rterr:
             model.space.load_state_dict(checkpoint_model)
         if optimizer_fg and not self.add_flow:
             optimizer_fg.load_state_dict(checkpoint.pop('optimizer_fg'))
@@ -134,6 +134,7 @@ class Checkpointer:
         """
         If path is '', we load the last checkpoint
         """
+        import ipdb; ipdb.set_trace()
         if path == '':
             with open(self.listfile, 'rb') as f:
                 model_list = pickle.load(f)

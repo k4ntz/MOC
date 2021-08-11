@@ -14,7 +14,7 @@ from argparse import Namespace
 import os
 
 N_NEIGHBORS = 24
-DISPLAY_CENTROIDS = False
+DISPLAY_CENTROIDS = True
 
 warnings.filterwarnings("ignore", category=UserWarning)
 import argparse

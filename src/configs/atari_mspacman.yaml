@@ -2,7 +2,7 @@ seed: 1
 model: 'SPACE'
 exp_name: mspacman_atari_example
 resume: true
-load_time_consistency: true
+load_time_consistency: false
 add_flow: false
 
 resume_ckpt: '../output/checkpoints/mspacman_atari_pretrained/model.pth'
