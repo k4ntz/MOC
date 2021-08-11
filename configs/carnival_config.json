@@ -9,5 +9,5 @@
     "max_replay_size": 500000,
     "test_samples": 125000,
     "n_epochs": 500,
-    "game_name": "CarnivalDeterministic-v4"
+    "game_name": "CarnivalDeterministic-v4-Augmented"
 }
