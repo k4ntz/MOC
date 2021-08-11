@@ -212,12 +212,12 @@ def draw_image_bb(model, cfg, dataset):
         pil_img = Image.open(f'{rgb_folder}/{idx:05}.png', ).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
         image = np.array(pil_img)
-        torch_img = torch.from_numpy(image).permute(2, 1, 0)
+        objects = torch.from_numpy(np.loadtxt(f'{bb_path}/bb_{idx}.txt', delimiter=','))
+        objects[:, 2:] += objects[:, :2]
+        torch_img = torch.from_numpy(image).permute(2, 0, 1)
+        bb_img = draw_bb(torch_img, objects, colors=['red']*len(objects)).permute(0, 2, 1)
         pred_tensor = torch.FloatTensor(pred) * 128
         pred_tensor = torch.index_select(pred_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
-        gt_tensor = torch.FloatTensor(gt) * 128
-        gt_tensor = torch.index_select(gt_tensor, 1, torch.LongTensor([1, 3, 0, 2]))
-        bb_img = draw_bb(torch_img, gt_tensor, colors=['red']*50)
-        bb_img = draw_bb(bb_img, pred_tensor, colors=['green']*50)
-        result.append(bb_img.permute(0, 2, 1))
+        bb_img = draw_bb(bb_img, pred_tensor, colors=['green']*len(pred_tensor)).permute(0, 2, 1)
+        result.append(bb_img)
     return torch.stack(result)

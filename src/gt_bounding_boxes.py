@@ -23,6 +23,7 @@ from torchvision.utils import draw_bounding_boxes as draw_bb
 from torchvision.utils import save_image
 from eval import convert_to_boxes, read_boxes
 
+
 def draw_images(args):
     bb_folder = f"../aiml_atari_data/space_like/{args['game']}-v0/{args['folder']}/bb"
     rgb_folder = f"../aiml_atari_data/with_bounding_boxes/{args['game']}-v0/{args['folder']}"
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     for idx in range(folder_sizes[args.folder]):
         img_gt = gt.iloc[[idx]]
         enemy_list = ['sue', 'inky', 'pinky', 'blinky']
-        pieces = {"save_fruit": (171, 139), "life": (170, 25), "life2": (170, 42), "score0": (183, 86),
+        pieces = {"save_fruit": (171, 139), "score0": (183, 86),
                   "pacman": (img_gt['player_y'].item(), img_gt['player_x'].item()),
                   "fruit": (img_gt['fruit_y'].item(), img_gt['fruit_x'].item())}
         for en in enemy_list:
@@ -77,7 +78,11 @@ if __name__ == "__main__":
                 pieces[en] = (img_gt[f'{en}_y'].item(), img_gt[f'{en}_x'].item())
             if not img_gt[f'{en}_blue'].item():
                 all_blue = False
-        bb = pd.DataFrame.from_dict({k: [xy[1] * 128 / 160.0 - 12, xy[0] * 128 / 210.0,
+        if img_gt['lives'].item() >= 3:
+            pieces["life2"] = (170, 42)
+        if img_gt['lives'].item() >= 2:
+            pieces["life1"] = (170, 25)
+        bb = pd.DataFrame.from_dict({k: [xy[1] * 128 / 160.0 - 11, xy[0] * 128 / 210.0,
                                          0.07 * 128 if k != 'score0' else 0.2 * 128, 0.07 * 128] for k, xy in
                                      pieces.items()},
                                     orient='index')
@@ -87,4 +92,4 @@ if __name__ == "__main__":
         pbar.update(1)
 
     print("Writing bb.txt is done... \n\n")
-    draw_images(args)
+    draw_images({'folder': args.folder, 'game': args.game})

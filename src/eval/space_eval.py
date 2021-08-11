@@ -11,7 +11,7 @@ from .eval_cfg import eval_cfg
 from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
-from post_eval import classify_z_what, get_labels_validation
+from post_eval import evaluate_z_what, get_labels_validation
 
 class SpaceEval():
     def __init__(self):
@@ -53,7 +53,7 @@ class SpaceEval():
             print("MSE result: ", mse)
         if 'ap' in eval_cfg.train.metrics:
             results = self.train_eval_ap_and_acc(model, valset, bb_path, writer, global_step, device)
-            print("AP result: ", results['APs'], results['error_rate'])
+            print("AP result: ", results['APs'], results['accuracy'])
             checkpointer.save_best('ap_dot5', results['APs'][0], checkpoint, min_is_better=False)
             checkpointer.save_best('ap_avg', np.mean(results['APs']), checkpoint, min_is_better=False)
             checkpointer.save_best('error_rate', results['error_rate'], checkpoint, min_is_better=True)
@@ -86,7 +86,14 @@ class SpaceEval():
         writer.add_scalar('val/overcount', overcount, global_step)
         writer.add_scalar('val/undercount', undercount, global_step)
         writer.add_scalar('val/error_rate', error_rate, global_step)
-        
+        for z_pres_thresh in result_dict['z_pres_thresholds']:
+            if f'accuracy_{z_pres_thresh}' not in result_dict:
+                continue
+            writer.add_scalar(f'val/accuracy_{z_pres_thresh}', result_dict[f'accuracy_{z_pres_thresh}'], global_step)
+            writer.add_scalar(f'val/perfect_{z_pres_thresh}', result_dict[f'perfect_{z_pres_thresh}'], global_step)
+            writer.add_scalar(f'val/overcount_{z_pres_thresh}', result_dict[f'overcount_{z_pres_thresh}'], global_step)
+            writer.add_scalar(f'val/undercount_{z_pres_thresh}', result_dict[f'undercount_{z_pres_thresh}'], global_step)
+            writer.add_scalar(f'val/error_rate_{z_pres_thresh}', result_dict[f'error_rate_{z_pres_thresh}'], global_step)
         return result_dict
 
     @torch.no_grad()
@@ -105,18 +112,17 @@ class SpaceEval():
         metric_logger = MetricLogger()
     
         print(f'Evaluating MSE using {num_samples} samples.')
-        with tqdm(total=len(dataloader)) as pbar:
-            for batch_idx, sample in enumerate(dataloader):
-                imgs = sample.to(device)
-                loss, log = model(imgs, global_step)
-                B = imgs.size(0)
-                for b in range(B):
-                    metric_logger.update(
-                        mse=log['space_log'][0]['mse'][b],
-                    )
-                metric_logger.update(loss=loss.mean())
-                pbar.update(1)
-    
+        # with tqdm(total=len(dataloader)) as pbar:
+        for batch_idx, sample in enumerate(dataloader):
+            imgs = sample.to(device)
+            loss, log = model(imgs, global_step)
+            B = imgs.size(0)
+            for b in range(B):
+                metric_logger.update(
+                    mse=torch.mean([log['space_log'][i]['mse'][b] for i in range(4)])
+                )
+            metric_logger.update(loss=loss.mean())
+
         assert metric_logger['mse'].count == num_samples
         # Add last log
         # log.update([(k, torch.tensor(v.global_avg)) for k, v in metric_logger.values.items()])
@@ -133,12 +139,16 @@ class SpaceEval():
         Evaluate clustering during training
         :return: result_dict
         """
-        result_dict, img_path = self.eval_clustering(
+        print('Computing clustering and few-shot linear classifiers...')
+
+        result_dict, img_path, few_shot_accuracy = self.eval_clustering(
             model, valset, bb_path, eval_cfg.train.batch_size, eval_cfg.train.num_workers,
             device, cfg, num_samples=eval_cfg.train.num_samples.cluster
         )
 
         writer.add_image('Clustering PCA', np.array(Image.open(img_path)), global_step, dataformats='HWC')
+        for score in few_shot_accuracy:
+            writer.add_scalar(f'val/{score}', few_shot_accuracy[score], global_step)
         for score in result_dict:
             writer.add_scalar(f'val/{score}', result_dict[score], global_step)
         return result_dict
@@ -181,8 +191,7 @@ class SpaceEval():
         all_labels = []
         model.eval()
         with torch.no_grad():
-            print('Computing boxes...')
-            pbar = tqdm(total=len(dataloader))
+            # pbar = tqdm(total=len(dataloader))
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
                 loss, log = model(imgs, global_step=100000000)
@@ -195,14 +204,10 @@ class SpaceEval():
                 boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
                 z_whats.extend(z_what_pres)
                 all_labels.extend(get_labels_validation(range(i * batch_size, (i + 1) * batch_size), boxes_batch))
-                pbar.update(1)
-        print()
-        print('================================')
-        print(len(all_labels), len(all_labels[0]))
-        print(len(z_whats), len(z_whats[0]))
+                # pbar.update(1)
         model.train()
         args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation'}
-        return classify_z_what(args, torch.stack(z_whats).detach().cpu(), torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
+        return evaluate_z_what(args, torch.stack(z_whats).detach().cpu(), torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
 
     def eval_ap_and_acc(
             self,
@@ -230,7 +235,7 @@ class SpaceEval():
         """
         
         from tqdm import tqdm
-
+        print('Computing error rates, counts and APs...')
         model.eval()
         
         if num_samples is None:
@@ -240,15 +245,19 @@ class SpaceEval():
         
         if iou_thresholds is None:
             iou_thresholds = np.linspace(0.5, 0.95, 10)
+        z_pres_thresholds = [0.5]
+
         boxes_gt = read_boxes(bb_path, 128)
-    
-        boxes_pred = []
+        boxes_preds = [[] for _ in z_pres_thresholds]
+        result = {
+            'iou_thresholds': iou_thresholds,
+            'z_pres_thresholds': z_pres_thresholds,
+        }
         rgb_folder_src = f"../aiml_atari_data/rgb/MsPacman-v0/validation"
         rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/validation"
         model.eval()
         with torch.no_grad():
-            print('Computing boxes...')
-            pbar = tqdm(total=len(dataloader))
+            # pbar = tqdm(total=len(dataloader))
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
             
@@ -259,13 +268,11 @@ class SpaceEval():
                 # (B, N, 4), (B, N), (B, N)
                 z_where = z_where.detach().cpu()
                 z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-
-                z_pres = z_pres_prob > 0.5
-
-                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-
-                boxes_pred.extend(boxes_batch)
-                pbar.update(1)
+                for pred_idx, prob_th_str in enumerate(z_pres_thresholds):
+                    z_pres = z_pres_prob > prob_th_str  # try other values
+                    boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+                    boxes_preds[pred_idx].extend(boxes_batch)
+                # pbar.update(1)
 
             # print('Drawing bounding boxes for eval...')
             # for idx, (pred, gt) in enumerate(zip(boxes_pred, boxes_gt)):
@@ -282,28 +289,24 @@ class SpaceEval():
             #     result = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
             #     result.save(f'{rgb_folder}/temp_from_eval_objects_{idx:05}.png')
 
-            print('Computing error rates and counts...')
+
 
             # Four numbers
-            error_rate, perfect, overcount, undercount = compute_counts(boxes_pred, boxes_gt)
-            accuracy = perfect / (perfect + overcount + undercount)
-        
-            print('Computing average precision...')
+            for pred_idx, prob_thresh in enumerate(z_pres_thresholds):
+                error_rate, perfect, overcount, undercount = compute_counts(boxes_preds[pred_idx], boxes_gt)
+                accuracy = perfect / (perfect + overcount + undercount)
+                prob_th_str = f'_{prob_thresh}' if prob_thresh != 0.5 else ''
+                result[f'error_rate{prob_th_str}'] = error_rate
+                result[f'perfect{prob_th_str}'] = perfect
+                result[f'accuracy{prob_th_str}'] = accuracy
+                result[f'overcount{prob_th_str}'] = overcount
+                result[f'undercount{prob_th_str}'] = undercount
             # A list of length 10
-            APs = compute_ap(boxes_pred, boxes_gt, iou_thresholds)
+            result['APs'] = compute_ap(boxes_preds[0], boxes_gt, iou_thresholds)
     
         model.train()
         
-        return {
-            'APs': APs,
-            'iou_thresholds': iou_thresholds,
-            'error_rate': error_rate,
-            'perfect': perfect,
-            'accuracy': accuracy,
-            'overcount': overcount,
-            'undercount': undercount
-        }
-        
+        return result
         
     def save_to_json(self, result_dict, json_path, info):
         """

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import cv2
+from collections import Counter
 
 
 def augment_dict(obs, info, game):
@@ -10,6 +11,8 @@ def augment_dict(obs, info, game):
         return _augment_dict_mspacman(obs, info)
     elif game == "Tennis":
         return _augment_dict_tennis(obs, info)
+    elif game == "Carnival":
+        return _augment_dict_carnival(obs, info)
     elif game == "SpaceInvaders":
         return _augment_dict_spaceinvaders(obs, info)
     elif game == "Pong":
@@ -17,12 +20,13 @@ def augment_dict(obs, info, game):
     else:
         raise ValueError
 
+
 def _augment_dict_spaceinvaders(obs, info):
     raise NotImplementedError
     labels = info['labels']
     objects_colors = {"player": (50, 132, 50), "planet": (151, 25, 122),
-                      "enemy":  (134, 134, 29), "shield": (181, 83, 40),
-                      "gfig":  (50, 132, 50),  "yfig": (162, 134, 56)}
+                      "enemy": (134, 134, 29), "shield": (181, 83, 40),
+                      "gfig": (50, 132, 50), "yfig": (162, 134, 56)}
     x, y = labels['enemies_x'], labels['enemies_x']
     # x, y = labels['enemies_x'], labels['enemies_x']
     x = x + 100
@@ -32,6 +36,7 @@ def _augment_dict_spaceinvaders(obs, info):
     print(labels)
     mark_point(obs, x, y, color=(255, 0, 0), show=False, size=1)
     mark_point(obs, x_player, y_player, color=(0, 255, 0))
+
 
 def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
                  min_distance=None):
@@ -45,7 +50,7 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     min_distance: minimal distance between two detected objects
     """
     mask = cv2.inRange(image, np.array(color), np.array(color))
-    output = cv2.bitwise_and(image, image, mask = mask)
+    output = cv2.bitwise_and(image, image, mask=mask)
     contours, _ = cv2.findContours(mask.copy(), 1, 1)
     detected = []
     for cnt in contours:
@@ -67,17 +72,18 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
         detected.append((y, x))
     return detected
 
+
 def _augment_dict_tennis(obs, info):
     labels = info['labels']
     labels.clear()
     objects_colors = {"enemy": [117, 231, 194], "player": [240, 128, 128],
                       "ball": [236, 236, 236], "ball_shadow": [74, 74, 74]}
     objects_sizes = {"enemy": [23, 14], "player": [23, 14],
-                      "ball": [2, 2], "ball_shadow": [2, 2]}
+                     "ball": [2, 2], "ball_shadow": [2, 2]}
     objects_sizes_tol = {"enemy": 2, "player": 2, "ball": 0, "ball_shadow": 0}
     for obj in ['ball', 'player', 'enemy', 'ball_shadow']:
         detected = find_objects(obs, objects_colors[obj],
-                            size=objects_sizes[obj], tol_s=5)
+                                size=objects_sizes[obj], tol_s=5)
         if len(detected) == 0:
             if obj not in ['ball', 'ball_shadow']:
                 # print(f"no {obj} detected")
@@ -105,6 +111,7 @@ def _augment_dict_tennis(obs, info):
     # show_image(obs)
     return labels
 
+
 def _augment_dict_pong(obs, info):
     labels = info['labels']
     # print(labels)
@@ -113,14 +120,15 @@ def _augment_dict_pong(obs, info):
     scores = {"score_enemy_0": ((1, 36), (1, 40)),
               "score_enemy_1": ((1, 24), (1, 28)),
               "score_player_0": ((1, 116), (1, 120)),
-              "score_player_1": ((1, 104),(1, 108))}
+              "score_player_1": ((1, 104), (1, 108))}
     for obj in ['ball', "player", "enemy"]:
         x, y = labels[f'{obj}_y'] - 13, labels[f'{obj}_x'] - 48
         if obj == 'ball':
             pres = enough_color_around(obs, x, y, objects_colors["background"],
                                        threshold=4)
             if not pres:
-                del labels[f"ball_x"]; del labels[f"ball_y"]
+                del labels[f"ball_x"];
+                del labels[f"ball_y"]
                 continue
         labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
     for score in scores:
@@ -128,7 +136,8 @@ def _augment_dict_pong(obs, info):
             try:
                 x, y = potential_pos
             except:
-                import ipdb; ipdb.set_trace()
+                import ipdb;
+                ipdb.set_trace()
             if enough_color_around(obs, x, y, objects_colors[score.split("_")[1]],
                                    threshold=4):
                 labels[f"{score}_x"] = x
@@ -144,13 +153,59 @@ def assert_in(observed, target, tol):
     return np.all([target[i] + tol[i] > observed[i] > target[i] - tol[i] for i in range(2)])
 
 
-def _augment_dict_mspacman(obs, info):
+def _augment_dict_carnival(obs, info):
     labels = info['labels']
+    base_objects_colors = {"duck": np.array([255, 255, 0]), "rabbit": np.array([240, 240, 240]),
+                           "refill": np.array([0, 0, 0]), "shooter": np.array([0, 102, 102]),
+                           "owl": np.array([255, 102, 102]), "pipes": np.array([153, 0, 153]),
+                           "bonus": np.array([204, 0, 0])
+                           }
+    objects = {
+        'ducks': [],
+        'owls': [],
+        'rabbits': [],
+        'refills': [],
+    }
+
+    W, H = obs.shape
+    prior_main_color = (0, 0, 0)
+    prior_amount = 0
+    for y in [80, 90, 100]:
+        x = 0
+        while x < W:
+            colors_around = get_colors_around(obs, x, y)
+            if len(colors_around) > 1:
+                main_color = list(c.keys())[0] if list(c.keys())[0] != (0, 0, 0) else list(c.keys())[1]
+                current_amount = colors_around[main_color]
+                if prior_main_color == main_color and current_amount < prior_amount:
+                    obj = max((k for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
+                        current_amount) - v))
+                    objects[f'{obj}s'].append((x - 1, y))
+                    x += 10
+                    prior_main_color = (0, 0, 0)
+                    prior_amount = 0
+                else:
+                    x += 1
+                    prior_main_color = main_color
+                    prior_amount = current_amount
+        if prior_amount > 10:
+            obj = max((k for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
+                current_amount) - v))
+            objects[f'{obj}s'].append((x - 1, y))
+    return True
+
+
+def _augment_dict_mspacman(obs, info):
+    if 'labels' in info:
+        labels = info['labels']
+    else:
+        labels = {}
+        info['labels'] = labels
     enemy_list = ['sue', 'inky', 'pinky', 'blinky']
     base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                            "pinky": (198, 89, 179), "blinky": (200, 72, 72),
                            "pacman": (210, 164, 74), "fruit": (184, 50, 50)
-                          } #
+                           }  #
     vulnerable_ghost_color = (66, 114, 194)
     wo_vulnerable_ghost_color = (214, 214, 214)
     for enemy in enemy_list:
@@ -162,16 +217,16 @@ def _augment_dict_mspacman(obs, info):
         x, y = labels[f'{enemy}_x'], labels[f'{enemy}_y']
         x_t, y_t = y + 7, x - 9  # x and y in the tensor
         if not enough_color_around(obs, x_t, y_t, base_objects_colors[enemy]):
-            if enough_color_around(obs, x_t, y_t, vulnerable_ghost_color): # enemy is blue
+            if enough_color_around(obs, x_t, y_t, vulnerable_ghost_color):  # enemy is blue
                 labels[f'{enemy}_blue'] = True
-            elif enough_color_around(obs, x_t, y_t, wo_vulnerable_ghost_color): # enemy is white
+            elif enough_color_around(obs, x_t, y_t, wo_vulnerable_ghost_color):  # enemy is white
                 labels[f'{enemy}_white'] = True
             else:
                 labels[f'{enemy}_visible'] = False
     x, y = labels['player_x'], labels['player_y']
     x_t, y_t = y + 8, x - 9  # x and y in the tensor
     if not color_around(obs, x_t, y_t, base_objects_colors["pacman"]):
-            return False
+        return False
     labels['fruit_visible'] = False
     x, y = labels['fruit_x'], labels['fruit_y']
     x_t, y_t = y + 8, x - 9  # x and y in the tensor
@@ -205,6 +260,16 @@ def draw_names(obs, info):
 #         print("Pacman just ate")
 #         return True
 #     return False
+
+def get_colors_around(image_array, root_x, root_y):
+    """
+    Counts the colors present in the square around the (x, y) point.
+    """
+    counter = Counter()
+    for x in range(root_x - 5, root_x + 6):
+        for y in range(root_y - 5, root_y + 6):
+            counter[image_array[x][y]] += 1
+    return {k: v for k, v in sorted(counter.items(), key=lambda item: item[1])}
 
 
 def color_around(image_array, x, y, color, size=2):
@@ -286,14 +351,16 @@ def enough_color_around(image_array, x, y, color, size=3, threshold=10):
                      for i in ran for j in ran]
     return np.sum(points_around) >= threshold
 
+
 def load_agent(path):
     from mushroom_rl.utils.parameters import Parameter
     from mushroom_rl.algorithms.agent import Agent
     agent = Agent.load(path)
     epsilon_test = Parameter(value=0.05)
     agent.policy.set_epsilon(epsilon_test)
-    agent.policy._predict_params = {} # mushroom_rl compatibility
+    agent.policy._predict_params = {}  # mushroom_rl compatibility
     return agent
+
 
 def dict_to_serie(info_dict):
     info_dict['labels']['lives'] = info_dict['ale.lives']

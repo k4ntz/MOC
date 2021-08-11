@@ -8,9 +8,9 @@ def compute_counts(boxes_pred, boxes_gt):
     Compute error rates, perfect number, overcount number, undercount number
 
     :param boxes_pred: [[y_min, y_max, x_min, x_max, conf] * N] * B
-    :param boxed_gt: [[y_min, y_max, x_min, x_max] * N] * B
+    :param boxes_gt: [[y_min, y_max, x_min, x_max] * N] * B
     :return:
-        error_rates: a list of error rates
+        error_rate: mean of ratio of differences
         perfect: integer
         overcount: integer
         undercount: integer
@@ -116,8 +116,7 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         recall_values = np.linspace(0.0, 1.0, 11)
 
     if iou_thresholds is None:
-        iou_thresholds = np.linspace(0.5, 0.95, 10)
-        # iou_thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        iou_thresholds = np.linspace(0.1, 0.9, 9)
 
     AP = []
     for threshold in iou_thresholds:
@@ -128,7 +127,7 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         # For each image, determine each prediction is a hit of not
         for pred, gt in zip(pred_boxes, gt_boxes):
             count_gt += len(gt)
-            # Sort predictions within an image by descreasing confidence
+            # Sort predictions within an image by decreasing confidence
             pred = sorted(pred, key=lambda x: -x[-1])
 
             if len(gt) == 0:

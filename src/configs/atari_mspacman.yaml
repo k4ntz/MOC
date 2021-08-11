@@ -1,18 +1,23 @@
 seed: 1
 model: 'SPACE'
-exp_name: mspacman_atari+z_area_object_1e1
+exp_name: mspacman_atari_hyper
 resume: true
 load_time_consistency: true
-resume_ckpt: '../output/checkpoints/mspacman_atari+z_area_object_1e1/model_000186501.pth'
+add_flow: false
+
+resume_ckpt: '../output/checkpoints/mspacman_atari_pretrained/model.pth'
+#
 # '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
+#'../output/checkpoints/mspacman_atari+z_area_object_1e1/model_000186501.pth'
+# '../output/checkpoints/mspacman_baseline/model_000177001.pth'
 # 'result_checkpoints/base_z_what_model_000078001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 parallel: true
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+device_ids: [1, 2, 3, 4]
+device: 'cuda:1'
 
-logdir: '../output/logs'
-checkpointdir: '../output/checkpoints'
+logdir: '../output/logs/hyper'
+checkpointdir: '../output/checkpoints/hyper'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
@@ -26,8 +31,8 @@ dataset_roots:
 train:
   batch_size: 32
   max_epochs: 100
-  max_steps: 1600000
-  print_every: 100
+  max_steps: 165003
+  print_every: 200
   save_every: 500
   num_workers: 4
   clip_norm: 1.0
@@ -37,12 +42,13 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 1e-5
+      lr: 5e-5
     bg:
       optim: 'Adam'
-      lr: 1e-3
+      lr: 5e-3
 
 arch:
+  flow: false
   G: 16
   fg_sigma: 0.20
   z_pres_start_step: 10000

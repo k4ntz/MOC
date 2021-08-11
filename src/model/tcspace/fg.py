@@ -34,12 +34,7 @@ class SpaceFg(nn.Module):
         self.prior_scale_std_new = torch.tensor(arch.z_scale_std_value)
         self.prior_shift_mean_new = torch.tensor(0.)
         self.prior_shift_std_new = torch.tensor(1.)
-        # self.register_buffer('prior_scale_mean_new', torch.tensor(arch.z_scale_mean_start_value))
-        # self.register_buffer('prior_scale_std_new', torch.tensor(arch.z_scale_std_value))
-        # self.register_buffer('prior_shift_mean_new', torch.tensor(0.))
-        # self.register_buffer('prior_shift_std_new', torch.tensor(1.))
 
-        # TODO: These are placeholders for loading old checkpoints. No longer used
         self.boundary_filter = get_boundary_kernel(sigma=20)
         self.register_buffer('prior_scale_mean',
                              torch.tensor([arch.z_scale_mean_start_value] * 2).view((arch.z_where_scale_dim), 1, 1))
@@ -73,7 +68,6 @@ class SpaceFg(nn.Module):
         :param global_step: global step (training)
         :return:
         """
-
         self.prior_z_pres_prob = linear_annealing(self.prior_z_pres_prob.device, global_step,
                                                   arch.z_pres_start_step, arch.z_pres_end_step,
                                                   arch.z_pres_start_value, arch.z_pres_end_value)
@@ -84,21 +78,11 @@ class SpaceFg(nn.Module):
                                     arch.tau_start_step, arch.tau_end_step,
                                     arch.tau_start_value, arch.tau_end_value)
 
-    def t_cons_loss(self, z_what):
-        """
-        add loss for temporal consistency
-
-        :param z_what: (B, 3, H, W)
-        :param global_step: global step (training)
-        :return:
-            loss: the loss coming from two adjacent images differences
-        """
-
     def forward(self, x, global_step):
         """
         Forward pass
 
-        :param x: (B, 3, H, W)
+        :param x: (B, T, 3, H, W)
         :param global_step: global step (training)
         :return:
             fg_likelihood: (B, 3, H, W)
@@ -108,128 +92,126 @@ class SpaceFg(nn.Module):
             boundary_loss: (B,)
             log: a dictionary containing anything we need for visualization
         """
-        B = x.size(0)
+        B, T, _, H, W = x.size()
         # if global_step:
         self.anneal(global_step)
 
-        # Everything is (B, G*G, D), where D varies
+        # Everything is (B, T, G*G, D), where D varies
         z_pres, z_depth, z_scale, z_shift, z_where, \
         z_pres_logits, z_depth_post, z_scale_post, z_shift_post = self.img_encoder(x, self.tau)
 
-        # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
-        x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
+        # (B, T, 3, H, W) -> (B*T*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
+        x_repeat = torch.repeat_interleave(x.reshape(B*T, -1, H, W), arch.G ** 2, dim=0)
 
-        # (B*G*G, 3, H, W), where G is the grid size
+        # (B*T*G*G, 3, H, W), where G is the grid size
         # Extract glimpse
-        x_att = spatial_transform(x_repeat, z_where.view(B * arch.G ** 2, 4),
-                                  (B * arch.G ** 2, 3, arch.glimpse_size, arch.glimpse_size), inverse=False)
+        x_att = spatial_transform(x_repeat, z_where.view(B * T * arch.G ** 2, 4),
+                                  (B * T * arch.G ** 2, 3, arch.glimpse_size, arch.glimpse_size), inverse=False)
 
-        # (B*G*G, D)
+        # (B*T*G*G, D)
         z_what, z_what_post = self.z_what_net(x_att)
 
         # t_cons_loss = self.t_cons_loss(z_what)
 
         # Decode z_what into small reconstructed glimpses
-        # All (B*G*G, 3, H, W)
+        # All (B*T*G*G, 3, H, W)
         o_att, alpha_att = self.glimpse_dec(z_what)
-        # z_pres: (B, G*G, 1) -> (B*G*G, 1, 1, 1)
+        # z_pres: (B*T, G*G, 1) -> (B*G*G, 1, 1, 1)
         alpha_att_hat = alpha_att * z_pres.view(-1, 1, 1, 1)
-        # (B*G*G, 3, H, W)
+        # (B*T*G*G, 3, H, W)
         y_att = alpha_att_hat * o_att
 
         # Compute pixel-wise object weights
-        # (B*G*G, 1, H, W). These are glimpse size
-        importance_map = alpha_att_hat * 100.0 * torch.sigmoid(-z_depth.view(B * arch.G ** 2, 1, 1, 1))
+        # (B*T*G*G, 1, H, W). These are glimpse size
+        importance_map = alpha_att_hat * 100.0 * torch.sigmoid(-z_depth.view(B * T * arch.G ** 2, 1, 1, 1))
         # (B*G*G, 1, H, W). These are of full resolution
-        importance_map_full_res = spatial_transform(importance_map, z_where.view(B * arch.G ** 2, 4),
-                                                    (B * arch.G ** 2, 1, *arch.img_shape),
+        importance_map_full_res = spatial_transform(importance_map, z_where.view(B * T * arch.G ** 2, 4),
+                                                    (B * T * arch.G ** 2, 1, *arch.img_shape),
                                                     inverse=True)
 
-        # (B*G*G, 1, H, W) -> (B, G*G, 1, H, W)
-        importance_map_full_res = importance_map_full_res.view(B, arch.G ** 2, 1, *arch.img_shape)
+        # (B*T*G*G, 1, H, W) -> (B, T, G*G, 1, H, W)
+        importance_map_full_res = importance_map_full_res.view(B, T, arch.G ** 2, 1, *arch.img_shape)
         # Normalize (B, >G*G<, 1, H, W)
-        importance_map_full_res_norm = torch.softmax(importance_map_full_res, dim=1)
+        importance_map_full_res_norm = torch.softmax(importance_map_full_res, dim=2)
 
         # To full resolution
-        # (B*G*G, 3, H, W) -> (B, G*G, 3, H, W)
-        y_each_cell = spatial_transform(y_att, z_where.view(B * arch.G ** 2, 4), (B * arch.G ** 2, 3, *arch.img_shape),
-                                        inverse=True).view(B, arch.G ** 2, 3, *arch.img_shape)
-        # Weighted sum, (B, 3, H, W)
-        y_nobg = (y_each_cell * importance_map_full_res_norm).sum(dim=1)
+        # (B*T*G*G, 3, H, W) -> (B, T, G*G, 3, H, W)
+        y_each_cell = spatial_transform(y_att, z_where.view(B * T * arch.G ** 2, 4), (B * T * arch.G ** 2, 3, *arch.img_shape),
+                                        inverse=True).view(B, T, arch.G ** 2, 3, *arch.img_shape)
+        # Weighted sum, (B, T, 3, H, W)
+        y_nobg = (y_each_cell * importance_map_full_res_norm).sum(dim=2)
 
         # To full resolution
-        # (B*G*G, 1, H, W) -> (B, G*G, 1, H, W)
-        alpha_map = spatial_transform(alpha_att_hat, z_where.view(B * arch.G ** 2, 4),
-                                      (B * arch.G ** 2, 1, *arch.img_shape),
-                                      inverse=True).view(B, arch.G ** 2, 1, *arch.img_shape)
+        # (B*T*G*G, 1, H, W) -> (B, T, G*G, 1, H, W)
+        alpha_map = spatial_transform(alpha_att_hat, z_where.view(B * T * arch.G ** 2, 4),
+                                      (B * T * arch.G ** 2, 1, *arch.img_shape),
+                                      inverse=True).view(B, T, arch.G ** 2, 1, *arch.img_shape)
 
-        # Weighted sum, (B, 1, H, W)
-        alpha_map = (alpha_map * importance_map_full_res_norm).sum(dim=1)
+        # Weighted sum, (B, T, 1, H, W)
+        alpha_map = (alpha_map * importance_map_full_res_norm).sum(dim=2)
 
         # Everything is computed. Now let's compute loss
         # Compute KL divergences
-        # (B, G*G, 1)
+        # (B, T, G*G, 1)
         kl_z_pres = kl_divergence_bern_bern(z_pres_logits, self.prior_z_pres_prob)
 
-        # (B, G*G, 1)
+        # (B, T, G*G, 1)
         kl_z_depth = kl_divergence(z_depth_post, self.z_depth_prior)
 
-        # (B, G*G, 2)
+        # (B, T, G*G, 2)
         kl_z_scale = kl_divergence(z_scale_post, self.z_scale_prior)
         kl_z_shift = kl_divergence(z_shift_post, self.z_shift_prior)
 
         # Reshape z_what and z_what_post
-        # (B*G*G, D) -> (B, G*G, D)
-        z_what = z_what.view(B, arch.G ** 2, arch.z_what_dim)
-        z_what_post = Normal(*[x.view(B, arch.G ** 2, arch.z_what_dim)
-                               for x in [z_what_post.mean, z_what_post.stddev]])
-        # (B, G*G, D)
+        # (B*T*G*G, D) -> (B, T, G*G, D)
+        z_what = z_what.view(B, T, arch.G ** 2, arch.z_what_dim)
+        z_what_post = Normal(*[z_what_val.view(B, T, arch.G ** 2, arch.z_what_dim)
+                               for z_what_val in [z_what_post.mean, z_what_post.stddev]])
+        # (B, T, G*G, D)
         kl_z_what = kl_divergence(z_what_post, self.z_what_prior)
 
         # dimensionality check
-        assert ((kl_z_pres.size() == (B, arch.G ** 2, 1)) and
-                (kl_z_depth.size() == (B, arch.G ** 2, 1)) and
-                (kl_z_scale.size() == (B, arch.G ** 2, 2)) and
-                (kl_z_shift.size() == (B, arch.G ** 2, 2)) and
-                (kl_z_what.size() == (B, arch.G ** 2, arch.z_what_dim))
+        assert ((kl_z_pres.size() == (B, T, arch.G ** 2, 1)) and
+                (kl_z_depth.size() == (B, T, arch.G ** 2, 1)) and
+                (kl_z_scale.size() == (B, T, arch.G ** 2, 2)) and
+                (kl_z_shift.size() == (B, T, arch.G ** 2, 2)) and
+                (kl_z_what.size() == (B, T, arch.G ** 2, arch.z_what_dim))
                 )
 
-        # Reduce (B, G*G, D) -> (B,)
+        # Reduce (B, T, G*G, D) -> (B, T)
         kl_z_pres, kl_z_depth, kl_z_scale, kl_z_shift, kl_z_what = [
-            x.flatten(start_dim=1).sum(1) for x in [kl_z_pres, kl_z_depth, kl_z_scale, kl_z_shift, kl_z_what]
+            x.flatten(start_dim=2).sum(2) for x in [kl_z_pres, kl_z_depth, kl_z_scale, kl_z_shift, kl_z_what]
         ]
-        # (B,)
+        # (B, T)
         kl_z_where = kl_z_scale + kl_z_shift
 
         # Compute boundary loss
         # (1, 1, K, K)
         boundary_kernel = self.boundary_kernel[None, None].to(x.device)
         # (1, 1, K, K) * (B*G*G, 1, 1) -> (B*G*G, 1, K, K)
-        boundary_kernel = boundary_kernel * z_pres.view(B * arch.G ** 2, 1, 1, 1)
-        # (B, G*G, 1, H, W), to full resolution
+        boundary_kernel = boundary_kernel * z_pres.view(B * T * arch.G ** 2, 1, 1, 1)
+        # (B, T, G*G, 1, H, W), to full resolution
         boundary_map = spatial_transform(boundary_kernel, z_where.view(B * arch.G ** 2, 4),
                                          (B * arch.G ** 2, 1, *arch.img_shape),
-                                         inverse=True).view(B, arch.G ** 2, 1, *arch.img_shape)
-        # (B, 1, H, W)
-        boundary_map = boundary_map.sum(dim=1)
+                                         inverse=True).view(B, T, arch.G ** 2, 1, *arch.img_shape)
+        # (B, T, 1, H, W)
+        boundary_map = boundary_map.sum(dim=2)
         # TODO: some magic number. For reproducibility I will keep it
         boundary_map = boundary_map * 1000
-        # (B, 1, H, W) * (B, 1, H, W)
+        # (B, T, 1, H, W) * (B, T, 1, H, W)
         overlap = boundary_map * alpha_map
         # TODO: another magic number. For reproducibility I will keep it
         p_boundary = Normal(0, 0.7)
         # (B, 1, H, W)
         boundary_loss = p_boundary.log_prob(overlap)
         # (B,)
-        boundary_loss = boundary_loss.flatten(start_dim=1).sum(1)
+        boundary_loss = boundary_loss.flatten(start_dim=2).sum(2)
 
         # NOTE: we want to minimize this
         boundary_loss = -boundary_loss
 
         # Compute foreground likelhood
         fg_dist = Normal(y_nobg, self.fg_sigma)
-        x = x[:, :3]
-
         fg_likelihood = fg_dist.log_prob(x)
 
         kl = kl_z_what + kl_z_where + kl_z_pres + kl_z_depth
@@ -240,12 +222,12 @@ class SpaceFg(nn.Module):
         # For visualizating
         # Dimensionality check
         assert (
-                (z_pres.size() == (B, arch.G ** 2, 1)) and
-                (z_depth.size() == (B, arch.G ** 2, 1)) and
-                (z_scale.size() == (B, arch.G ** 2, 2)) and
-                (z_shift.size() == (B, arch.G ** 2, 2)) and
-                (z_where.size() == (B, arch.G ** 2, 4)) and
-                (z_what.size() == (B, arch.G ** 2, arch.z_what_dim))
+                (z_pres.size() == (B, T, arch.G ** 2, 1)) and
+                (z_depth.size() == (B, T, arch.G ** 2, 1)) and
+                (z_scale.size() == (B, T, arch.G ** 2, 2)) and
+                (z_shift.size() == (B, T, arch.G ** 2, 2)) and
+                (z_where.size() == (B, T, arch.G ** 2, 4)) and
+                (z_what.size() == (B, T, arch.G ** 2, arch.z_what_dim))
         )
         log = {
             'fg': y_nobg,
@@ -292,7 +274,7 @@ class ImgEncoderFg(nn.Module):
         # Encoder: (B, C, Himg, Wimg) -> (B, E, G, G)
         # G is H=W in the paper
         self.enc = nn.Sequential(
-            nn.Conv2d(5 if arch.flow else 3, 16, 4, 2, 1),
+            nn.Conv2d(3, 16, 4, 2, 1),
             nn.CELU(),
             nn.GroupNorm(4, 16),
             nn.Conv2d(16, 32, 4, 2, 1),
@@ -349,7 +331,7 @@ class ImgEncoderFg(nn.Module):
         """
         Given image, infer z_pres, z_depth, z_where
 
-        :param x: (B, 3, H, W)
+        :param x: (B, T, 3, H, W)
         :param tau: temperature for the relaxed bernoulli
         :return
             z_pres: (B, G*G, 1)
@@ -364,11 +346,11 @@ class ImgEncoderFg(nn.Module):
         """
         B = x.size(0)
 
-        # (B, C, H, W)
+        # (B, T, C, H, W)
         img_enc = self.enc(x)
-        # (B, E, G, G)
+        # (B, T, E, G, G)
         lateral_enc = self.enc_lat(img_enc)
-        # (B, 2E, G, G) -> (B, 128, H, W)
+        # (B, T, 2E, G, G) -> (B, T, 128, H, W)
         cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))
 
         def reshape(*args):
@@ -382,9 +364,9 @@ class ImgEncoderFg(nn.Module):
 
         # Compute posteriors
 
-        # (B, 1, G, G)
+        # (B, T, 1, G, G)
         z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc))
-        # (B, 1, G, G) - > (B, G*G, 1)
+        # (B, T, 1, G, G) - > (B, T, G*G, 1)
         z_pres_logits = reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
         # Unbounded
@@ -392,50 +374,50 @@ class ImgEncoderFg(nn.Module):
         # in (0, 1)
         z_pres = torch.sigmoid(z_pres_y)
 
-        # (B, 1, G, G)
+        # (B, T, 1, G, G)
         z_depth_mean, z_depth_std = self.z_depth_net(cat_enc).chunk(2, 1)
-        # (B, 1, G, G) -> (B, G*G, 1)
+        # (B, T, 1, G, G) -> (B, T, G*G, 1)
         z_depth_mean, z_depth_std = reshape(z_depth_mean, z_depth_std)
         z_depth_std = F.softplus(z_depth_std)
         z_depth_post = Normal(z_depth_mean, z_depth_std)
-        # (B, G*G, 1)
+        # (B, T, G*G, 1)
         z_depth = z_depth_post.rsample()
 
-        # (B, 2, G, G)
         scale_std_bias = 1e-15
+        # (B, T, 2, G, G)
         z_scale_mean, _z_scale_std = self.z_scale_net(cat_enc).chunk(2, 1)
         z_scale_std = F.softplus(_z_scale_std) + scale_std_bias
-        # (B, 2, G, G) -> (B, G*G, 2)
+        # (B, T, 2, G, G) -> (B, T, G*G, 2)
         z_scale_mean, z_scale_std = reshape(z_scale_mean, z_scale_std)
         z_scale_post = Normal(z_scale_mean, z_scale_std)
         z_scale = z_scale_post.rsample()
 
-        # (B, 2, G, G)
+        # (B, T, 2, G, G)
         z_shift_mean, z_shift_std = self.z_shift_net(cat_enc).chunk(2, 1)
         z_shift_std = F.softplus(z_shift_std)
-        # (B, 2, G, G) -> (B, G*G, 2)
+        # (B, T, 2, G, G) -> (B, T, G*G, 2)
         z_shift_mean, z_shift_std = reshape(z_shift_mean, z_shift_std)
         z_shift_post = Normal(z_shift_mean, z_shift_std)
         z_shift = z_shift_post.rsample()
 
-        # scale: unbounded to (0, 1), (B, G*G, 2)
+        # scale: unbounded to (0, 1), (B, T, G*G, 2)
         z_scale = z_scale.sigmoid()
         # offset: (2, G, G) -> (G*G, 2)
         offset = self.offset.permute(1, 2, 0).view(arch.G ** 2, 2)
-        # (B, G*G, 2) and (G*G, 2)
+        # (B, T, G*G, 2) and (G*G, 2)
         # where: (-1, 1)(local) -> add center points -> (0, 2) -> (-1, 1)
         z_shift = (2.0 / arch.G) * (offset + 0.5 + z_shift.tanh()) - 1
 
-        # (B, G*G, 4)
+        # (B, T, G*G, 4)
         z_where = torch.cat((z_scale, z_shift), dim=-1)
 
         # Check dimensions
         assert (
-                (z_pres.size() == (B, arch.G ** 2, 1)) and
-                (z_depth.size() == (B, arch.G ** 2, 1)) and
-                (z_shift.size() == (B, arch.G ** 2, 2)) and
-                (z_scale.size() == (B, arch.G ** 2, 2)) and
-                (z_where.size() == (B, arch.G ** 2, 4))
+                (z_pres.size() == (B, T, arch.G ** 2, 1)) and
+                (z_depth.size() == (B, T, arch.G ** 2, 1)) and
+                (z_shift.size() == (B, T, arch.G ** 2, 2)) and
+                (z_scale.size() == (B, T, arch.G ** 2, 2)) and
+                (z_where.size() == (B, T, arch.G ** 2, 4))
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
@@ -448,22 +430,22 @@ class ZWhatEnc(nn.Module):
         super(ZWhatEnc, self).__init__()
 
         self.enc_cnn = nn.Sequential(
-            nn.Conv2d(5 if arch.flow else 3, 16, 3, 1, 1),
+            nn.Conv3d(3, 16, 3, 1, 1),
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 32, 4, 2, 1),
+            nn.Conv3d(16, 32, (3, 4, 4), (1, 2, 2), 1),
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.Conv3d(32, 32, 3, 1, 1),
             nn.CELU(),
             nn.GroupNorm(4, 32),
-            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.Conv3d(32, 64, (3, 4, 4), (1, 2, 2), 1),
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 128, 4, 2, 1),
+            nn.Conv3d(64, 128, (3, 4, 4), (1, 2, 2), 1),
             nn.CELU(),
             nn.GroupNorm(8, 128),
-            nn.Conv2d(128, 256, 4),
+            nn.Conv3d(128, 256, (3, 4, 4), 1, (1, 0, 0)),
             nn.CELU(),
             nn.GroupNorm(16, 256),
         )
@@ -474,21 +456,21 @@ class ZWhatEnc(nn.Module):
         """
         Encode a (32, 32) glimpse into z_what
 
-        :param x: (B, C, H, W)
+        :param x: (B, T, C, H, W)
         :return:
-            z_what: (B, D)
-            z_what_post: (B, D)
+            z_what: (B, T, D)
+            z_what_post: (B, T, D)
         """
-        x = self.enc_cnn(x)
+        # B, T, C, H, W = x.size()
+        x = self.enc_cnn(x.transpose(1, 2))
 
-        # (B, D), (B, D)
-        z_what_mean, z_what_std = self.enc_what(x.flatten(start_dim=1)).chunk(2, -1)
+        # (B, T, D), (B, T, D)
+        z_what_mean, z_what_std = self.enc_what(x.squeeze().transpose(1, 2)).chunk(2, -1)
         z_what_std = F.softplus(z_what_std)
         z_what_post = Normal(z_what_mean, z_what_std)
         z_what = z_what_post.rsample()
 
         return z_what, z_what_post
-
 
 class GlimpseDec(nn.Module):
     """Decoder z_what into reconstructed objects"""
@@ -553,12 +535,13 @@ class GlimpseDec(nn.Module):
 
         :param x: (B, D)
         :return:
-            o_att: (B, 3, H, W)
+            o_att: (B, T, 3, H, W)
             alpha_att: (B, 1, H, W)
         """
-        x = self.dec(x.view(x.size(0), -1, 1, 1))
+        B, T, D = x.size()
+        x = self.dec(x.view(B*T, D, 1, 1))
 
         o = torch.sigmoid(self.dec_o(x))
         alpha = torch.sigmoid(self.dec_alpha(x))
 
-        return o, alpha
+        return o.view(B, T, 3, H, W), alpha.view(B, T, 3, H, W)

@@ -137,10 +137,10 @@ def z_what_consistency_objects(responses):
             z_sim = cos(z_what_prior, z_whats_now)
         else:
             z_means = nn.functional.mse_loss(z_what_prior, z_whats_now, reduction='none')
-            # (#hits,) in (0,1]
-            z_sim = 1 / (torch.mean(z_means, dim=1) + 1)
+            z_sim = torch.mean(z_means, dim=1)
         object_consistency_loss += -arch.z_cos_match_weight * torch.max(z_sim) + torch.sum(z_sim)
     return object_consistency_loss, torch.tensor(len(z_pres_idx)).to(z_whats.device)
+
 
 def z_what_consistency_pool(responses):
     # O(n^2) matching of only high z_pres
@@ -157,13 +157,11 @@ def z_what_consistency_pool(responses):
 
     z_what_weighted = z_whats * z_pres
     pool = nn.MaxPool2d(3, stride=1, padding=1)
-    # (T * B, D, G, G)
     z_what_reshaped = z_what_weighted.transpose(2, 3).reshape(T, B, D, arch.G, arch.G).reshape(T * B, D, arch.G, arch.G)
     z_what_smoothed = pool(z_what_reshaped)
-    # (T, B, G * G, D)
     z_what_smoothed = z_what_smoothed.reshape(T, B, D, arch.G, arch.G).reshape(T, B, D, arch.G * arch.G).transpose(2, 3)
+    # (T-1, B, G * G)
     if arch.cosine_sim:
-        # (T-1, B, G * G)
         cos = nn.CosineSimilarity(dim=3, eps=1e-6)(z_what_smoothed[:-1], z_what_weighted[1:])
         z_pres_weight = z_pres.squeeze()
         z_pres_weight = (z_pres_weight[:-1] + z_pres_weight[1:]) * 0.5

@@ -25,7 +25,7 @@ parser.add_argument('-g', '--game', type=str, help='An atari game',
                     # default='SpaceInvaders')
                     # default='MsPacman')
                     # default='Tennis')
-                    default='Pong')
+                    default='Carnival')
 # parser.add_argument('-raw', '--raw_image', default=False, action="store_true",
 #                     help='Wether to store original image from the gamef
 parser.add_argument('--render', default=False, action="store_true",
@@ -57,15 +57,16 @@ with open(f'configs/{args.game.lower()}_config.json', 'r') as f:
     config = json.loads(data, object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
 if "Augmented" not in config.game_name:
     print("\n\n\t\tYou are not using an Augmented environment\n\n")
+augmented = "Augmented" in config.game_name
 env = Atari(config.game_name, config.width, config.height, ends_at_life=True,
             history_length=config.history_length, max_no_op_actions=30)
 state = env.reset()
 
 make_deterministic(0, env)
 
-bgr_folder = f"aiml_atari_data/space_like/{args.game}-v0/{args.folder}"
+bgr_folder = f"2aiml_atari_data/space_like/{args.game}-v0/{args.folder}"
 os.makedirs(bgr_folder, exist_ok=True)
-rgb_folder = f"aiml_atari_data/rgb/{args.game}-v0/{args.folder}"
+rgb_folder = f"2aiml_atari_data/rgb/{args.game}-v0/{args.folder}"
 os.makedirs(rgb_folder, exist_ok=True)
 
 agent_path = glob(f'agents/*{args.game}*')[0]
@@ -82,31 +83,38 @@ series = []
 for _ in range(200):
     action = agent.draw_action(state)
     # action = env.action_space.sample()
-    state, reward, done, info, obs = env.step(action)
+    if augmented:
+        state, reward, done, info, obs = env.step(action)
+    else:
+        state, reward, done, info = env.step(action)
 #     env.render()
 #     sleep(0.01)
 # exit()
 i = 0
 pbar = tqdm(total=limit)
+obs = None
 while True:
     action = agent.draw_action(state)
-    # action = env.action_space.sample()
-    state, reward, done, info, obs = env.step(action)
+    if augmented:
+        state, reward, done, info, obs = env.step(action)
+    else:
+        state, reward, done, info = env.step(action)
     if args.render:
         env.render()
-        sleep(0.01)
-    # img = draw_names(obs, info)  # to see where the objects are
+        sleep(0.001)
     if (not args.random) or np.random.rand() < 0.01:
         image_n = index[image_count]
         try:
-            if not augment_dict(obs, info, args.game): # wrong image
-                # print("Wrong image")
+            if not augment_dict(obs, info, args.game):
                 if done:
                     env.reset()
                     for _ in range(200):
                         action = agent.draw_action(state)
                         # action = env.action_space.sample()
-                        state, reward, done, info, obs = env.step(action)
+                        if augmented:
+                            state, reward, done, info, obs = env.step(action)
+                        else:
+                            state, reward, done, info = env.step(action)
                 continue
             ## RAW IMAGE
             img = Image.fromarray(obs, 'RGB')
@@ -122,7 +130,10 @@ while True:
                 for _ in range(200):
                     action = agent.draw_action(state)
                     # action = env.action_space.sample()
-                    state, reward, done, info, obs = env.step(action)
+                    if augmented:
+                        state, reward, done, info, obs = env.step(action)
+                    else:
+                        state, reward, done, info = env.step(action)
             pbar.update(1)
             image_count += 1
             if image_count == limit:

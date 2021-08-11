@@ -53,7 +53,7 @@ def train(cfg):
         print("Can't train")
         exit(1)
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
-                                load_time_consistency=cfg.load_time_consistency)
+                                load_time_consistency=cfg.load_time_consistency, add_flow=cfg.add_flow)
     model.train()
 
     optimizer_fg, optimizer_bg = get_optimizers(cfg, model)
@@ -72,7 +72,7 @@ def train(cfg):
                            purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
-
+    never_eval = True
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
     start_log = 2
@@ -86,12 +86,11 @@ def train(cfg):
             data_time = end - start
             start = end
             model.train()
-            # print("Pre to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             vids = data.to(cfg.device)
-            # print("Post to.device", torch.cuda.memory_summary(device=4, abbreviated=False))
             loss, log = model(vids, global_step)
             # In case of using DataParallel
             loss = loss.mean()
+
             optimizer_fg.zero_grad()
             optimizer_bg.zero_grad()
             loss.backward()
@@ -131,7 +130,8 @@ def train(cfg):
                 checkpointer.save_last(model, optimizer_fg, optimizer_bg, epoch, global_step)
                 print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
 
-            if global_step % cfg.train.eval_every == 0 and cfg.train.eval_on:
+            if (global_step % cfg.train.eval_every == 0 or never_eval) and cfg.train.eval_on:
+                never_eval = False
                 print('Validating...')
                 start = time.perf_counter()
                 eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]

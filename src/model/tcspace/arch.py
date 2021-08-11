@@ -10,7 +10,8 @@ arch = CfgNode({
     'object_threshold': 0.5,
     'z_cos_match_weight': 5.0,
     'full_object_weight': 20000,
-    'flow': True,
+    'n_img': 4,
+
     # SPACE-config
     'img_shape': (128, 128),
     

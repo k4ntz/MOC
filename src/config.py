@@ -6,6 +6,8 @@ cfg = CfgNode({
     'seed': 8848,
     'exp_name': '',
     'model': 'SPACE',
+    'flow': False,
+    'add_flow': False,
     # Whether a TcSpace or (Space for TcSpace) should be loaded
     'load_time_consistency': True,
     # Resume training or not
