@@ -69,18 +69,19 @@ sh scripts/show_atari_spaceinvaders.sh 'cpu'  # otherwise
 ## :space_invader: AIML SCRIPTS :space_invader:
 
 We have our own scripts:
-* To create a dataset for the game pong (`train` folder): <br/>
+* To create a dataset for the game pong (`train` folder) from root folder: <br/>
 `python3 create_dataset.py -f train -g Pong`
 
 * To create a dataset for the game Tennis (`train` folder) and make the data i.i.d.: <br/>
 `python3 create_dataset.py -f train -g Tennis --random`
 
-* To extract images for a game: <br/>
-`python3 extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
+All of the following is also called during eval stage when training. Check out train.py and the src/configs to configure.
 
-* To create a PCA (or tsne) and visualize in a plot: (only available for MsPacman) <br/>
-`python3 classify_z_what.py show -method pca -dim 2`
-(This needs labeled generated data, contact Quentin to get the arxiv)
+* To extract images for a game from src folder: <br/>
+`python3 post-eval/extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
+
+* To create a PCA (or tsne) and visualize in a plot from src: (only available for MsPacman yet) also always check the parameter descriptions of argparse <br/>
+`python3 post-eval/classify_z_what.py`
 
 ## Training and Evaluation
 
