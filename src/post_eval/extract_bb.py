@@ -1,8 +1,8 @@
 import os, sys
 _curent_dir = os.getcwd()
-if _curent_dir not in sys.path:
-    sys.path.append(_curent_dir)
-
+for _cd in [_curent_dir, _curent_dir + "/post_eval"]:
+    if _cd not in sys.path:
+        sys.path.append(_cd)
 
 import os.path as osp
 import matplotlib.pyplot as plt
@@ -95,7 +95,8 @@ for i in tqdm(range(0, nb_images, 4 if TIME_CONSISTENCY else 1)):
     image_fs = open_image(img_path_fs).to(cfg.device)
 
     # TODO: treat global_step in a more elegant way
-    loss, space_log = model(image, global_step=100000000)
+    with torch.no_grad():
+        loss, space_log = model(image, global_step=100000000)
     if TIME_CONSISTENCY:
         for j in range(4):
             process_image(space_log['space_log'][j], image_fs, i + j)
@@ -106,11 +107,11 @@ for i in tqdm(range(0, nb_images, 4 if TIME_CONSISTENCY else 1)):
 # all_labels = torch.cat(all_labels)
 
 if action == "extract":
-    print(len(all_z_what), len(all_labels))
     if not os.path.exists(f"labeled/{cfg.exp_name}"):
         os.makedirs(f"labeled/{cfg.exp_name}")
     torch.save(all_z_what, f"labeled/{cfg.exp_name}/z_what_{folder}.pt")
     torch.save(all_labels, f"labeled/{cfg.exp_name}/labels_{folder}.pt")
+    print(f"Extracted z_whats and saved it in labeled/{cfg.exp_name}/")
 
 # import ipdb; ipdb.set_trace()
 # image = (image[0] * 255).round().to(torch.uint8)  # for draw_bounding_boxes
