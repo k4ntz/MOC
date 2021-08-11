@@ -13,6 +13,7 @@ import pandas as pd
 from argparse import Namespace
 
 N_NEIGHBORS = 24
+DISPLAY_CENTROIDS = False
 
 warnings.filterwarnings("ignore", category=UserWarning)
 import argparse
@@ -117,15 +118,16 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
                        alpha=0.7, edgecolors=edge_colors, s=100, linewidths=2)
         centroid_emb = pca.transform(centroids)
 
-        for c_emb, cl in zip(centroid_emb, centroid_label):
-            if "pacman" in label_list:
-                colr = [np.array(base_objects_colors[label_list[cl]]) / 255]
-            else:
-                colr = colors[cl]
-            ax.scatter([c_emb[0]],
-                           [c_emb[1]],
-                           c=colr,
-                           edgecolors='black', s=100, linewidths=2)
+        if DISPLAY_CENTROIDS:
+            for c_emb, cl in zip(centroid_emb, centroid_label):
+                if "pacman" in label_list:
+                    colr = [np.array(base_objects_colors[label_list[cl]]) / 255]
+                else:
+                    colr = colors[cl]
+                ax.scatter([c_emb[0]],
+                               [c_emb[1]],
+                               c=colr,
+                               edgecolors='black', s=100, linewidths=2)
         plt.legend(prop={'size': 6})
         plt.savefig(
             f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
@@ -172,6 +174,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
 
         axs[0].legend(prop={'size': 6})
         axs[1].legend(prop={'size': 6})
+        plt.tight_layout()
         plt.savefig(
             f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
         plt.close(fig)
@@ -204,9 +207,9 @@ if __name__ == "__main__":
 
     nb_used_sample = 500
 
-    z_what_train = torch.randn((400, 32))
-    train_labels = torch.randint(high=8, size=(400,))
-    # torch.cat(torch.load(f"labeled/{args.folder}/z_what_validation.pt"))
-    # torch.cat(torch.load(f"labeled/{args.folder}/labels_validation.pt"))
+    # z_what_train = torch.randn((400, 32))
+    # train_labels = torch.randint(high=8, size=(400,))
+    torch.cat(torch.load(f"labeled/{args.folder}/z_what_validation.pt"))
+    torch.cat(torch.load(f"labeled/{args.folder}/labels_validation.pt"))
 
     evaluate_z_what(vars(args), z_what_train, train_labels, nb_used_sample, cfg=None)

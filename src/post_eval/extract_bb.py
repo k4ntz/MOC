@@ -1,5 +1,11 @@
+import os, sys
+_curent_dir = os.getcwd()
+if _curent_dir not in sys.path:
+    sys.path.append(_curent_dir)
+
+
+import os.path as osp
 import matplotlib.pyplot as plt
-import sys
 import numpy as np
 from engine.utils import get_config
 from engine.train import train
@@ -11,7 +17,6 @@ from dataset import get_dataset, get_dataloader
 from utils import Checkpointer, open_image, show_image, save_image, \
     corners_to_wh, draw_bounding_boxes, get_labels, place_labels
 import os
-import os.path as osp
 from torch import nn
 from torch.utils.data import Subset, DataLoader
 from utils import draw_bounding_boxes
@@ -23,7 +28,6 @@ from termcolor import colored
 import pandas as pd
 from PIL import Image
 import PIL
-import os
 
 folder = "validation"
 
