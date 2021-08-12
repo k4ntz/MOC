@@ -10,7 +10,7 @@ import pandas as pd
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-features = ["Target Y - Player Y", "Player X - Ball X", "0", "Ball X - Enemy X", "Ball Y - Enemy Y", "Ball Speed"]
+plt.interactive(False)
 
 # function to plot live while training
 def plot_screen(env, episode, step, second_img=None):
@@ -38,22 +38,35 @@ def get_integrated_gradients(ig, input, target_class):
     return attr
 
 
+# function to get feature titles
+def get_feature_titles():
+    feature_titles = []
+    for i in range(0, 3):
+        feature_titles.append(str("obj" +  str(i) + " vel"))
+        for j in range(0, 3):
+            if j > i:
+                feature_titles.append(str("x obj" + str(j) + " - obj" + str(i)))
+                feature_titles.append(str("y obj" + str(j) + " - obj" + str(i)))
+        for j in range(0, 3):
+            if i != j:
+                feature_titles.append(str("target y obj" + str(j) + " - obj" + str(i)))
+                feature_titles.append(str("target x obj" + str(j) + " - obj" + str(i)))
+    return feature_titles
+
+
 # helper function to get integrated gradients of given features as plotable image
-def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
+def plot_integrated_gradient_img(ig, exp_name, input, feature_titles, target_class, env, plot):
     attr = get_integrated_gradients(ig, input, target_class)
     attr_df = pd.DataFrame({"Values": attr},
-                  index=features)
+                  index=feature_titles)
     #print(attr_df)
     env_img = env.render(mode='rgb_array')
     # plot both next to each other
-    plt.clf()
-    plt.cla()
-    plt.close()
     fig, (ax1, ax2) = plt.subplots(ncols=2)
     ax1.imshow(env_img)
     sn.heatmap(attr_df, ax=ax2, vmin=-0.2, vmax=1)
-    plt.title(exp_name)
-    plt.tight_layout()
+    ax1.set_title(exp_name)
+    fig.tight_layout()
     # convert fig to cv2 img
     # put pixel buffer in numpy array
     canvas = FigureCanvas(fig)
@@ -62,13 +75,16 @@ def plot_integrated_gradient_img(ig, exp_name, input, target_class, env, plot):
     mat = cv2.cvtColor(mat, cv2.COLOR_RGB2BGR)
     resized = cv2.resize(mat, (480, 480), interpolation = cv2.INTER_AREA)
     if plot:
-        plt.plot()
+        plt.draw()
         plt.pause(0.0001)
+    # clean up
+    fig.clf()
+    plt.close(fig)
     return resized
 
 
 # helper function to plot igs of each feature over whole episode
-def plot_igs(ig_sum, plot_titles = features):
+def plot_igs(ig_sum, plot_titles):
     for i, igs in enumerate(ig_sum.T):
         plt.plot(igs)
         plt.xlabel("Steps")

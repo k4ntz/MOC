@@ -14,6 +14,7 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
+from yaml import load
 
 import xrl.utils as xutils
 import dqn.utils as utils
@@ -83,6 +84,17 @@ def save_policy(training_name, policy, episode, optimizer):
             }, model_path)
 
 
+# load model
+def load_model(model_path, policy, optimizer=None):
+    print("{} does exist, loading ... ".format(model_path))
+    checkpoint = torch.load(model_path)
+    policy.load_state_dict(checkpoint['policy'])
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+    i_episode = checkpoint['episode']
+    return policy, optimizer, i_episode
+
+
 def train():
     print('Experiment name:', cfg.exp_name)
     writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
@@ -100,11 +112,7 @@ def train():
     # load if exists
     model_path = model_name(cfg.exp_name)
     if os.path.isfile(model_path):
-        print("{} does exist, loading ... ".format(model_path))
-        checkpoint = torch.load(model_path)
-        policy.load_state_dict(checkpoint['policy'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        i_episode = checkpoint['episode']
+        policy, optimizer, i_episode = load_model(model_path, policy, optimizer)
     print('Episodes:', cfg.train.num_episodes)
     print('Max Steps per Episode:', cfg.train.max_steps)
     print('Gamma:', cfg.train.gamma)
@@ -175,20 +183,18 @@ def eval():
     # load if exists
     model_path = model_name(cfg.exp_name)
     if os.path.isfile(model_path):
-        print("{} does exist, loading ... ".format(model_path))
-        checkpoint = torch.load(model_path)
-        policy.load_state_dict(checkpoint['policy'])
-        i_episode = checkpoint['episode']
+        policy, _, i_episode = load_model(model_path, policy)
     policy.eval()
     # init intgrad
     ig = IntegratedGradients(policy)
     ig_sum = []
+    feature_titles = xutils.get_feature_titles()
     # env loop
     t = 0
     while t  < cfg.train.max_steps:  # Don't infinite loop while playing
         action, _ = select_action(features, policy)
         if cfg.liveplot or cfg.make_video:
-            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, action, env, cfg.liveplot)
+            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
@@ -207,7 +213,7 @@ def eval():
         ig_sum = np.asarray(ig_sum)
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
-        #xutils.plot_igs(ig_sum)
+        #xutils.plot_igs(ig_sum, feature_titles)
 
 
 if __name__ == '__main__':

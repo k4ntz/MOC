@@ -1,5 +1,6 @@
 # q learning with given shallow representation of atari game
 
+from typing import TYPE_CHECKING
 from warnings import catch_warnings
 import gym
 import numpy as np
@@ -23,6 +24,8 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
+from yaml import load
+from reinforce import load_model
 
 import xrl.utils as xutils
 import dqn.utils as utils
@@ -211,6 +214,20 @@ def save_agents(training_name, agents, generation, elite_index):
             }, model_path)
 
 
+# load agents if exists
+def load_agents(model_path):
+    print("{} does exist, loading ... ".format(model_path))
+    checkpoint = torch.load(model_path)
+    agents = checkpoint['agents']
+    generation = checkpoint['generation']
+    elite_index = None
+    try:
+        elite_index = checkpoint['elite_index']
+    except:
+        print("No elite index in save available...")
+    return agents, generation, elite_index
+
+
 # train main function
 def train():
     print('Experiment name:', cfg.exp_name)
@@ -239,10 +256,7 @@ def train():
     # load if exists
     model_path = model_name(cfg.exp_name)
     if os.path.isfile(model_path):
-        print("{} does exist, loading ... ".format(model_path))
-        checkpoint = torch.load(model_path)
-        agents = checkpoint['agents']
-        generation = checkpoint['generation']
+        agents, generation, _ = load_agents(model_path)
 
     # How many top agents to consider as parents
     top_limit = 20
@@ -314,27 +328,24 @@ def play_agent():
     # load if exists
     model_path = model_name(cfg.exp_name)
     if os.path.isfile(model_path):
-        print("{} does exist, loading ... ".format(model_path))
-        checkpoint = torch.load(model_path)
-        agents = checkpoint['agents']
-        generation = checkpoint['generation']
-        try:
-            elite_index = checkpoint['elite_index']
-        except:
-            print("No elite index in save available...")
+        agents, generation, t_elite_index = load_agents(model_path)
+        if t_elite_index is not None:
+            elite_index = t_elite_index
+    print('Selected elite agent:', elite_index)
     elite_agent = agents[elite_index]
 
     # play with elite agent
     logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
     ig = IntegratedGradients(elite_agent)
     ig_sum = []
+    feature_titles = xutils.get_feature_titles()
     elite_agent.eval()
     r = 0
     for t in count():
         action = select_action(features, elite_agent)
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         if cfg.liveplot or cfg.make_video:
-            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, action, env, cfg.liveplot)
+            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
             print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 generation, r, t), end="\r")

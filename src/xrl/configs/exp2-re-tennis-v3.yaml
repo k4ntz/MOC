@@ -11,7 +11,7 @@ train:
   gamma: 0.97
   learning_rate: 0.001 #0.0005 worked with bug
 
-  num_episodes: 50000
+  num_episodes: 18000
   max_steps: 50000
   
   log_steps: 25

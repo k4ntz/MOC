@@ -11,7 +11,7 @@ train:
   gamma: 0.97
   learning_rate: 0.001
 
-  num_episodes: 50000
+  num_episodes: 30000
   max_steps: 100000
   
   log_steps: 25
