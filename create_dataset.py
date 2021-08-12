@@ -16,6 +16,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 
+
 folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
 
 

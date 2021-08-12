@@ -136,7 +136,7 @@ def _augment_dict_pong(obs, info):
             try:
                 x, y = potential_pos
             except:
-                import ipdb;
+                import ipdb
                 ipdb.set_trace()
             if enough_color_around(obs, x, y, objects_colors[score.split("_")[1]],
                                    threshold=4):
@@ -171,7 +171,8 @@ def _augment_dict_carnival(obs, info):
         'refills': [],
     }
 
-    W, H = obs.shape
+    W, H, C = obs.shape
+
     prior_main_color = (0, 0, 0)
     prior_amount = 0
     for y in [80, 90, 100]:
@@ -179,11 +180,11 @@ def _augment_dict_carnival(obs, info):
         while x < W:
             colors_around = get_colors_around(obs, x, y)
             if len(colors_around) > 1:
-                main_color = list(c.keys())[0] if list(c.keys())[0] != (0, 0, 0) else list(c.keys())[1]
+                main_color = list(colors_around.keys())[0] if list(colors_around.keys())[0] != (0, 0, 0) else list(colors_around.keys())[1]
                 current_amount = colors_around[main_color]
                 if prior_main_color == main_color and current_amount < prior_amount:
-                    obj = max((k for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
-                        current_amount) - v))
+                    obj = max(((k, v) for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
+                        current_amount) - item[1]))[0]
                     objects[f'{obj}s'].append((x - 1, y))
                     x += 10
                     prior_main_color = (0, 0, 0)
@@ -192,10 +193,14 @@ def _augment_dict_carnival(obs, info):
                     x += 1
                     prior_main_color = main_color
                     prior_amount = current_amount
+            else:
+                x += 1
         if prior_amount > 10:
             obj = max((k for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
                 current_amount) - v))
             objects[f'{obj}s'].append((x - 1, y))
+    import ipdb
+    ipdb.set_trace()
     return True
 
 
@@ -272,7 +277,7 @@ def get_colors_around(image_array, root_x, root_y):
     counter = Counter()
     for x in range(root_x - 5, root_x + 6):
         for y in range(root_y - 5, root_y + 6):
-            counter[image_array[x][y]] += 1
+            counter[tuple(image_array[x][y])] += 1
     return {k: v for k, v in sorted(counter.items(), key=lambda item: item[1])}
 
 

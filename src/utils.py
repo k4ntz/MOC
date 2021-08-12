@@ -134,7 +134,6 @@ class Checkpointer:
         """
         If path is '', we load the last checkpoint
         """
-        import ipdb; ipdb.set_trace()
         if path == '':
             with open(self.listfile, 'rb') as f:
                 model_list = pickle.load(f)
