@@ -14,7 +14,7 @@ from argparse import Namespace
 import os
 
 N_NEIGHBORS = 24
-DISPLAY_CENTROIDS = True
+DISPLAY_CENTROIDS = False
 
 warnings.filterwarnings("ignore", category=UserWarning)
 import argparse
@@ -30,7 +30,7 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        }
 
 
-def evaluate_z_what(arguments, z_what, labels, n, cfg):
+def evaluate_z_what(arguments, z_what, labels, nb_samples, cfg):
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else range(
         labels.max() + 1)
     folder = f'hyper/{cfg.exp_name}{cfg.seed}' if cfg else f'{arguments["folder"]}1'
@@ -101,7 +101,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         ax.set_facecolor((0.3, 0.3, 0.3))
         plt.suptitle("Labeled PCA of z_whats", y=0.96, fontsize=28)
         plt.title("Inner Color is GT, Outer is greedy Centroid-based label", fontsize=18, pad=20)
-        n = min(n, 10000)
+        nb_samples = min(nb_samples, 10000)
         for i, idx in enumerate(sorted):
             if "pacman" in label_list:
                 colr = [np.array(base_objects_colors[label_list[relevant_labels[i]]]) / 255]
@@ -110,15 +110,17 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
             else:
                 colr = colors[relevant_labels[i]]
                 edge_colors = [colors[centroid_label[assign[0]]] for assign in y[idx]]
+
             ax.scatter(z_what_emb[:, 0][idx].squeeze()[:1],
                        z_what_emb[:, 1][idx].squeeze()[:1],
                        c=colr, label=label_list[relevant_labels[i]].replace("_", " "),
                        alpha=0.7)
-            ax.scatter(z_what_emb[:, 0][idx].squeeze()[:n],
-                       z_what_emb[:, 1][idx].squeeze()[:n],
+            ax.scatter(z_what_emb[:, 0][idx].squeeze()[:nb_samples],
+                       z_what_emb[:, 1][idx].squeeze()[:nb_samples],
                        c=colr,
                        alpha=0.7, edgecolors=edge_colors, s=100, linewidths=2)
         centroid_emb = pca.transform(centroids)
+        import ipdb; ipdb.set_trace()
 
         if DISPLAY_CENTROIDS:
             for c_emb, cl in zip(centroid_emb, centroid_label):

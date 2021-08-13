@@ -1,33 +1,30 @@
-import os, sys
-_curent_dir = os.getcwd()
-for _cd in [_curent_dir, _curent_dir + "/post_eval"]:
-    if _cd not in sys.path:
-        sys.path.append(_cd)
-
 import os.path as osp
 import matplotlib.pyplot as plt
 import numpy as np
-from engine.utils import get_config
-from engine.train import train
-from engine.eval import eval
-from engine.show import show
-from model import get_model
-from vis import get_vislogger
-from dataset import get_dataset, get_dataloader
-from utils import Checkpointer, open_image, show_image, save_image, \
-    corners_to_wh, draw_bounding_boxes, get_labels, place_labels
-import os
 from torch import nn
 from torch.utils.data import Subset, DataLoader
-from utils import draw_bounding_boxes
 from torchvision.transforms.functional import crop
 import torch
-from eval.ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from tqdm import tqdm
 from termcolor import colored
 import pandas as pd
 from PIL import Image
 import PIL
+import os, sys
+_curent_dir = os.getcwd()
+for _cd in [_curent_dir, _curent_dir + "/post_eval"]:
+    if _cd not in sys.path:
+        sys.path.append(_cd)
+from engine.utils import get_config
+from engine.train import train
+from engine.eval import eval
+from engine.show import show
+from utils import Checkpointer, open_image, show_image, save_image, \
+    corners_to_wh, draw_bounding_boxes, get_labels, place_labels, extract_images
+from model import get_model
+from vis import get_vislogger
+from dataset import get_dataset, get_dataloader
+from eval.ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 
 folder = "validation"
 
@@ -38,7 +35,7 @@ nb_images = folder_sizes[folder]
 cfg, task = get_config()
 
 TIME_CONSISTENCY = True
-EXTRACT_IMAGES = False
+EXTRACT_IMAGES = True
 USE_FULL_SIZE = True
 
 model = get_model(cfg)
@@ -53,8 +50,7 @@ table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}_labels.c
 # print(colored("Please change number of images !", "red"))
 all_z_what = []
 all_labels = []
-print(table)
-
+all_images_refs = []
 
 def process_image(log, image_rgb, idx):
     # (B, N, 4), (B, N, 1), (B, N, D)
@@ -66,6 +62,9 @@ def process_image(log, image_rgb, idx):
     z_what_pres = z_what[z_pres.unsqueeze(0)]
     boxes_batch = np.array(convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))).squeeze()
     labels = get_labels(table.iloc[[idx]], boxes_batch)
+    if EXTRACT_IMAGES:
+        extract_images(image_rgb, boxes_batch, idx)
+        images_refs = [f"{idx:05}_{i:05}.png" for i in range(len(labels))]
     if action == "visu":
         visu = place_labels(labels, boxes_batch, image_rgb)
         visu = draw_bounding_boxes(visu, boxes_batch, labels)
@@ -75,7 +74,7 @@ def process_image(log, image_rgb, idx):
     assert z_what_pres.shape[0] == labels.shape[0]
     all_z_what.append(z_what_pres.detach().cpu())
     all_labels.append(labels.detach().cpu())
-
+    all_images_refs.append(images_refs)
 
 def img_path_to_tensor(path):
     pil_img = Image.open(path).convert('RGB')
@@ -112,6 +111,10 @@ if action == "extract":
     torch.save(all_z_what, f"labeled/{cfg.exp_name}/z_what_{folder}.pt")
     torch.save(all_labels, f"labeled/{cfg.exp_name}/labels_{folder}.pt")
     print(f"Extracted z_whats and saved it in labeled/{cfg.exp_name}/")
+    if EXTRACT_IMAGES:
+        torch.save(all_images_refs, f"labeled/{cfg.exp_name}/all_images_refs_{folder}.pt")
+        print(f"Extracted images as well")
+
 
 # import ipdb; ipdb.set_trace()
 # image = (image[0] * 255).round().to(torch.uint8)  # for draw_bounding_boxes

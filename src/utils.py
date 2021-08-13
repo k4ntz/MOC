@@ -311,7 +311,7 @@ def place_labels(labels, boxes_batch, image):
     return image
 
 
-def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
+def get_labels(serie, boxes_batch, return_form="labels_n"):
     """
     Return starting epoch and global step
     return_form in `labels`, `labels_n`, or `one_hot`
@@ -323,7 +323,7 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
         "life2": (169, 38),
         "score0": (183, 81)
     }
-    bb = (boxes_batch[:, :4] * (210, 210, 160, 160)).round().astype(int)
+    boxes_batch = (boxes_batch[:, :4] * (210, 210, 160, 160)).round().astype(int)
     pieces["pacman"] = (serie['player_y'].item(), serie['player_x'].item())
     pieces["fruit"] = (serie['fruit_y'].item(), serie['fruit_x'].item())
     for en in enemy_list:
@@ -332,7 +332,7 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
         if not serie[f'{en}_blue'].item():
             all_blue = False
     labels = []
-    for bbx in bb:
+    for bbx in boxes_batch:
         min_dist = np.inf
         label = ""
         cor_pos = None
@@ -351,7 +351,7 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
     if return_form == "labels":
         return labels
     elif return_form == "one_hot":
-        one_hot_t = torch.zeros(len(bb), len(label_list))
+        one_hot_t = torch.zeros(len(boxes_batch), len(label_list))
         for i, lab in enumerate(labels):
             one_hot_t[i][label_list.index(lab)] = 1
         return one_hot_t
@@ -397,3 +397,18 @@ def label_names(labels):
         else:
             return [label_list[i] for i in labels]
     return labels
+
+
+def extract_images(image, boxes_batch, idx):
+    path = "extracted_images"
+    os.makedirs(path, exist_ok=True)
+    if len(image.shape) == 4:
+        image = image.squeeze()
+    boxes_batch = (boxes_batch[:, :4] * (210, 210, 160, 160)).round().astype(int)
+    boxes_batch[boxes_batch < 0] = 0
+    for i, bbx in enumerate(boxes_batch):
+        cropped = image[:, bbx[0]:bbx[1], bbx[2]:bbx[3]]
+        if isinstance(cropped, torch.Tensor):
+            cropped = cropped.detach().cpu().numpy()
+        plt.imshow(np.moveaxis(cropped, (0, 1, 2), (2, 0, 1)))
+        plt.savefig(f"{path}/{idx:05}_{i:05}.png")
