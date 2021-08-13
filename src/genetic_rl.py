@@ -28,10 +28,9 @@ from yaml import load
 from reinforce import load_model
 
 import xrl.utils as xutils
-import dqn.utils as utils
 import dqn.dqn_logger as vlogger
 
-cfg, _ = utils.get_config()
+cfg = xutils.get_config()
 
 PATH_TO_OUTPUTS = os.getcwd() + "/xrl/checkpoints/"
 if not os.path.exists(PATH_TO_OUTPUTS):

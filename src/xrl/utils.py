@@ -1,6 +1,8 @@
+import os
 import math
 import torch
 import cv2
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +11,70 @@ import pandas as pd
 
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+from argparse import ArgumentParser
+from xrl.xrl_config import cfg
+
+######################
+######## INIT ########
+######################
+
+# function to get config
+def get_config():
+    parser = ArgumentParser()
+    parser.add_argument(
+        '--task',
+        type=str,
+        default='train',
+        metavar='TASK',
+        help='What to do. See engine'
+    )
+    parser.add_argument(
+        '--config-file',
+        type=str,
+        default='',
+        metavar='FILE',
+        help='Path to config file'
+    )
+
+    parser.add_argument(
+        '--space-config-file',
+        type=str,
+        default='configs/atari_ball_joint_v1.yaml',
+        metavar='FILE',
+        help='Path to SPACE config file'
+    )
+
+    parser.add_argument(
+        'opts',
+        help='Modify config options using the command line',
+        default=None,
+        nargs=argparse.REMAINDER
+    )
+
+    args = parser.parse_args()
+    if args.config_file:
+        cfg.merge_from_file(args.config_file)
+    if args.opts:
+        cfg.merge_from_list(args.opts)
+
+    # Use config file name as the default experiment name
+    if cfg.exp_name == '':
+        if args.config_file:
+            cfg.exp_name = os.path.splitext(os.path.basename(args.config_file))[0]
+        else:
+            raise ValueError('exp_name cannot be empty without specifying a config file')
+
+    # Seed
+    import torch
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    return cfg
+
+######################
+###### PLOTTING ######
+######################
 
 plt.interactive(False)
 
@@ -98,7 +164,9 @@ def plot_igs(ig_sum, plot_titles):
             plt.title(plot_titles[i])
         plt.show()
 
-### processing features ###
+###############################
+##### PROCESSING FEATURES #####
+###############################
 
 
 # function to get raw features and order them by 
