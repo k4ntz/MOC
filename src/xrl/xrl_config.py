@@ -7,11 +7,6 @@ cfg = CfgNode({
     'exp_name': '', 
     'mode': 'train',
 
-    'gamelist': [
-        'Tennis-v0',
-        'Pong-v0',
-    ],
-
     # algo selection 
     # 1: REINFORCE
     # 2: Deep Neuroevolution

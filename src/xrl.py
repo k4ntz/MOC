@@ -2,6 +2,7 @@
 
 from xrl import reinforce
 from xrl import genetic_rl as genetic
+from xrl import dreamer_v2
 from xrl import utils
 
 # otherwise genetic loading model doesnt work, torch bug?
@@ -25,6 +26,15 @@ def use_genetic(cfg):
         genetic.play_agent(cfg)
 
 
+# function to call dreamerv2
+def use_dreamerv2(cfg):
+    print("Selected algorithm: DreamerV2")
+    if cfg.mode == "train":
+        dreamer_v2.train(cfg)
+    elif cfg.mode == "eval":
+        print("Eval not implemented")
+
+
 # main
 if __name__ == '__main__':
     cfg = utils.get_config()
@@ -36,6 +46,8 @@ if __name__ == '__main__':
         use_reinforce(cfg)
     elif cfg.rl_algo == 2:
         use_genetic(cfg)
+    elif cfg.rl_algo == 3:
+        use_dreamerv2(cfg)
     else:
         print("Unknown algorithm selected")
 
