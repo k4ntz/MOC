@@ -1,5 +1,7 @@
 env_name: 'PongDeterministic-v4'
 
+rl_algo: 2
+
 device: 'cuda:0'
 parallel: False
 

@@ -1,5 +1,3 @@
-import argparse
-from captum import attr
 import gym
 import numpy as np
 import os
@@ -14,12 +12,9 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
-from yaml import load
 
 import xrl.utils as xutils
-import dqn.dqn_logger as vlogger
-
-cfg = xutils.get_config()
+import xrl.video_logger as vlogger
 
 PATH_TO_OUTPUTS = os.getcwd() + "/xrl/checkpoints/"
 if not os.path.exists(PATH_TO_OUTPUTS):
@@ -51,7 +46,7 @@ def select_action(features, policy):
     return action.item(), log_prob
 
 
-def finish_episode(policy, optimizer, eps):
+def finish_episode(policy, optimizer, eps, cfg):
     R = 0
     policy_loss = []
     returns = []
@@ -94,7 +89,7 @@ def load_model(model_path, policy, optimizer=None):
     return policy, optimizer, i_episode
 
 
-def train():
+def train(cfg):
     print('Experiment name:', cfg.exp_name)
     writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
     # init env to get params for policy net
@@ -150,7 +145,7 @@ def train():
         else:
             running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
         reward_buffer += ep_reward
-        policy, optimizer = finish_episode(policy, optimizer, eps)
+        policy, optimizer = finish_episode(policy, optimizer, eps, cfg)
         print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tSteps: {}       '.format(
             i_episode, ep_reward, running_reward, t), end="\r")
         if i_episode % cfg.train.log_steps == 0:
@@ -164,13 +159,13 @@ def train():
 
 
 # eval function 
-def eval():
+def eval(cfg):
     print('Experiment name:', cfg.exp_name)
     print('Evaluating Mode')
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
     # init video logger
-    logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
+    logger = vlogger.VideoLogger(size=(480,480))
     # init env 
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
@@ -213,10 +208,3 @@ def eval():
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
         #xutils.plot_igs(ig_sum, feature_titles)
-
-
-if __name__ == '__main__':
-    if cfg.mode == "train":
-        train()
-    elif cfg.mode == "eval":
-        eval()

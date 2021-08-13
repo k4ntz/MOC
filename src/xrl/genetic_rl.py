@@ -1,12 +1,8 @@
-# q learning with given shallow representation of atari game
+# deep neuroevolution as a genetic rl algo
 
-from typing import TYPE_CHECKING
-from warnings import catch_warnings
 import gym
 import numpy as np
 import os
-import pandas as pd
-import seaborn as sn
 import copy
 import multiprocessing
 
@@ -24,13 +20,11 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
 
 from rtpt import RTPT
-from yaml import load
-from reinforce import load_model
 
+#from xrl.model import policy_net
 import xrl.utils as xutils
-import dqn.dqn_logger as vlogger
+import xrl.video_logger as vlogger
 
-cfg = xutils.get_config()
 
 PATH_TO_OUTPUTS = os.getcwd() + "/xrl/checkpoints/"
 if not os.path.exists(PATH_TO_OUTPUTS):
@@ -38,8 +32,7 @@ if not os.path.exists(PATH_TO_OUTPUTS):
 
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pth"
 
-
-# define policy network
+# define policy network for genetic algo
 class policy_net(nn.Module):
     def __init__(self, input, hidden, actions): 
         super(policy_net, self).__init__()
@@ -51,6 +44,7 @@ class policy_net(nn.Module):
         x = F.relu(self.h(x))
         x = F.softmax(self.out(x), dim=1)
         return x
+
 
 
 def init_weights(m):
@@ -66,11 +60,11 @@ def init_weights(m):
 
 
 # function to create random agents of given count
-def return_random_agents(n_inputs, num_agents, n_actions):
+def return_random_agents(n_inputs, num_agents, n_actions, cfg):
     agents = []
     print("Agents have", n_inputs, "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
     for _ in range(num_agents):
-        agent = policy_net(n_inputs, 32, n_actions)
+        agent = policy_net(n_inputs, cfg.train.hidden_layer_size, n_actions)
         for param in agent.parameters():
             param.requires_grad = False
         init_weights(agent)
@@ -96,7 +90,7 @@ def select_action(features, policy):
 
 
 # function to run list of agents in given env
-def run_agents(env, agents):
+def run_agents(env, agents, cfg):
     reward_agents = []
     _ = env.reset()
     _, _, done, info = env.step(1)
@@ -119,25 +113,25 @@ def run_agents(env, agents):
 
 
 # returns average score of given agent when it runs n times
-def return_average_score(agent, runs):
+def return_average_score(agent, runs, cfg):
     score = 0.
     env = AtariARIWrapper(gym.make(cfg.env_name))
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=runs)
     rtpt.start()
     for i in range(runs):
-        score += run_agents(env, [agent])[0]
+        score += run_agents(env, [agent], cfg)[0]
         rtpt.step()
     avg_score = score/runs
     return avg_score
 
 
 # gets avg score of every agent running n runs 
-def run_agents_n_times(agents, runs):
+def run_agents_n_times(agents, runs, cfg):
     avg_score = []
     agents = tqdm(agents)
     cpu_cores = min(multiprocessing.cpu_count(), 100)
-    avg_score = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agent, runs) for agent in agents)
+    avg_score = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agent, runs, cfg) for agent in agents)
     return avg_score
 
 
@@ -163,7 +157,7 @@ def mutate(agent):
 
 
 # function to add elite to childs 
-def add_elite(agents, sorted_parent_indexes, elite_index=None, only_consider_top_n=10):
+def add_elite(agents, sorted_parent_indexes, cfg, elite_index=None, only_consider_top_n=10):
     candidate_elite_index = sorted_parent_indexes[:only_consider_top_n]
     if(elite_index is not None):
         candidate_elite_index = np.append(candidate_elite_index,[elite_index]) 
@@ -171,7 +165,7 @@ def add_elite(agents, sorted_parent_indexes, elite_index=None, only_consider_top
     top_elite_index = None
     tqdmcandidate_elite_index = tqdm(candidate_elite_index)
     cpu_cores = min(100, max(multiprocessing.cpu_count(), only_consider_top_n))
-    scores = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agents[i], runs=5) for i in tqdmcandidate_elite_index)
+    scores = Parallel(n_jobs=cpu_cores)(delayed(return_average_score)(agents[i], runs=5, cfg=cfg) for i in tqdmcandidate_elite_index)
     for i, score in enumerate(scores):
         i = candidate_elite_index[i]
         print("Score for elite i ", i, " is ", score)
@@ -187,14 +181,14 @@ def add_elite(agents, sorted_parent_indexes, elite_index=None, only_consider_top
 
 
 # function to create and return children from given parent agents
-def return_children(agents, sorted_parent_indexes, elite_index):  
+def return_children(agents, sorted_parent_indexes, elite_index, cfg):  
     children_agents = []
     #first take selected parents from sorted_parent_indexes and generate N-1 children
     for i in range(len(agents) - 1):
         selected_agent_index = sorted_parent_indexes[np.random.randint(len(sorted_parent_indexes))]
         children_agents.append(mutate(agents[selected_agent_index]))
     #now add one elite
-    elite_child = add_elite(agents, sorted_parent_indexes, elite_index)
+    elite_child = add_elite(agents, sorted_parent_indexes, cfg, elite_index)
     children_agents.append(elite_child)
     elite_index = len(children_agents) - 1 #it is the last one
     return children_agents, elite_index
@@ -228,7 +222,7 @@ def load_agents(model_path):
 
 
 # train main function
-def train():
+def train(cfg):
     print('Experiment name:', cfg.exp_name)
 
     writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
@@ -249,7 +243,7 @@ def train():
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
-    agents = return_random_agents(len(features), num_agents, n_actions)
+    agents = return_random_agents(len(features), num_agents, n_actions, cfg)
     generation = 0
 
     # load if exists
@@ -273,7 +267,7 @@ def train():
     while generation < generations:
         print("Starting generation", generation)
         # return rewards of agents
-        rewards = run_agents_n_times(agents, n_gen_runs) #return average of 3 runs
+        rewards = run_agents_n_times(agents, n_gen_runs, cfg) #return average of 3 runs
  
         # sort by rewards
         # reverses and gives top values (argsort sorts by ascending by default) https://stackoverflow.com/questions/16486252/is-it-possible-to-use-argsort-in-descending-order
@@ -291,7 +285,7 @@ def train():
         print("Rewards for top: ",top_rewards)
         
         # setup an empty list for containing children agents
-        children_agents, elite_index = return_children(agents, sorted_parent_indexes, elite_index)
+        children_agents, elite_index = return_children(agents, sorted_parent_indexes, elite_index, cfg)
  
         # kill all agents, and replace them with their children
         agents = children_agents
@@ -307,7 +301,7 @@ def train():
 
 
 # function to eval best agent of last generation
-def play_agent():
+def play_agent(cfg):
     print('Experiment name:', cfg.exp_name)
     print('Evaluating Mode')
     # disable gradients as we will not use them
@@ -320,7 +314,7 @@ def play_agent():
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
-    agents = return_random_agents(len(features), num_agents, n_actions)
+    agents = return_random_agents(len(features), num_agents, n_actions, cfg)
     generation = 0
     elite_index = 7 # SET FOR ELITE INDEX FROM LOADED GENERATION
 
@@ -334,7 +328,7 @@ def play_agent():
     elite_agent = agents[elite_index]
 
     # play with elite agent
-    logger = vlogger.DQN_Logger(os.getcwd() + cfg.logdir, cfg.exp_name, vfolder="/xrl/video/", size=(480,480))
+    logger = vlogger.VideoLogger(size=(480,480))
     ig = IntegratedGradients(elite_agent)
     ig_sum = []
     feature_titles = xutils.get_feature_titles()
@@ -363,10 +357,3 @@ def play_agent():
             elite_index, r, np.mean(ig_sum, axis=0)))
         #xutils.plot_igs(ig_sum)
 
-
-
-if __name__ == '__main__':
-    if cfg.mode == "train":
-        train()
-    elif cfg.mode == "eval":
-        play_agent()

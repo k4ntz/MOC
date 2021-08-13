@@ -11,6 +11,13 @@ cfg = CfgNode({
         'Tennis-v0',
         'Pong-v0',
     ],
+
+    # algo selection 
+    # 1: REINFORCE
+    # 2: Deep Neuroevolution
+    # 3: DreamerV2
+    'rl_algo': 1,
+
     # Resume training or not
     'resume': True,
 
