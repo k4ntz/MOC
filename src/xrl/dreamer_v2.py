@@ -153,6 +153,9 @@ def train(cfg):
     # inner function to give it access to shared variables
     def gather_episode():
         with torch.no_grad():
+            rtpt_s = RTPT(name_initials='DV', experiment_name=cfg.exp_name + "_el",
+                    max_iterations=cfg.train.num_episodes)
+            rtpt_s.start()
             while True:
                 obs = env.reset()
                 obs = transform_obs(obs)
@@ -177,6 +180,7 @@ def train(cfg):
                 history.append(episode)
                 for _ in range(len(history) - history_size):
                     history.pop(0)
+                rtpt_s.step()
 
     #start gathering episode thread
     t = threading.Thread(target=gather_episode)
