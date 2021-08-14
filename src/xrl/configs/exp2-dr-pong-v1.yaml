@@ -10,8 +10,7 @@ logdir: '/xrl/drlogs/'
 video_steps: 100
 
 train:
-  num_episodes: 50000
-
-  save_every: 20
+  num_episodes: 500000
+  save_every: 100
 
 

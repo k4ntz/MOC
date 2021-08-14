@@ -24,7 +24,7 @@ cfg = CfgNode({
     # Device ids to use
     'device_ids': [0, 1, 2, 3],
     'device': 'cuda:0',
-    'logdir': '/dqn/logs/',
+    'logdir': '/xrl/logs/',
 
     'make_video': False,
     'video_steps': 10,

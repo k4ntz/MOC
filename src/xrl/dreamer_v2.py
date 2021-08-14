@@ -16,6 +16,9 @@ from time import sleep, time
 from tqdm import tqdm
 from torch.optim import Adam
 from itertools import count
+from torch.utils.tensorboard import SummaryWriter
+from PIL import Image
+from rtpt import RTPT
 
 from xrl.dreamerv2.dataset import ModelDataset
 from xrl.dreamerv2.model import WorldModel, Actor, Critic, LossModel, ActorLoss, CriticLoss
@@ -53,6 +56,9 @@ def train(cfg):
 
     # device to use for training
     device = cfg.device
+
+    # logger
+    writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
 
     # params for game
     env = gym.make(cfg.env_name, frameskip = 4)
@@ -93,6 +99,8 @@ def train(cfg):
     optim_critic = Adam(critic.parameters(), lr=lr_critic, eps=adam_eps, weight_decay=decay)
     optim_target = Adam(target.parameters())
 
+    i_episode = 1
+
     if os.path.isfile(save_path):
         print("Trying to load", save_path)
         w = torch.load(save_path)
@@ -104,6 +112,7 @@ def train(cfg):
             critic.load_state_dict(w["critic"])
             optim_critic.load_state_dict(w["optim_critic"])
             criterionActor = ActorLoss(*w["criterionActor"])
+            i_episode = w['episode']
         except:
             print("error loading model")
             world = WorldModel(gamma, num_actions).to(device)
@@ -117,6 +126,7 @@ def train(cfg):
             optim_actor = Adam(actor.parameters(), lr=lr_actor, eps=adam_eps, weight_decay=decay)
             optim_critic = Adam(critic.parameters(), lr=lr_critic, eps=adam_eps, weight_decay=decay)
             optim_target = Adam(target.parameters())
+            i_episode = 1
         del w
     else:
         print(save_path, "does not exists, starting fresh")
@@ -190,7 +200,15 @@ def train(cfg):
 
     iternum = 0
     start = time()
-    for step in count():
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
+                    max_iterations=cfg.train.num_episodes)
+    rtpt.start()
+    while i_episode < cfg.train.num_episodes:
+        l_world = 0
+        l_actor = 0
+        l_critic = 0
+        len_h = 0
+        last_rew = 0
         pbar = tqdm(loader)
         for s, a, r, g in pbar:
             s = s.to(device)
@@ -324,20 +342,32 @@ def train(cfg):
                 with torch.no_grad():
                     target.load_state_dict(critic.state_dict())
 
+            # set logging variables
+            l_world = loss_model.item()
+            l_actor = loss_actor.item()
+            l_critic = loss_critic.item()
+            len_h = len(history)
+            last_rew = sum(history[-1][2::4])
             # display
             pbar.set_postfix(
-                l_world = loss_model.item(),
-                l_actor = loss_actor.item(),
-                l_critic = loss_critic.item(),
-                len_h = len(history),
-                iternum=iternum,
-                last_rew=sum(history[-1][2::4]),
+                l_world = l_world,
+                l_actor = l_actor,
+                l_critic = l_critic,
+                len_h = len_h,
+                iternum = iternum,
+                last_rew= last_rew,
             )
             #print(a_logits_list[0][0].detach())
             #print(list(z_hat_sample_list[-1][0,1].detach().cpu().numpy().round()).index(1))
 
+        # log all
+        writer.add_scalar('Train/Loss World Model', l_world, i_episode)
+        writer.add_scalar('Train/Loss Actor', l_actor, i_episode)
+        writer.add_scalar('Train/Loss Critic', l_critic, i_episode)
+        writer.add_scalar('Train/Last Reward', last_rew, i_episode)
+
         #save once in a while
-        if step % cfg.train.save_every == 0:
+        if i_episode % cfg.train.save_every == 0:
             print("Saving...")
             torch.save(
                 {
@@ -348,14 +378,19 @@ def train(cfg):
                     "optim_actor":optim_actor.state_dict(),
                     "optim_critic":optim_critic.state_dict(),
                     "criterionActor": (criterionActor.ns, criterionActor.nd, criterionActor.ne),
+                    "episode":i_episode
                 },
                 save_path
             )
             print("...done")
-            plt.imsave("img.png", np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1))
+            #plt.imsave("img.png", np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1))
+            #img = np.array(Image.fromarray(np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1), 'RGB'))
+            writer.add_image('x_hat', x_hat[0].detach().cpu().numpy(), i_episode)
 
         # plt.figure(1)
         # # plt.clf()
         # plt.imshow(x_hat[0].detach().cpu().numpy().transpose(1,2,0), cmap='gray')
         # # plt.pause(0.001)
         # plt.show()
+        i_episode += 1
+        rtpt.step()

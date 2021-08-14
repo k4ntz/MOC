@@ -1,6 +1,7 @@
 checkpoints/
 logs/
 genlogs/
+drlogs/
 gdlogs/
 relogs/
 video/
