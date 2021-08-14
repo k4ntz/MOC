@@ -301,7 +301,7 @@ def train(cfg):
             loss_actor = criterionActor(
                 a_sample_list[-1],
                 torch.distributions.one_hot_categorical.OneHotCategorical(
-                    logits=a_logits_list[-1]
+                    logits=a_logits_list[-1], validate_args=False
                 ),
                 V,
                 ve.detach()
@@ -313,7 +313,7 @@ def train(cfg):
                 loss_actor += criterionActor(
                     a_sample_list[t],
                     torch.distributions.one_hot_categorical.OneHotCategorical(
-                        logits=a_logits_list[t]
+                        logits=a_logits_list[t], validate_args=False
                     ),
                     V,
                     ve.detach()

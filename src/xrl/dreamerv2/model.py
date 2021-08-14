@@ -282,10 +282,10 @@ class LossModel(nn.Module):
             logits=gamma_hat
         )
         z_hat_dist = torch.distributions.one_hot_categorical.OneHotCategorical(
-            logits=z_hat_logits.reshape(-1, 32, 32)
+            logits=z_hat_logits.reshape(-1, 32, 32), validate_args=False
         )
         z_dist = torch.distributions.one_hot_categorical.OneHotCategorical(
-            logits=z_logits.reshape(-1, 32, 32).detach()
+            logits=z_logits.reshape(-1, 32, 32).detach(), validate_args=False
         )
 
         z_sample = z_sample.reshape(-1, 32, 32)
