@@ -25,6 +25,25 @@ from xrl.dreamerv2.dataset import ModelDataset
 from xrl.dreamerv2.model import WorldModel, Actor, Critic, LossModel, ActorLoss, CriticLoss
 # plt.ion()
 
+# world model parameter
+batch = 50
+L = 50 #seq len world training
+history_size = 50
+lr_world = 2e-4
+
+# behavior parameter
+H = 15 #imagination length
+gamma = 0.995 #discount factor
+lamb = 0.95 #lambda-target
+lr_actor = 4e-5
+lr_critic = 1e-4
+target_interval = 100 #update interval for target critic
+
+# common parameter
+gradient_clipping = 100
+adam_eps = 1e-5
+decay = 1e-6
+
 
 def act_straight_through(z_hat_sample, actor):
     a_logits = actor(z_hat_sample)
@@ -64,26 +83,6 @@ def train(cfg):
     # params for game
     env = gym.make(cfg.env_name, frameskip = 4)
     num_actions = env.action_space.n
-
-    # world model parameter
-    batch = 50
-    L = 50 #seq len world training
-    history_size = 50
-    lr_world = 2e-4
-
-    # behavior parameter
-    H = 15 #imagination length
-    gamma = 0.995 #discount factor
-    lamb = 0.95 #lambda-target
-    lr_actor = 4e-5
-    lr_critic = 1e-4
-    target_interval = 100 #update interval for target critic
-
-    # common parameter
-    gradient_clipping = 100
-    adam_eps = 1e-5
-    decay = 1e-6
-
 
     ### MODELS ###
     world = WorldModel(gamma, num_actions).to(device)
@@ -169,7 +168,7 @@ def train(cfg):
                     a = torch.distributions.one_hot_categorical.OneHotCategorical(
                         logits = a
                     ).sample()
-                    obs, rew, done, _ = env.step(int((a.cpu()*tensor_range).sum().round())) # take a random action (int)
+                    obs, rew, done, _ = env.step(int((a.cpu()*tensor_range).sum().round()))
                     obs = transform_obs(obs)
                     obs = obs.to(device)
                     episode.extend([a.cpu(), tanh(rew), done, obs.cpu()])
@@ -400,3 +399,66 @@ def train(cfg):
         # plt.show()
         i_episode += 1
         rtpt.step()
+
+
+# eval function
+def eval(cfg):
+    print('Experiment name:', cfg.exp_name)
+    print('Eval mode')
+    print('Env name:', cfg.env_name)
+    print('Using device:', cfg.device)
+    if 'cuda' in cfg.device:
+            print('Using parallel:', cfg.parallel)
+    if cfg.parallel:
+        print('Device ids:', cfg.device_ids)
+    
+    # params for saving loading
+    save_path = os.getcwd() + "/xrl/checkpoints/"
+    save_path = save_path + cfg.exp_name + "_model.pth"
+    # device to use for training
+    device = cfg.device
+    # params for game
+    env = gym.make(cfg.env_name, frameskip = 4)
+    num_actions = env.action_space.n
+    ### MISC ###
+    resize = torchvision.transforms.Resize(
+        (64,64),
+        interpolation=PIL.Image.BICUBIC
+    )
+    def transform_obs(obs):
+        obs = resize(
+            torch.from_numpy(obs.transpose(2,0,1))
+        ) #3, 64, 64
+        return (obs.float() - 255/2).unsqueeze(0)
+    tensor_range = torch.arange(0, num_actions).unsqueeze(0)
+    # models
+    world = WorldModel(gamma, num_actions).to(device)
+    actor = Actor(num_actions).to(device)
+    if os.path.isfile(save_path):
+        print("Trying to load", save_path)
+        w = torch.load(save_path, map_location=torch.device(device))
+        world.load_state_dict(w["world"])
+        actor.load_state_dict(w["actor"])
+    # game loop
+    obs = env.reset()
+    obs = transform_obs(obs)
+    obs = obs.to(device)
+    z_sample, h = world(None, obs, None, inference=True)
+    done = False
+    rsum = 0
+    with torch.no_grad():
+        for t in count():
+            a = actor(z_sample)
+            a = torch.distributions.one_hot_categorical.OneHotCategorical(
+                logits = a
+            ).sample()
+            obs, rew, done, _ = env.step(int((a.cpu()*tensor_range).sum().round()))
+            rsum += rew
+            obs = transform_obs(obs)
+            obs = obs.to(device)
+            if not done:
+                z_sample, h = world(a, obs, z_sample.reshape(-1, 1024), h, inference=True)
+            print("Step: {}, Reward: {}".format(t, rsum), end="\r")
+            if done:
+                break
+        print("Final - Step: {}, Reward: {}".format(t, rsum))

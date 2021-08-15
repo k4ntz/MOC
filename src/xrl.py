@@ -32,7 +32,7 @@ def use_dreamerv2(cfg):
     if cfg.mode == "train":
         dreamer_v2.train(cfg)
     elif cfg.mode == "eval":
-        print("Eval not implemented")
+        dreamer_v2.eval(cfg)
 
 
 # main
