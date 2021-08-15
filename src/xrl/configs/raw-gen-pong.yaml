@@ -1,18 +1,19 @@
 env_name: 'PongDeterministic-v4'
 
-rl_algo: 3
+rl_algo: 2
 
 device: 'cuda:0'
 parallel: False
 
-logdir: '/xrl/drlogs/'
+logdir: '/xrl/genlogs/'
 
 video_steps: 100
 
 raw_image: True
 
 train:
-  num_episodes: 500000
-  save_every: 100
+  num_episodes: 50000
+  
+  log_steps: 500
 
 

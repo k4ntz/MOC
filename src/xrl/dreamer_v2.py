@@ -9,6 +9,7 @@ import PIL
 import threading
 import torch
 import torchvision
+import imageio
 
 from concurrent.futures import ThreadPoolExecutor
 from math import tanh
@@ -103,7 +104,7 @@ def train(cfg):
 
     if os.path.isfile(save_path):
         print("Trying to load", save_path)
-        w = torch.load(save_path)
+        w = torch.load(save_path, map_location=torch.device(device))
         try:
             world.load_state_dict(w["world"])
             optim_model.load_state_dict(w["optim_model"])
@@ -387,9 +388,10 @@ def train(cfg):
                 save_path
             )
             print("...done")
-            #plt.imsave("img.png", np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1))
-            #img = np.array(Image.fromarray(np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1), 'RGB'))
-            writer.add_image('x_hat', x_hat[0].detach().cpu().numpy(), i_episode)
+            img = np.clip((x_hat[0].detach().cpu().numpy().transpose(1,2,0))/255+0.5, 0, 1)
+            #image_path = "xrl/dreamerv2/world.png"
+            #plt.imsave(image_path, img)
+            writer.add_image('x_hat', img.transpose(2, 0, 1), i_episode)
 
         # plt.figure(1)
         # # plt.clf()

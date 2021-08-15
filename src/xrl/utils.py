@@ -242,8 +242,36 @@ def preprocess_raw_features(env_info, last_raw_features=None):
     return raw_features, features
 
 
+# helper function to process raw image
+def process_raw_image(image):
+    frame = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # To grayscale
+    frame = cv2.resize(frame, (64, 64))  # Resize
+    frame = frame.reshape(64, 64) / 255  # Normalize
+    return frame
+
+
 # helper function to get features
-def do_step(env, action=1, last_raw_features=None):
+def do_step(env, action=1, last_raw_features=None, raw_image=False):
     obs, reward, done, info = env.step(action)
-    raw_features, features = preprocess_raw_features(info, last_raw_features)
-    return raw_features, features, reward, done
+    # calculate meaningful features from given raw features and last raw features
+    if not raw_image:
+        raw_features, features = preprocess_raw_features(info, last_raw_features)
+        return raw_features, features, reward, done
+    ###################################################################################
+    ######################## ONLY FOR BASELINE WITH RAW IMAGE #########################
+    # now last raw features are last 3 frames 
+    # and features which is returned are all 4 frames stacked
+    else:
+        img = process_raw_image(obs)
+        raw_features = last_raw_features
+        # stack all same image if none last raw features available
+        if raw_features is None:
+            raw_features = [img, img, img]
+        # add newest image to make it as features
+        features = raw_features
+        features.insert(0, img)
+        # and set newest 3 images as raw features 
+        # to have raw features as newest history
+        raw_features = features[:3]
+        return raw_features, features, reward, done
+

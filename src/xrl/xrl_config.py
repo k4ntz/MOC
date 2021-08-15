@@ -29,7 +29,7 @@ cfg = CfgNode({
     'make_video': False,
     'video_steps': 10,
 
-    'use_space': False,
+    'raw_image': False,
     'liveplot': False,
     'debug': False,
 
@@ -57,8 +57,6 @@ cfg = CfgNode({
 
         ### XRL SPECIFIC
         'hidden_layer_size': 32,
-
-        'use_enemy': True,
     },
 })
 
