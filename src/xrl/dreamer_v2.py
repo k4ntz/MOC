@@ -351,7 +351,7 @@ def train(cfg):
             l_actor = loss_actor.item()
             l_critic = loss_critic.item()
             len_h = len(history)
-            last_rew = sum(history[-1][2::4])
+            last_rew = sum(history[-1][2::4]) * (1 / (np.tanh(1)))
             # display
             pbar.set_postfix(
                 l_world = l_world,
