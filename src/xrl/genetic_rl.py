@@ -134,12 +134,12 @@ def run_agents(env, agents, cfg):
     _, _, done, info = env.step(1)
     for agent in agents:
         agent.eval()
-        raw_features, features, _, _ = xutils.do_step(env)
+        raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
         r = 0
         t = 0
         while t < cfg.train.max_steps:
             action = select_action(features, agent)
-            raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
+            raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
             r = r + reward
             if(done):
                 break
@@ -276,7 +276,7 @@ def train(cfg):
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
     _ = env.reset()
-    _, features, _, _ = xutils.do_step(env)
+    _, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
 
     # initialize N number of agents
     num_agents = 500
@@ -348,7 +348,7 @@ def play_agent(cfg):
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
     _ = env.reset()
-    raw_features, features, _, _ = xutils.do_step(env)
+    raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
@@ -374,7 +374,7 @@ def play_agent(cfg):
     r = 0
     for t in count():
         action = select_action(features, elite_agent)
-        raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
+        raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
