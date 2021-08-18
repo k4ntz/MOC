@@ -42,15 +42,17 @@ class Policy(nn.Module):
 class CNNPolicy(nn.Module):
     def __init__(self, actions): 
         super(CNNPolicy, self).__init__()
-        # 2 conv layers for image
+        # 2 conv layers for image to raw features
         self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32, kernel_size=3)
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(in_channels=32,  out_channels=16, kernel_size=2)
         self.bn2 = nn.BatchNorm2d(16)
 
         # fcl 
+        # first hidden layer raw features to meaningful features
         self.h = nn.Linear(59536, 64)
-        self.out = nn.Linear(64, actions)
+        self.h2 = nn.Linear(64, 32)
+        self.out = nn.Linear(32, actions)       # b: only two hidden layers with x->64->64->actions
 
         self.saved_log_probs = []
         self.rewards = []
@@ -63,6 +65,7 @@ class CNNPolicy(nn.Module):
         x = x.view(x.size(0), -1) 
         # fcl
         x = F.relu(self.h(x))
+        x = F.relu(self.h2(x))
         return F.softmax(self.out(x), dim=1)
 
 
@@ -231,7 +234,9 @@ def eval(cfg):
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
         else:
-            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
+            #ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
+            print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
+                i_episode, ep_reward, t), end="\r")
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
         ep_reward += reward
         t += 1

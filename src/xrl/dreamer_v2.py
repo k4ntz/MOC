@@ -23,6 +23,8 @@ from rtpt import RTPT
 
 from xrl.dreamerv2.dataset import ModelDataset
 from xrl.dreamerv2.model import WorldModel, Actor, Critic, LossModel, ActorLoss, CriticLoss
+
+import xrl.utils as xutils
 # plt.ion()
 
 # world model parameter
@@ -453,6 +455,7 @@ def eval(cfg):
                 logits = a
             ).sample()
             obs, rew, done, _ = env.step(int((a.cpu()*tensor_range).sum().round()))
+            #xutils.plot_screen(env, "eval", t)
             rsum += rew
             obs = transform_obs(obs)
             obs = obs.to(device)

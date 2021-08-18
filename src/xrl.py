@@ -6,7 +6,7 @@ from xrl import dreamer_v2
 from xrl import utils
 
 # otherwise genetic loading model doesnt work, torch bug?
-from xrl.genetic_rl import policy_net
+from xrl.genetic_rl import policy_net, CNNPolicy
 
 # function to call reinforce algorithm
 def use_reinforce(cfg):

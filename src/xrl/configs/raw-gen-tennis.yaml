@@ -13,6 +13,7 @@ raw_image: True
 
 train:
   num_episodes: 50000
+  max_steps: 50000
   
   log_steps: 500
 
