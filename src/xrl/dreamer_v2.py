@@ -30,7 +30,7 @@ import xrl.utils as xutils
 # world model parameter
 batch = 50
 L = 50 #seq len world training
-history_size = 800
+history_size = 400
 lr_world = 2e-4
 
 # behavior parameter
@@ -196,9 +196,9 @@ def train(cfg):
     t.start()
 
     print("Dataset init")
-    while len(history) < history_size / 4:
+    while len(history) < 50:
         # check every second if first history entry is inside
-        print("Wainting until history large enough (current size: {}, needed: {})".format(len(history), history_size / 4), end="\r")
+        print("Wainting until history large enough (current size: {}, needed: {})".format(len(history), 50), end="\r")
         sleep(5.0)
     print("done")
     ### DATASET ###
