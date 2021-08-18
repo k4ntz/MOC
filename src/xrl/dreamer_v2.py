@@ -30,7 +30,7 @@ import xrl.utils as xutils
 # world model parameter
 batch = 50
 L = 50 #seq len world training
-history_size = 50
+history_size = 800
 lr_world = 2e-4
 
 # behavior parameter
@@ -102,6 +102,7 @@ def train(cfg):
     optim_target = Adam(target.parameters())
 
     i_episode = 1
+    steps_done = [0]
 
     if os.path.isfile(save_path):
         print("Trying to load", save_path)
@@ -115,6 +116,7 @@ def train(cfg):
             optim_critic.load_state_dict(w["optim_critic"])
             criterionActor = ActorLoss(*w["criterionActor"])
             i_episode = w['episode']
+            steps_done = w['steps_done']
         except:
             print("error loading model")
             world = WorldModel(gamma, num_actions).to(device)
@@ -129,6 +131,7 @@ def train(cfg):
             optim_critic = Adam(critic.parameters(), lr=lr_critic, eps=adam_eps, weight_decay=decay)
             optim_target = Adam(target.parameters())
             i_episode = 1
+            steps_done = [0]
         del w
     else:
         print(save_path, "does not exists, starting fresh")
@@ -165,6 +168,7 @@ def train(cfg):
                 obs = obs.to(device)
                 z_sample, h = world(None, obs, None, inference=True)
                 done = False
+                r_sum = 0
                 for t in count():
                     a = actor(z_sample)
                     a = torch.distributions.one_hot_categorical.OneHotCategorical(
@@ -174,11 +178,14 @@ def train(cfg):
                     obs = transform_obs(obs)
                     obs = obs.to(device)
                     episode.extend([a.cpu(), tanh(rew), done, obs.cpu()])
+                    r_sum += rew
                     if not done:
                         z_sample, h = world(a, obs, z_sample.reshape(-1, 1024), h, inference=True)
                     #print("Step: {}, Reward: {}".format(t, rew), end="\r")
+                    steps_done[0] += 1
                     if done:
                         break
+                writer.add_scalar('Train/Reward', r_sum, steps_done[0])
                 history.append(episode)
                 for _ in range(len(history) - history_size):
                     history.pop(0)
@@ -189,9 +196,10 @@ def train(cfg):
     t.start()
 
     print("Dataset init")
-    while len(history) < 1:
+    while len(history) < history_size / 4:
         # check every second if first history entry is inside
-        sleep(1.0)
+        print("Wainting until history large enough (current size: {}, needed: {})".format(len(history), history_size / 4), end="\r")
+        sleep(5.0)
     print("done")
     ### DATASET ###
     ds = ModelDataset(history, seq_len=L, gamma=gamma, history_size=history_size)
@@ -204,12 +212,11 @@ def train(cfg):
         pin_memory=True
     )
 
-    iternum = 0
     start = time()
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=cfg.train.num_episodes)
     rtpt.start()
-    while i_episode < cfg.train.num_episodes:
+    while steps_done[0] < cfg.train.max_steps:
         l_world = 0
         l_actor = 0
         l_critic = 0
@@ -343,8 +350,8 @@ def train(cfg):
             optim_target.zero_grad()
 
             #update target network with critic weights
-            iternum += 1
-            if not iternum % target_interval:
+            i_episode += 1
+            if not i_episode % target_interval:
                 with torch.no_grad():
                     target.load_state_dict(critic.state_dict())
 
@@ -360,8 +367,8 @@ def train(cfg):
                 l_actor = l_actor,
                 l_critic = l_critic,
                 len_h = len_h,
-                iternum = iternum,
-                last_rew= last_rew,
+                i_episode = i_episode,
+                last_rew = last_rew,
             )
             #print(a_logits_list[0][0].detach())
             #print(list(z_hat_sample_list[-1][0,1].detach().cpu().numpy().round()).index(1))
@@ -370,7 +377,6 @@ def train(cfg):
         writer.add_scalar('Train/Loss World Model', l_world, i_episode)
         writer.add_scalar('Train/Loss Actor', l_actor, i_episode)
         writer.add_scalar('Train/Loss Critic', l_critic, i_episode)
-        writer.add_scalar('Train/Last Reward', last_rew, i_episode)
 
         #save once in a while
         if i_episode % cfg.train.save_every == 0:
@@ -384,7 +390,8 @@ def train(cfg):
                     "optim_actor":optim_actor.state_dict(),
                     "optim_critic":optim_critic.state_dict(),
                     "criterionActor": (criterionActor.ns, criterionActor.nd, criterionActor.ne),
-                    "episode":i_episode
+                    "episode":i_episode,
+                    "steps_done":steps_done
                 },
                 save_path
             )
