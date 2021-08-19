@@ -12,7 +12,7 @@ video_steps: 100
 raw_image: True
 
 train:
-  max_steps: 2000000 #2mio steps
+  max_steps: 200000000 #2mio steps
   save_every: 100
 
 
