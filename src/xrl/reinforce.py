@@ -1,3 +1,4 @@
+from operator import mod
 import gym
 import numpy as np
 import os
@@ -5,6 +6,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules import module
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical
@@ -15,6 +17,7 @@ from rtpt import RTPT
 
 import xrl.utils as xutils
 import xrl.video_logger as vlogger
+import xrl.pruner as pruner
 
 PATH_TO_OUTPUTS = os.getcwd() + "/xrl/checkpoints/"
 if not os.path.exists(PATH_TO_OUTPUTS):
@@ -234,7 +237,7 @@ def eval(cfg):
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
         else:
-            #ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
+            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
@@ -250,4 +253,6 @@ def eval(cfg):
         ig_sum = np.asarray(ig_sum)
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
+        # prune 
+        policy = pruner.prune_nn(policy, "ig-pr", np.mean(ig_sum, axis=0))
         #xutils.plot_igs(ig_sum, feature_titles)

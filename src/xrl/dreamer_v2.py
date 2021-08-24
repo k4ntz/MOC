@@ -65,7 +65,7 @@ def train(cfg):
     print('Env name:', cfg.env_name)
     print('Using device:', cfg.device)
     if 'cuda' in cfg.device:
-            print('Using parallel:', cfg.parallel)
+        print('Using parallel:', cfg.parallel)
     if cfg.parallel:
         print('Device ids:', cfg.device_ids)
 
@@ -169,7 +169,8 @@ def train(cfg):
                 z_sample, h = world(None, obs, None, inference=True)
                 done = False
                 r_sum = 0
-                for t in count():
+                t = 0
+                while t < 50000:
                     a = actor(z_sample)
                     a = torch.distributions.one_hot_categorical.OneHotCategorical(
                         logits = a
@@ -185,6 +186,7 @@ def train(cfg):
                     steps_done[0] += 1
                     if done:
                         break
+                    t += 1
                 writer.add_scalar('Train/Reward', r_sum, steps_done[0])
                 history.append(episode)
                 for _ in range(len(history) - history_size):
