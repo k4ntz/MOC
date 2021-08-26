@@ -12,6 +12,9 @@ from matplotlib.colors import ListedColormap
 import pandas as pd
 from argparse import Namespace
 import os
+from sklearn.neighbors import KNeighborsClassifier
+from dataset import get_label_list
+from collections import Counter
 
 N_NEIGHBORS = 24
 DISPLAY_CENTROIDS = True
@@ -26,47 +29,60 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        "save_fruit": (144, 10, 10),
                        "white_ghost": (214, 214, 214),
                        "blue_ghost": (66, 114, 194), "score0": (200, 50, 200),
-                       "life": (70, 210, 70), "life2": (20, 150, 20)
+                       "life": (70, 210, 70), "life2": (20, 150, 20), "no_label": (160, 160, 160)
                        }
 
 
-def evaluate_z_what(arguments, z_what, labels, n, cfg):
-    relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else range(
-        labels.max() + 1)
+def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
+    """
+    :param arguments: dict of properties
+    :param z_what: (#objects, encoding_dim)
+    :param labels: (#objects)
+    # :param z_where: (#objects, 4)
+    :param cfg:
+    :return:
+        result: metrics
+        path: to pca
+        accuracy: few shot accuracy
+    """
+
+    c = Counter(labels.tolist())
+    print("Distribution of matched labels:", c)
+    relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else list(c.keys())
     folder = f'hyper/{cfg.exp_name}{cfg.seed}' if cfg else f'{arguments["folder"]}1'
+    pca_path = f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
+    label_list = get_label_list(cfg)
+
     relevant = torch.zeros(labels.shape, dtype=torch.bool)
     for rl in relevant_labels:
         relevant |= labels == rl
     z_what = z_what[relevant]
     labels = labels[relevant]
-    train_portion = 0.8
+    train_portion = 0.9
     nb_sample = int(train_portion * len(labels))
     test_x = z_what[nb_sample:]
     test_y = labels[nb_sample:]
+    train_x = z_what[:nb_sample]
+    train_y = labels[:nb_sample]
     few_shot_accuracy = {}
-    z_what_by_game = {rl: z_what[labels == rl] for rl in relevant_labels}
-    labels_by_game = {rl: labels[labels == rl] for rl in relevant_labels}
-    for train_portion in [1, 4, 16, 64]:
-        current_train_sample = torch.cat([z_what_by_game[rl][:train_portion] for rl in relevant_labels])
-        current__train_labels = torch.cat([labels_by_game[rl][:train_portion] for rl in relevant_labels])
+    z_what_by_game = {rl: train_x[train_y == rl] for rl in relevant_labels}
+    labels_by_game = {rl: train_y[train_y == rl] for rl in relevant_labels}
+    for training_objects_per_class in [1, 4, 16, 64]:
+        current_train_sample = torch.cat([z_what_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
+        current__train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         clf = LogisticRegression()
         clf.fit(current_train_sample, current__train_labels)
         acc = clf.score(test_x, test_y)
-        few_shot_accuracy[f'few_shot_accuracy_with_{train_portion}'] = acc
+        few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
 
     clf = KMeans(n_clusters=len(relevant_labels))
     y = clf.fit_predict(z_what)
-
     results = {
         'adjusted_mutual_info_score': metrics.adjusted_mutual_info_score(labels, y),
         'adjusted_rand_score': metrics.adjusted_rand_score(labels, y),
-        # 'homogeneity_score': metrics.homogeneity_score(labels, y),
-        # 'completeness_score': metrics.completeness_score(labels, y),
-        # 'v_measure_score': metrics.v_measure_score(labels, y),
-        # 'fowlkes_mallows_score': metrics.fowlkes_mallows_score(labels, y)
     }
     centroids = clf.cluster_centers_
-    X = z_what.numpy()
+    X = train_x.numpy()
     nn = NearestNeighbors(n_neighbors=N_NEIGHBORS).fit(X)
     _, z_w_idx = nn.kneighbors(centroids)
     centroid_label = []
@@ -83,6 +99,9 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         if not added:
             leftover_labels = [i for i in relevant_labels if i not in centroid_label]
             centroid_label.append(leftover_labels[0])
+    nn_class = KNeighborsClassifier(n_neighbors=1)
+    nn_class.fit(centroids, centroid_label)
+    few_shot_accuracy[f'few_shot_accuracy_cluster_nn'] = nn_class.score(test_x, test_y)
 
     train_all = torch.cat((z_what, labels.unsqueeze(1)), 1)
     colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'purple', 'orange',
@@ -103,10 +122,18 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         plt.title("Inner Color is GT, Outer is greedy Centroid-based label", fontsize=18, pad=20)
         n = min(n, 10000)
         for i, idx in enumerate(sorted):
+            if torch.numel(idx) == 0:
+                continue
+            y_idx = y[idx] if torch.numel(idx) > 1 else [[y[idx]]]
             if "pacman" in label_list:
                 colr = [np.array(base_objects_colors[label_list[relevant_labels[i]]]) / 255]
-                edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign in
-                               y[idx]]
+                try:
+                    edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign
+                                   in
+                                   y_idx]
+                except:
+                    print("=======================ERROR:", idx, y[idx], y)
+
             else:
                 colr = colors[relevant_labels[i]]
                 edge_colors = [colors[centroid_label[assign[0]]] for assign in y[idx]]
@@ -135,8 +162,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         if not os.path.exists(directory):
             print(f"Writing PCA to {directory}")
             os.makedirs(directory)
-        plt.savefig(
-            f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
+        plt.savefig(pca_path)
     else:
         fig, axs = plt.subplots(1, 2)
         fig.set_size_inches(30, 12)
@@ -145,13 +171,21 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         axs[0].set_title("Ground Truth Labels")
         axs[1].set_title("Labels Following Clustering")
         for i, idx in enumerate(sorted):
+            # dimension issue only if there is exactly one object of one kind
+            if torch.numel(idx) == 0:
+                continue
+            y_idx = y[idx] if torch.numel(idx) > 1 else [[y[idx]]]
             if "pacman" in label_list:
                 colr = [np.array(base_objects_colors[label_list[relevant_labels[i]]]) / 255]
-                edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign in
-                               y[idx]]
+                try:
+                    edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign
+                                   in y_idx]
+                except:
+                    print("=======================ERROR:", idx, y[idx], y, y_idx)
+                    raise
             else:
                 colr = colors[relevant_labels[i]]
-                edge_colors = [colors[centroid_label[assign[0]]] for assign in y[idx]]
+                edge_colors = [colors[centroid_label[assign[0]]] for assign in y_idx]
             axs[0].scatter(z_what_emb[:, 0][idx].squeeze(),
                            z_what_emb[:, 1][idx].squeeze(),
                            c=colr,
@@ -183,18 +217,16 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg):
         if not os.path.exists(f"../output/logs/{folder}"):
             os.makedirs(f"../output/logs/{folder}")
         plt.tight_layout()
-        plt.savefig(
-            f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png")
+        plt.savefig(pca_path)
         plt.close(fig)
-    return results, f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}.png", \
-           few_shot_accuracy
+    return results, pca_path, few_shot_accuracy
 
 
-all_train_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/train_labels.csv")
-all_validation_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/validation_labels.csv")
+# all_train_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/train_labels.csv")
+# all_validation_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/validation_labels.csv")
 
-label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
-              "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
+# label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
+#               "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate the z_what encoding')

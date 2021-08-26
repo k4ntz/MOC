@@ -45,9 +45,8 @@ model = get_model(cfg)
 model = model.to(cfg.device)
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name),
                             max_num=cfg.train.max_ckpt, load_time_consistency=TIME_CONSISTENCY)
-use_cpu = 'cpu' in cfg.device
 if cfg.resume:
-    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
+    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, cfg.device)
 
 table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}_labels.csv")
 # print(colored("Please change number of images !", "red"))

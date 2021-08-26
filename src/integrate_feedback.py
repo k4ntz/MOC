@@ -19,8 +19,7 @@ cfg, task = get_config()
 model = get_model(cfg)
 model = model.to(cfg.device)
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
-use_cpu = 'cpu' in cfg.device
 if cfg.resume_ckpt:
-    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
+    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, cfg.device)
 
 import ipdb; ipdb.set_trace()

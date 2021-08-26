@@ -130,7 +130,6 @@ class SpaceBg(nn.Module):
         
         # Now we are ready to compute the background likelihoods
         # (B, K, 3, H, W)
-        x = x[:, :3]
         comp_dist = Normal(comps, torch.full_like(comps, self.bg_sigma))
         log_likelihoods = comp_dist.log_prob(x[:, None].expand_as(comps))
         
@@ -222,7 +221,7 @@ class ImageEncoderBg(nn.Module):
         embed_size = arch.img_shape[0] // 16
         nn.Module.__init__(self)
         self.enc = nn.Sequential(
-            nn.Conv2d(5 if arch.flow else 3, 64, 3, 2, 1),
+            nn.Conv2d(3, 64, 3, 2, 1),
             nn.BatchNorm2d(64),
             nn.ELU(),
             nn.Conv2d(64, 64, 3, 2, 1),
@@ -248,7 +247,7 @@ class ImageEncoderBg(nn.Module):
         Returns:
             enc: (B, D)
         """
-        return self.enc(x)
+        return self.enc(x[:, :3])
 
 
 class PredictMask(nn.Module):
@@ -351,7 +350,7 @@ class CompEncoder(nn.Module):
         
         embed_size = arch.img_shape[0] // 16
         self.enc = nn.Sequential(
-            nn.Conv2d(6 if arch.flow else 4, 32, 3, 2, 1),
+            nn.Conv2d(4, 32, 3, 2, 1),
             nn.BatchNorm2d(32),
             nn.ELU(),
             nn.Conv2d(32, 32, 3, 2, 1),
@@ -377,7 +376,7 @@ class CompEncoder(nn.Module):
             z_comp_loc: (B, D)
             z_comp_scale: (B, D)
         """
-        x = self.enc(x)
+        x = self.enc(x[:, :4])
         z_comp_loc = x[:, :arch.z_comp_dim]
         z_comp_scale = F.softplus(x[:, arch.z_comp_dim:]) + 1e-4
         

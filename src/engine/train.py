@@ -13,6 +13,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
 from tqdm import tqdm
+import shutil
 
 
 def train(cfg):
@@ -61,18 +62,22 @@ def train(cfg):
     start_epoch = 0
     global_step = 0
     if cfg.resume:
-        checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, optimizer_fg, optimizer_bg)
+        checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, optimizer_fg, optimizer_bg, cfg.device)
         if checkpoint:
             start_epoch = checkpoint['epoch']
             global_step = checkpoint['global_step'] + 1
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-    writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed)), flush_secs=30,
+    log_path = os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed))
+    if os.path.exists(log_path) and len(log_path) > 15 and cfg.logdir and cfg.exp_name and str(cfg.seed):
+        shutil.rmtree(log_path)
+
+    writer = SummaryWriter(log_dir=log_path, flush_secs=30,
                            purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
-    never_eval = True
+    never_evaluated = True
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
     start_log = 2
@@ -130,8 +135,8 @@ def train(cfg):
                 checkpointer.save_last(model, optimizer_fg, optimizer_bg, epoch, global_step)
                 print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
 
-            if (global_step % cfg.train.eval_every == 0 or never_eval) and cfg.train.eval_on:
-                never_eval = False
+            if (global_step % cfg.train.eval_every == 0 or never_evaluated) and cfg.train.eval_on:
+                never_evaluated = False
                 print('Validating...')
                 start = time.perf_counter()
                 eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]

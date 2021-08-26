@@ -31,12 +31,11 @@ def show_bb(cfg):
     vis_logger = get_vislogger(cfg)
     model.eval()
 
-    use_cpu = 'cpu' in cfg.device
     if cfg.resume_ckpt:
-        checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
+        checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, cfg.device)
     else:
         # Load last checkpoint
-        checkpoint = checkpointer.load_last('', model, None, None, use_cpu=use_cpu)
+        checkpoint = checkpointer.load_last('', model, None, None, cfg.device)
 
     if cfg.parallel:
         assert 'cpu' not in cfg.device, 'You can not set "parallel" to True when you set "device" to cpu'

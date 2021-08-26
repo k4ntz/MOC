@@ -292,7 +292,7 @@ class ImgEncoderFg(nn.Module):
         # Encoder: (B, C, Himg, Wimg) -> (B, E, G, G)
         # G is H=W in the paper
         self.enc = nn.Sequential(
-            nn.Conv2d(5 if arch.flow else 3, 16, 4, 2, 1),
+            nn.Conv2d(3, 16, 4, 2, 1),
             nn.CELU(),
             nn.GroupNorm(4, 16),
             nn.Conv2d(16, 32, 4, 2, 1),
@@ -334,9 +334,9 @@ class ImgEncoderFg(nn.Module):
         )
 
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
-        self.z_scale_net = nn.Conv2d(128, (arch.z_where_scale_dim) * 2, 1)
-        self.z_shift_net = nn.Conv2d(128, (arch.z_where_shift_dim) * 2, 1)
-        self.z_pres_net = nn.Conv2d(128, arch.z_pres_dim, 1)
+        self.z_scale_net = nn.Conv2d(128, arch.z_where_scale_dim * 2, 1)
+        self.z_shift_net = nn.Conv2d(128, arch.z_where_shift_dim * 2, 1)
+        self.z_pres_net = nn.Conv2d(128 + arch.flow, arch.z_pres_dim, 1)
         self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)
 
         # (G, G). Grid center offset. (offset_x[i, j], offset_y[i, j]) is the center for cell (i, j)
@@ -365,11 +365,12 @@ class ImgEncoderFg(nn.Module):
         B = x.size(0)
 
         # (B, C, H, W)
-        img_enc = self.enc(x)
+        img_enc = self.enc(x[:, :3])
         # (B, E, G, G)
         lateral_enc = self.enc_lat(img_enc)
-        # (B, 2E, G, G) -> (B, 128, H, W)
+        # (B, 2E, G, G) -> (B, 128, H, W) / G, G
         cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))
+        cat_enc_z_pres = cat_enc
 
         def reshape(*args):
             """(B, D, G, G) -> (B, G*G, D)"""
@@ -381,9 +382,11 @@ class ImgEncoderFg(nn.Module):
             return out[0] if len(args) == 1 else out
 
         # Compute posteriors
-
+        avg = nn.AvgPool2d(128 // arch.G, 128 // arch.G)
         # (B, 1, G, G)
-        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc))
+        if arch.flow:
+            cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
+        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc_z_pres))
         # (B, 1, G, G) - > (B, G*G, 1)
         z_pres_logits = reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
@@ -448,7 +451,7 @@ class ZWhatEnc(nn.Module):
         super(ZWhatEnc, self).__init__()
 
         self.enc_cnn = nn.Sequential(
-            nn.Conv2d(5 if arch.flow else 3, 16, 3, 1, 1),
+            nn.Conv2d(3, 16, 3, 1, 1),
             nn.CELU(),
             nn.GroupNorm(4, 16),
             nn.Conv2d(16, 32, 4, 2, 1),
@@ -479,7 +482,7 @@ class ZWhatEnc(nn.Module):
             z_what: (B, D)
             z_what_post: (B, D)
         """
-        x = self.enc_cnn(x)
+        x = self.enc_cnn(x[:, :3])
 
         # (B, D), (B, D)
         z_what_mean, z_what_std = self.enc_what(x.flatten(start_dim=1)).chunk(2, -1)

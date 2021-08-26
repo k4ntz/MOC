@@ -127,7 +127,7 @@ def _augment_dict_pong(obs, info):
             pres = enough_color_around(obs, x, y, objects_colors["background"],
                                        threshold=4)
             if not pres:
-                del labels[f"ball_x"];
+                del labels[f"ball_x"]
                 del labels[f"ball_y"]
                 continue
         labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
@@ -153,39 +153,52 @@ def assert_in(observed, target, tol):
     return np.all([target[i] + tol[i] > observed[i] > target[i] - tol[i] for i in range(2)])
 
 
+cou = 0
+
+
 def _augment_dict_carnival(obs, info):
+    global cou
     if 'labels' in info:
         labels = info['labels']
     else:
         labels = {}
         info['labels'] = labels
-    base_objects_colors = {"duck": np.array([255, 255, 0]), "rabbit": np.array([240, 240, 240]),
-                           "refill": np.array([0, 0, 0]), "shooter": np.array([0, 102, 102]),
-                           "owl": np.array([255, 102, 102]), "pipes": np.array([153, 0, 153]),
-                           "bonus": np.array([204, 0, 0])
+    base_objects_colors = {"duck": np.array([187, 187, 53]), "flying_duck": np.array([135, 135, 35]),
+                           "rabbit": np.array([192, 192, 192]),
+                           "refill": np.array([0, 0, 0]), "shooter": np.array([66, 158, 130]),
+                           "owl": np.array([214, 92, 92]), "pipes": np.array([0, 160, 0]),
+                           "bonus": np.array([190, 75, 75])
                            }
-    objects = {
-        'ducks': [],
-        'owls': [],
-        'rabbits': [],
-        'refills': [],
-    }
-
-    W, H, C = obs.shape
+    for label in ['ducks', 'flying_ducks', 'owls', 'rabbits', 'refills', 'shooters']:
+        labels[label] = []
+    H, W, C = obs.shape
 
     prior_main_color = (0, 0, 0)
     prior_amount = 0
-    for y in [80, 90, 100]:
+    brig = np.max(obs, axis=2)
+    for y in [54, 75, 96, 192]:
         x = 0
         while x < W:
             colors_around = get_colors_around(obs, x, y)
             if len(colors_around) > 1:
-                main_color = list(colors_around.keys())[0] if list(colors_around.keys())[0] != (0, 0, 0) else list(colors_around.keys())[1]
+                main_color = list(colors_around.keys())[0] if list(colors_around.keys())[0] != (0, 0, 0) else \
+                    list(colors_around.keys())[1]
                 current_amount = colors_around[main_color]
                 if prior_main_color == main_color and current_amount < prior_amount:
-                    obj = max(((k, v) for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
-                        current_amount) - item[1]))[0]
-                    objects[f'{obj}s'].append((x - 1, y))
+                    obj = [k for k, v in base_objects_colors.items() if tuple(v) == main_color]
+                    if not obj:
+                        x += 1
+                        continue
+                    else:
+                        obj = obj[0]
+                    if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color, size=2):
+                        obj = 'refill'
+                    wings, fly_y, fly_x = found_wings(obs, x - 1, y)
+                    if main_color == tuple(base_objects_colors['duck']) and wings:
+                        obj = 'flying_duck'
+                        labels[f'{obj}s'].append((fly_x, fly_y))
+                    else:
+                        labels[f'{obj}s'].append((x - 1, y))
                     x += 10
                     prior_main_color = (0, 0, 0)
                     prior_amount = 0
@@ -196,12 +209,68 @@ def _augment_dict_carnival(obs, info):
             else:
                 x += 1
         if prior_amount > 10:
-            obj = max((k for k, v in base_objects_colors.items()), key=lambda item: np.linalg.norm(np.array(
-                current_amount) - v))
-            objects[f'{obj}s'].append((x - 1, y))
-    import ipdb
-    ipdb.set_trace()
+            obj = [k for k, v in base_objects_colors.items() if tuple(v) == main_color][0]
+            if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color, size=2):
+                obj = 'refill'
+            wings, fly_y, fly_x = found_wings(obs, x - 1, y)
+            if main_color == tuple(base_objects_colors['duck']) and wings:
+                obj = 'flying_duck'
+                labels[f'{obj}s'].append((fly_x, fly_y))
+            else:
+                labels[f'{obj}s'].append((x - 1, y))
+    for y in range(104, 185, 6):
+        for x in range(0, 160, 4):
+            if tr_color_around(obs, y, x, np.array([187, 187, 53])):
+                wings, fly_y, fly_x = found_wings(obs, x, y)
+                if wings:
+                    if not labels['flying_ducks'] or min(
+                            [(fly_y - e[1]) ** 2 + (fly_x - e[0]) ** 2 for e in labels['flying_ducks']]) > 60:
+                        labels['flying_ducks'].append((fly_x, fly_y))
+    # for obj, positions in labels.items():
+    #     for x, y in positions:
+    #         obs[y-1:y+1, x-1:x+1] = (base_objects_colors[obj[:-1]] * 1.15).astype(int)
+
+    bullets_xs = (brig[203:207] == 157).nonzero()[1]
+    labels['bullets_x'] = bullets_xs[-1] if bullets_xs.size else 0
+    labels['bonus'] = (brig[29:35] == 214).any()
+
     return True
+
+
+def print_obj(brig, y, x, size=(10, 8)):
+    with np.printoptions(threshold=np.inf):
+        print(brig[y - size[0]:y + size[0] + 1, x - size[1]:x + size[1] + 1])
+
+
+def print_brig(brig):
+    with np.printoptions(threshold=np.inf):
+        for i in range(4):
+            for j in range(4):
+                print(brig[i * 21:i * 21 + 21, j * 16:j * 16 + 16])
+            print()
+
+
+def found_wings(obs, base_x, base_y):
+    for y in range(base_y - 6, base_y + 7):
+        row = obs[y, max(0, base_x - 8):min(160, base_x + 8)]
+        if all(tuple(e) != (187, 187, 53) for e in row):
+            continue
+        former = (0, 0, 0)
+        switches = []
+        count = 0
+        for e in row:
+            if tuple(e) == former:
+                count += 1
+            else:
+                switches.append(count)
+                count = 1
+                former = tuple(e)
+        switches.append(count)
+        if len([s for s in switches if s > 1]) >= 5:
+            for x in range(base_x - 3, base_x + 4):
+                if all(tuple(e) == (187, 187, 53) for e in obs[y, x - 1:x + 2]):
+                    return True, y + 5, x
+    return False, -1, -1
 
 
 def _augment_dict_mspacman(obs, info):
@@ -274,11 +343,22 @@ def get_colors_around(image_array, root_x, root_y):
     """
     Counts the colors present in the square around the (x, y) point.
     """
+    H, W, C = image_array.shape
     counter = Counter()
-    for x in range(root_x - 5, root_x + 6):
-        for y in range(root_y - 5, root_y + 6):
-            counter[tuple(image_array[x][y])] += 1
+    for x in range(max(root_x - 4, 0), min(root_x + 5, W - 1)):
+        for y in range(root_y - 4, root_y + 5):
+            counter[tuple(image_array[y][x])] += 1
     return {k: v for k, v in sorted(counter.items(), key=lambda item: item[1])}
+
+
+def tr_color_around(image_array, y, x, color, size=2):
+    """
+    checks if the color is present in the square around the (x, y) point.
+    """
+
+    points_around = [(image_array[i, j] == color).all()
+                     for i in range(max(0, y - size), min(y + size + 1, 209)) for j in range(max(0, x - size), min(x + size + 1, 159))]
+    return np.any(points_around)
 
 
 def color_around(image_array, x, y, color, size=2):
@@ -286,7 +366,7 @@ def color_around(image_array, x, y, color, size=2):
     checks if the color is present in the square around the (x, y) point.
     """
     ran = list(range(-size, size + 1))
-    while x + size > image_array.shape[0] or y + size > image_array.shape[1]:
+    while x + size >= image_array.shape[0] or y + size >= image_array.shape[1]:
         size -= 1
     points_around = [(image_array[x + i, y + j] == color).all()
                      for i in ran for j in ran]

@@ -73,7 +73,7 @@ else:
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, suffix, cfg.exp_name), max_num=cfg.train.max_ckpt)
 use_cpu = 'cpu' in cfg.device
 if cfg.resume:
-    checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, use_cpu=cfg.device)
+    checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, None, None, cfg.device)
 #if cfg.parallel:
 #    model = nn.DataParallel(model, device_ids=cfg.device_ids)
 

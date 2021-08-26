@@ -98,26 +98,20 @@ class Checkpointer:
             pickle.dump(model_list, f)
         self.save(path, model, optimizer_fg, optimizer_bg, epoch, global_step)
 
-    def load(self, path, model, optimizer_fg, optimizer_bg, use_cpu=False):
+    def load(self, path, model, optimizer_fg, optimizer_bg, device):
         """
         Return starting epoch and global step
         """
 
         assert osp.exists(path), f'Checkpoint {path} does not exist.'
-        print('Loading checkpoint from {}...'.format(path))
-        if not use_cpu:
-            if torch.cuda.device_count() == 1:
-                checkpoint = torch.load(path, map_location="cuda:0")
-            else:
-                checkpoint = torch.load(path)
-        else:
-            checkpoint = torch.load(path, map_location='cpu')
+        checkpoint = torch.load(path, map_location=device)
         checkpoint_model = checkpoint.pop('model')
         if self.add_flow:
             for key in checkpoint_model:
                 if model.state_dict()[key].shape != checkpoint_model[key].shape:
+                    print(key)
                     B, C, H, W = checkpoint_model[key].size()
-                    flow_weights = torch.randn((B, 2, H, W)).to(checkpoint_model[key].device)
+                    flow_weights = torch.randn((B, 1, H, W)).to(checkpoint_model[key].device)
                     checkpoint_model[key] = torch.cat((checkpoint_model[key], flow_weights), dim=1)
         try:
             model.load_state_dict(checkpoint_model)
@@ -130,7 +124,7 @@ class Checkpointer:
         print('Checkpoint loaded.')
         return checkpoint
 
-    def load_last(self, path, model, optimizer_fg, optimizer_bg, use_cpu=False):
+    def load_last(self, path, model, optimizer_fg, optimizer_bg, device):
         """
         If path is '', we load the last checkpoint
         """
@@ -144,7 +138,7 @@ class Checkpointer:
                     path = model_list[-1]
         if not path.startswith('../'):
             path = '../' + path
-        return self.load(path, model, optimizer_fg, optimizer_bg, use_cpu)
+        return self.load(path, model, optimizer_fg, optimizer_bg, device)
 
     def save_best(self, metric_name, value, checkpoint, min_is_better):
         metric_file = os.path.join(self.checkpointdir, f'best_{metric_name}.json')
@@ -175,14 +169,14 @@ class Checkpointer:
                 json.dump(log, f)
             self.save(checkpoint_file, *checkpoint)
 
-    def load_best(self, metric_name, model, fg_optimizer, bg_optimizer, use_cpu=False):
+    def load_best(self, metric_name, model, fg_optimizer, bg_optimizer, device):
         metric_file = os.path.join(self.checkpointdir, f'best_{metric_name}.json')
         checkpoint_file = os.path.join(self.checkpointdir, f'best_{metric_name}.pth')
 
         assert osp.exists(metric_file), 'Metric file does not exist'
         assert osp.exists(checkpoint_file), 'checkpoint file does not exist'
 
-        return self.load(checkpoint_file, model, fg_optimizer, bg_optimizer, use_cpu)
+        return self.load(checkpoint_file, model, fg_optimizer, bg_optimizer, device)
 
 
 class SmoothedValue:
@@ -263,7 +257,7 @@ def corners_to_wh(bbox):
     xmin, ymin, xmax, ymax -> top, left, height, width
     """
     xmin, ymin, xmax, ymax = bbox.to(torch.int)
-    xmin += 1;
+    xmin += 1
     ymin += 1
     height, width = (ymax - ymin), (xmax - xmin)
     return ymin, xmin, height, width

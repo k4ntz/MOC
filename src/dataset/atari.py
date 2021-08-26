@@ -7,9 +7,10 @@ import skvideo.io as skv
 from PIL import Image
 import PIL
 import os.path as osp
+from .labels import get_labels, get_labels_moving
+import pandas as pd
 
 
-# TODO: Make Dataset less overlapping
 class Atari(Dataset):
     def __init__(self, root, mode, gamelist=None, flow=False):
         assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'
@@ -20,6 +21,9 @@ class Atari(Dataset):
         self.game = gamelist[0]
         self.flow = flow
         self.valid_flow_threshold = 5
+        self.all_labels = pd.read_csv(os.path.join(self.image_path, self.game, f"{mode}_labels.csv"))
+        if "MsPacman" in self.game:
+            self.all_labels = self.all_labels.rename(columns={'player_y': 'pacman_y', 'player_x': 'pacman_x'})
         if len(gamelist) > 1:
             print(f"Evaluation currently only supported for exactly one game not {gamelist}")
         image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root) \
@@ -30,14 +34,14 @@ class Atari(Dataset):
         self.image_fn.sort()
 
     def __getitem__(self, index):
+        index *= 4
         index += self.flow
-        base_idx = min(index, len(self.image_fn) - 4)
-        fn = self.image_fn[base_idx:base_idx + 4]
+        fn = self.image_fn[index:index + 4]
         torch_stack = torch.stack([self.img_path_to_tensor(f) for f in fn])
         return torch_stack
 
     def __len__(self):
-        return len(self.image_fn) - self.flow
+        return (len(self.image_fn) - self.flow) // 4
 
     def img_path_to_tensor(self, path):
         pil_img = Image.open(os.path.join(self.image_path, path)).convert('RGB')
@@ -46,7 +50,7 @@ class Atari(Dataset):
         image = np.array(pil_img)
         if self.flow:
             flow = np.load(os.path.join(self.flow_path, path.replace('.png', '.npy')))
-            flow = np.expand_dims((flow*flow).sum(axis=2), axis=2)
+            flow = np.expand_dims((flow * flow).sum(axis=2), axis=2)
             flow[flow > self.valid_flow_threshold] = 0
             flow = flow * 255 / self.valid_flow_threshold
             image = np.append(image, flow, axis=2)
@@ -57,3 +61,17 @@ class Atari(Dataset):
         path = osp.join(self.image_path, self.game, self.mode, 'bb')
         assert osp.exists(path), f'Bounding box path {path} does not exist.'
         return path
+
+    def get_labels(self, idx, j, boxes_batch):
+        labels = []
+        for i, boxes in zip(idx, boxes_batch):
+            img_idx = i * 4 + j + self.flow
+            labels.append(get_labels(self.all_labels.iloc[[img_idx]], self.game, boxes))
+        return labels
+
+    def get_labels_moving(self, idx, j, boxes_batch):
+        labels = []
+        for i, boxes in zip(idx, boxes_batch):
+            img_idx = i * 4 + j + self.flow
+            labels.append(get_labels_moving(self.all_labels.iloc[[img_idx]], self.game, boxes))
+        return labels

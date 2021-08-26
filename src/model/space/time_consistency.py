@@ -21,55 +21,21 @@ class TcSpace(nn.Module):
         """
         Inference.
         With time-dimension for consistency
-        :param x: (B, T, 3, H, W)
+        :param x: (B, T, 3/4, H, W)
         :param global_step: global training step
         :return:
             loss: a scalar. Note it will be better to return (B,)
             log: a dictionary for visualization
         """
-        # print(x.shape, x.get_device())
-        # over_time = []
-        # for i in range(x.shape[1]):
-        #     over_time.append(self.space(x[:, i], global_step))
-
-        # # (T, B, G*G, 1)
-
-        # z_wheres = torch.stack([get_log(res)['z_where'] for res in over_time])
-        # # (T-2, B, G*G, 1)
-        # z_pres_similarity = (1 - sqDelta(z_press[2:], z_press[:-2]))
-        # z_pres_deltas = (sqDelta(z_press[2:], z_press[1:-1]) + sqDelta(z_press[:-2], z_press[1:-1]))
-        # z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
-
-        # losses = torch.tensor([get_loss(res) for res in over_time])
-        # loss = losses.mean()
-        # log = {
-        #     # 'z_what_deltas': z_what_deltas,
-        #     # 'z_pres_inconsistencies': z_pres_inconsistencies,
-        #     # 'z_pres_similarity': z_pres_similarity,
-        #     # 'z_pres_deltas': z_pres_deltas,
-        #     'space_log': [get_log(res) for res in over_time]
-        # }
-        # print("Loss", loss, loss.get_device())
-        # print(" ")
-        # print("zwhatc", log['z_what_loss'], 'pool', log['z_what_loss_pool'])
-        # print('objects', log['z_what_loss_objects'], 'pres', log['z_pres_loss'])
-        # print("Len of SPACE_log", len(log['space_log']))
         y = [x[:, i] for i in range(4)]
+        zero = torch.tensor(0.0).to(x.device)
         responses = [self.space(y1, global_step) for y1 in y]
-        # (T, B, G*G, D)
-        z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
-        # (T-1, B, G*G, D)
-        z_what_deltas = sq_delta(z_whats[1:], z_whats[:-1])
-        z_what_loss = torch.sum(z_what_deltas)
-
-        z_press = torch.stack([get_log(r)['z_pres'] for r in responses])
-        # (T-2, B, G*G, 1)
-        z_pres_similarity = (1 - sq_delta(z_press[2:], z_press[:-2]))
-        z_pres_deltas = (sq_delta(z_press[2:], z_press[1:-1]) + sq_delta(z_press[:-2], z_press[1:-1]))
-        z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
-        z_pres_loss = torch.sum(z_pres_inconsistencies)
-        z_what_loss_pool = z_what_consistency_pool(responses)
-        z_what_loss_objects, objects_detected = z_what_consistency_objects(responses)
+        z_what_loss = z_what_loss_grid_cell(responses) if arch.adjacent_consistency_weight > 1e-3 else zero
+        z_pres_loss = z_pres_loss_grid_cell(responses) if arch.pres_inconsistency_weight > 1e-3 else zero
+        z_what_loss_pool = z_what_consistency_pool(responses) if arch.area_object_weight > 1e-3 else zero
+        z_what_loss_objects, objects_detected = z_what_consistency_objects(
+            responses) if arch.area_object_weight > 1e-3 else (zero, zero)
+        area_object_scaling = min(1, global_step / arch.full_object_weight)
         log = {
             'space_log': [get_log(r) for r in responses],
             'z_what_loss': z_what_loss,
@@ -78,13 +44,11 @@ class TcSpace(nn.Module):
             'z_pres_loss': z_pres_loss,
             'objects_detected': objects_detected
         }
-        area_object_scaling = min(1, global_step / arch.full_object_weight)
         loss = sum([get_loss(r) for r in responses]) \
                + z_what_loss * arch.adjacent_consistency_weight \
                + z_pres_loss * arch.pres_inconsistency_weight \
                + z_what_loss_pool * arch.area_pool_weight \
                + z_what_loss_objects * area_object_scaling * arch.area_object_weight
-
         return loss, log
 
 
@@ -142,10 +106,9 @@ def z_what_consistency_objects(responses):
         object_consistency_loss += -arch.z_cos_match_weight * torch.max(z_sim) + torch.sum(z_sim)
     return object_consistency_loss, torch.tensor(len(z_pres_idx)).to(z_whats.device)
 
+
 def z_what_consistency_pool(responses):
     # O(n^2) matching of only high z_pres
-    # In close-by
-    # By Flow
     # (T, B, G*G, D)
     z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
     z_whats = torch.abs(z_whats)
@@ -170,3 +133,20 @@ def z_what_consistency_pool(responses):
         return -torch.sum(cos * z_pres_weight)
     else:
         return torch.sum(nn.functional.mse_loss(z_what_smoothed[:-1], z_what_weighted[1:], reduction='none'))
+
+
+def z_what_loss_grid_cell(responses):
+    # (T, B, G*G, D)
+    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+    # (T-1, B, G*G, D)
+    z_what_deltas = sq_delta(z_whats[1:], z_whats[:-1])
+    return torch.sum(z_what_deltas)
+
+
+def z_pres_loss_grid_cell(responses):
+    z_press = torch.stack([get_log(r)['z_pres'] for r in responses])
+    # (T-2, B, G*G, 1)
+    z_pres_similarity = (1 - sq_delta(z_press[2:], z_press[:-2]))
+    z_pres_deltas = (sq_delta(z_press[2:], z_press[1:-1]) + sq_delta(z_press[:-2], z_press[1:-1]))
+    z_pres_inconsistencies = z_pres_similarity * z_pres_deltas
+    return torch.sum(z_pres_inconsistencies)

@@ -11,7 +11,7 @@ from .eval_cfg import eval_cfg
 from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
-from post_eval import evaluate_z_what, get_labels_validation
+from post_eval import evaluate_z_what
 
 class SpaceEval():
     def __init__(self):
@@ -27,13 +27,7 @@ class SpaceEval():
         path = osp.join(evaldir, 'results_{}.json'.format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
         self.save_to_json(result_dict, path, info)
         self.print_result(result_dict, [sys.stdout, open('./results.txt', 'w')])
-        # APs = result_dict['APs']
-        # iou_thresholds = result_dict['iou_thresholds']
-        # accuracy = result_dict['accuracy']
-        # perfect = result_dict['perfect']
-        # overcount = result_dict['O']
-        # undercount = result_dict['undercount']
-        # error_rate = result_dict['error_rate']
+
         
 
     @torch.no_grad()
@@ -54,7 +48,7 @@ class SpaceEval():
         if 'ap' in eval_cfg.train.metrics:
             results = self.train_eval_ap_and_acc(model, valset, bb_path, writer, global_step, device)
             print("AP result: ", results['APs'], results['accuracy'])
-            checkpointer.save_best('ap_dot5', results['APs'][0], checkpoint, min_is_better=False)
+            checkpointer.save_best('ap_dot5', results['APs'][len(results['APs']) // 2], checkpoint, min_is_better=False)
             checkpointer.save_best('ap_avg', np.mean(results['APs']), checkpoint, min_is_better=False)
             checkpointer.save_best('error_rate', results['error_rate'], checkpoint, min_is_better=True)
 
@@ -77,23 +71,33 @@ class SpaceEval():
         overcount = result_dict['overcount']
         undercount = result_dict['undercount']
         error_rate = result_dict['error_rate']
+        APs_moving = result_dict['APs_moving']
+        accuracy_moving = result_dict['accuracy_moving']
+        perfect_moving = result_dict['perfect_moving']
+        overcount_moving = result_dict['overcount_moving']
+        undercount_moving = result_dict['undercount_moving']
+        error_rate_moving = result_dict['error_rate_moving']
         
-        for ap, thres in zip(APs, iou_thresholds):
+        for ap, thres in zip(APs[1::4], iou_thresholds[1::4]):
             writer.add_scalar(f'val_aps/ap_{thres}', ap, global_step)
+        writer.add_scalar(f'val/ap_avg_0.5', APs[len(APs) // 2], global_step)
+        writer.add_scalar(f'val/ap_avg_up', np.mean(APs[len(APs) // 2:]), global_step)
         writer.add_scalar(f'val/ap_avg', np.mean(APs), global_step)
         writer.add_scalar('val/accuracy', accuracy, global_step)
         writer.add_scalar('val/perfect', perfect, global_step)
         writer.add_scalar('val/overcount', overcount, global_step)
         writer.add_scalar('val/undercount', undercount, global_step)
         writer.add_scalar('val/error_rate', error_rate, global_step)
-        for z_pres_thresh in result_dict['z_pres_thresholds']:
-            if f'accuracy_{z_pres_thresh}' not in result_dict:
-                continue
-            writer.add_scalar(f'val/accuracy_{z_pres_thresh}', result_dict[f'accuracy_{z_pres_thresh}'], global_step)
-            writer.add_scalar(f'val/perfect_{z_pres_thresh}', result_dict[f'perfect_{z_pres_thresh}'], global_step)
-            writer.add_scalar(f'val/overcount_{z_pres_thresh}', result_dict[f'overcount_{z_pres_thresh}'], global_step)
-            writer.add_scalar(f'val/undercount_{z_pres_thresh}', result_dict[f'undercount_{z_pres_thresh}'], global_step)
-            writer.add_scalar(f'val/error_rate_{z_pres_thresh}', result_dict[f'error_rate_{z_pres_thresh}'], global_step)
+        for ap, thres in zip(APs_moving[1::4], iou_thresholds[1::4]):
+            writer.add_scalar(f'moving_aps/ap_{thres}', ap, global_step)
+        writer.add_scalar('moving/accuracy', accuracy_moving, global_step)
+        writer.add_scalar('moving/perfect', perfect_moving, global_step)
+        writer.add_scalar('moving/overcount', overcount_moving, global_step)
+        writer.add_scalar('moving/undercount', undercount_moving, global_step)
+        writer.add_scalar('moving/error_rate', error_rate_moving, global_step)
+        writer.add_scalar(f'moving/ap_avg_0.5', APs_moving[len(APs_moving) // 2], global_step)
+        writer.add_scalar(f'moving/ap_avg_up', np.mean(APs_moving[len(APs_moving) // 2:]), global_step)
+        writer.add_scalar(f'moving/ap_avg', np.mean(APs_moving), global_step)
         return result_dict
 
     @torch.no_grad()
@@ -106,31 +110,26 @@ class SpaceEval():
         num_workers = eval_cfg.train.num_workers
         
         model.eval()
-        valset = Subset(valset, indices=range(num_samples))
+        valset = Subset(valset, indices=range(0, num_samples))
         dataloader = DataLoader(valset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
     
         metric_logger = MetricLogger()
     
         print(f'Evaluating MSE using {num_samples} samples.')
-        # with tqdm(total=len(dataloader)) as pbar:
         for batch_idx, sample in enumerate(dataloader):
             imgs = sample.to(device)
             loss, log = model(imgs, global_step)
             B = imgs.size(0)
             for b in range(B):
                 metric_logger.update(
-                    mse=torch.mean([log['space_log'][i]['mse'][b] for i in range(4)])
+                    mse=torch.mean(torch.tensor([log['space_log'][i]['mse'][b] for i in range(4)]))
                 )
             metric_logger.update(loss=loss.mean())
 
         assert metric_logger['mse'].count == num_samples
-        # Add last log
-        # log.update([(k, torch.tensor(v.global_avg)) for k, v in metric_logger.values.items()])
         mse = metric_logger['mse'].global_avg
         writer.add_scalar(f'val/mse', mse, global_step=global_step)
-    
         model.train()
-        
         return mse
 
     @torch.no_grad()
@@ -141,16 +140,23 @@ class SpaceEval():
         """
         print('Computing clustering and few-shot linear classifiers...')
 
-        result_dict, img_path, few_shot_accuracy = self.eval_clustering(
+        results_all, results_moving = self.eval_clustering(
             model, valset, bb_path, eval_cfg.train.batch_size, eval_cfg.train.num_workers,
             device, cfg, num_samples=eval_cfg.train.num_samples.cluster
         )
-
+        result_dict, img_path, few_shot_accuracy = results_all
         writer.add_image('Clustering PCA', np.array(Image.open(img_path)), global_step, dataformats='HWC')
         for score in few_shot_accuracy:
             writer.add_scalar(f'val/{score}', few_shot_accuracy[score], global_step)
         for score in result_dict:
             writer.add_scalar(f'val/{score}', result_dict[score], global_step)
+
+        result_dict, img_path, few_shot_accuracy = results_moving
+        writer.add_image('Clustering PCA Moving', np.array(Image.open(img_path)), global_step, dataformats='HWC')
+        for score in few_shot_accuracy:
+            writer.add_scalar(f'moving/{score}', few_shot_accuracy[score], global_step)
+        for score in result_dict:
+            writer.add_scalar(f'moving/{score}', result_dict[score], global_step)
         return result_dict
 
     def eval_clustering(
@@ -184,31 +190,35 @@ class SpaceEval():
 
         if num_samples is None:
             num_samples = len(dataset)
-        dataset = Subset(dataset, indices=range(num_samples))
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+        data_subset = Subset(dataset, indices=range(num_samples))
+        dataloader = DataLoader(data_subset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
 
-        z_whats = []
+        z_encs = []
         all_labels = []
+        all_labels_moving = []
         model.eval()
         with torch.no_grad():
-            # pbar = tqdm(total=len(dataloader))
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
                 loss, log = model(imgs, global_step=100000000)
-                img = log['space_log'][0]
-                z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
-                z_where = z_where.detach().cpu()
-                z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-                z_pres = z_pres_prob > 0.5
-                z_what_pres = z_what[z_pres]
-                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-                z_whats.extend(z_what_pres)
-                all_labels.extend(get_labels_validation(range(i * batch_size, (i + 1) * batch_size), boxes_batch))
-                # pbar.update(1)
+                for j, img in enumerate(log['space_log']):
+                    z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
+                    z_pres_prob = z_pres_prob.squeeze()
+                    z_pres = z_pres_prob > 0.5
+                    # (N, 32)
+                    z_enc = torch.cat((z_what[z_pres], z_where[z_pres]), dim=1)
+                    boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+                    print(z_enc.shape)
+                    z_encs.extend(z_enc)
+                    all_labels.extend(dataset.get_labels(range(i * batch_size, (i + 1) * batch_size), j, boxes_batch))
+                    all_labels_moving.extend(dataset.get_labels_moving(range(i * batch_size, (i + 1) * batch_size), j, boxes_batch))
         model.train()
-        args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation', 'edgecolors': True}
-        return evaluate_z_what(args, torch.stack(z_whats).detach().cpu(),
-                               torch.cat(all_labels).detach().cpu(), len(z_whats), cfg)
+        args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation', 'edgecolors': False}
+        all_objects = evaluate_z_what(args, torch.stack(z_encs).detach().cpu(),
+                                      torch.cat(all_labels).detach().cpu(), len(z_encs), cfg)
+        moving_objects = evaluate_z_what(args, torch.stack(z_encs).detach().cpu(),
+                                         torch.cat(all_labels_moving).detach().cpu(), len(z_encs), cfg, title="moving")
+        return all_objects, moving_objects
 
     def eval_ap_and_acc(
             self,
@@ -241,39 +251,33 @@ class SpaceEval():
         
         if num_samples is None:
             num_samples = len(dataset)
-        dataset = Subset(dataset, indices=range(num_samples))
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+        data_subset = Subset(dataset, indices=range(num_samples))
+        dataloader = DataLoader(data_subset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
         
         if iou_thresholds is None:
-            iou_thresholds = np.linspace(0.5, 0.95, 10)
-        z_pres_thresholds = [0.5]
+            iou_thresholds = np.linspace(0.05, 0.95, 19)
 
-        boxes_gt = read_boxes(bb_path, 128)
-        boxes_preds = [[] for _ in z_pres_thresholds]
+        boxes_gt, boxes_gt_moving = read_boxes(bb_path, 128, [k * batch_size * 4 + i * 4 + j + dataset.flow
+                                             for k in range(num_samples // batch_size)
+                                             for j in range(4) for i in range(batch_size)])
+        boxes_preds = []
         result = {
             'iou_thresholds': iou_thresholds,
-            'z_pres_thresholds': z_pres_thresholds,
         }
         rgb_folder_src = f"../aiml_atari_data/rgb/MsPacman-v0/validation"
         rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/validation"
         model.eval()
         with torch.no_grad():
-            # pbar = tqdm(total=len(dataloader))
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
-            
                 loss, log = model(imgs, global_step=100000000)
-                img = log['space_log'][0]
-                # (B, N, 4), (B, N, 1), (B, N, 1)
-                z_where, z_pres_prob = img['z_where'], img['z_pres_prob']
-                # (B, N, 4), (B, N), (B, N)
-                z_where = z_where.detach().cpu()
-                z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-                for pred_idx, prob_th_str in enumerate(z_pres_thresholds):
-                    z_pres = z_pres_prob > prob_th_str  # try other values
+                for j, img in enumerate(log['space_log']):
+                    z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
+                    z_where = z_where.detach().cpu()
+                    z_pres_prob = z_pres_prob.detach().cpu().squeeze()
+                    z_pres = z_pres_prob > 0.5
                     boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-                    boxes_preds[pred_idx].extend(boxes_batch)
-                # pbar.update(1)
+                    boxes_preds.extend(boxes_batch)
 
             # print('Drawing bounding boxes for eval...')
             # for idx, (pred, gt) in enumerate(zip(boxes_pred, boxes_gt)):
@@ -293,20 +297,26 @@ class SpaceEval():
 
 
             # Four numbers
-            for pred_idx, prob_thresh in enumerate(z_pres_thresholds):
-                error_rate, perfect, overcount, undercount = compute_counts(boxes_preds[pred_idx], boxes_gt)
-                accuracy = perfect / (perfect + overcount + undercount)
-                prob_th_str = f'_{prob_thresh}' if prob_thresh != 0.5 else ''
-                result[f'error_rate{prob_th_str}'] = error_rate
-                result[f'perfect{prob_th_str}'] = perfect
-                result[f'accuracy{prob_th_str}'] = accuracy
-                result[f'overcount{prob_th_str}'] = overcount
-                result[f'undercount{prob_th_str}'] = undercount
-            # A list of length 10
-            result['APs'] = compute_ap(boxes_preds[0], boxes_gt, iou_thresholds)
-    
+            error_rate, perfect, overcount, undercount = compute_counts(boxes_preds, boxes_gt_moving)
+            accuracy = perfect / (perfect + overcount + undercount)
+            result[f'error_rate_moving'] = error_rate
+            result[f'perfect_moving'] = perfect
+            result[f'accuracy_moving'] = accuracy
+            result[f'overcount_moving'] = overcount
+            result[f'undercount_moving'] = undercount
+            # A list of length 19
+            result['APs_moving'] = compute_ap(boxes_preds, boxes_gt, iou_thresholds)
+
+            error_rate, perfect, overcount, undercount = compute_counts(boxes_preds, boxes_gt)
+            accuracy = perfect / (perfect + overcount + undercount)
+            result[f'error_rate'] = error_rate
+            result[f'perfect'] = perfect
+            result[f'accuracy'] = accuracy
+            result[f'overcount'] = overcount
+            result[f'undercount'] = undercount
+            # A list of length 19
+            result['APs'] = compute_ap(boxes_preds, boxes_gt, iou_thresholds)
         model.train()
-        
         return result
         
     def save_to_json(self, result_dict, json_path, info):

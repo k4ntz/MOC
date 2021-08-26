@@ -16,9 +16,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 
-
 folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
-
 
 parser = argparse.ArgumentParser(
     description='Create the dataset for a specific game of ATARI Gym')
@@ -65,9 +63,9 @@ state = env.reset()
 
 make_deterministic(0, env)
 
-bgr_folder = f"2aiml_atari_data/space_like/{args.game}-v0/{args.folder}"
+bgr_folder = f"aiml_atari_data/space_like/{args.game}-v0/{args.folder}"
 os.makedirs(bgr_folder, exist_ok=True)
-rgb_folder = f"2aiml_atari_data/rgb/{args.game}-v0/{args.folder}"
+rgb_folder = f"aiml_atari_data/rgb/{args.game}-v0/{args.folder}"
 os.makedirs(rgb_folder, exist_ok=True)
 
 agent_path = glob(f'agents/*{args.game}*')[0]
@@ -105,44 +103,39 @@ while True:
         sleep(0.001)
     if (not args.random) or np.random.rand() < 0.01:
         image_n = index[image_count]
-        try:
-            if not augment_dict(obs if augmented else state, info, args.game):
-                if done:
-                    env.reset()
-                    for _ in range(200):
-                        action = agent.draw_action(state)
-                        # action = env.action_space.sample()
-                        if augmented:
-                            state, reward, done, info, obs = env.step(action)
-                        else:
-                            state, reward, done, info = env.step(action)
-                continue
-            ## RAW IMAGE
-            img = Image.fromarray(obs, 'RGB')
-            img.save(f'{rgb_folder}/{image_n:05}.png')
+        print("Augmenting...")
+        augment_dict(obs if augmented else state, info, args.game)
+        # if True:
+        #     env.reset()
+        #     for _ in range(10):
+        #         action = agent.draw_action(state)
+        #         # action = env.action_space.sample()
+        #         if augmented:
+        #             state, reward, done, info, obs = env.step(action)
+        #         else:
+        #             state, reward, done, info = env.step(action)
+        # continue
+        ## RAW IMAGE
+        img = Image.fromarray(obs, 'RGB')
+        img.save(f'{rgb_folder}/{image_n:05}.png')
 
-            ## BGR SPACE IMAGES
-            img = Image.fromarray(
-                obs[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
-            img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
-            series.append(dict_to_serie(info))
-            if done:
-                env.reset()
-                for _ in range(200):
-                    action = agent.draw_action(state)
-                    # action = env.action_space.sample()
-                    if augmented:
-                        state, reward, done, info, obs = env.step(action)
-                    else:
-                        state, reward, done, info = env.step(action)
-            pbar.update(1)
-            image_count += 1
-            if image_count == limit:
-                break
-        except IndexError:
-            # print("Wrong image")
-            continue
-
+        ## BGR SPACE IMAGES
+        img = Image.fromarray(
+            obs[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
+        img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
+        series.append(dict_to_serie(info))
+        if done:
+            env.reset()
+            for _ in range(100):
+                action = agent.draw_action(state)
+                if augmented:
+                    state, reward, done, info, obs = env.step(action)
+                else:
+                    state, reward, done, info = env.step(action)
+        pbar.update(1)
+        image_count += 1
+        if image_count == limit:
+            break
 
 df = pd.DataFrame(series, dtype=int)
 # enemy_list = ['sue', 'inky', 'pinky', 'blinky', 'player']
