@@ -45,45 +45,6 @@ class policy_net(nn.Module):
         x = F.softmax(self.out(x), dim=1)
         return x
 
-# with raw image as input
-class CNNPolicy(nn.Module):
-    def __init__(self, actions): 
-        super(CNNPolicy, self).__init__()
-        # 2 conv layers for image to raw features
-        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32, kernel_size=3)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(in_channels=32,  out_channels=16, kernel_size=2)
-        self.bn2 = nn.BatchNorm2d(16)
-
-        # fcl 
-        # first hidden layer raw features to meaningful features
-        self.h = nn.Linear(59536, 64)
-        self.h2 = nn.Linear(64, 32)
-        self.out = nn.Linear(32, actions)       # b: only two hidden layers with x->64->64->actions
-
-        self.saved_log_probs = []
-        self.rewards = []
-
-    def forward(self, x):
-        # conv
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        # flatten
-        x = x.view(x.size(0), -1) 
-        # fcl
-        x = F.relu(self.h(x))
-        x = F.relu(self.h2(x))
-        return F.softmax(self.out(x), dim=1)
-
-
-# helper function to return correct network
-def get_network(cfg, input, hidden, actions):
-    if not cfg.raw_image:
-        return policy_net(input, hidden, actions)
-    else: 
-        return CNNPolicy(actions)
-
-
 
 def init_weights(m):
     # nn.Conv2d weights are of shape [16, 1, 3, 3] i.e. # number of filters, 1, stride, stride
@@ -102,7 +63,7 @@ def return_random_agents(n_inputs, num_agents, n_actions, cfg):
     agents = []
     print("Agents have", n_inputs, "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
     for _ in range(num_agents):
-        agent = get_network(cfg, n_inputs, cfg.train.hidden_layer_size, n_actions)
+        agent = policy_net(n_inputs, cfg.train.hidden_layer_size, n_actions)
         for param in agent.parameters():
             param.requires_grad = False
         init_weights(agent)
@@ -276,7 +237,7 @@ def train(cfg):
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
     _ = env.reset()
-    _, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
+    _, features, _, _ = xutils.do_step(env)
 
     # initialize N number of agents
     num_agents = 500
@@ -348,7 +309,7 @@ def play_agent(cfg):
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
     _ = env.reset()
-    raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
+    raw_features, features, _, _ = xutils.do_step(env)
     # initialize N number of agents
     num_agents = 500
     print('Number of agents:', num_agents)
@@ -374,7 +335,7 @@ def play_agent(cfg):
     r = 0
     for t in count():
         action = select_action(features, elite_agent)
-        raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
+        raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)

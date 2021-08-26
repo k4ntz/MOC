@@ -29,7 +29,6 @@ cfg = CfgNode({
     'make_video': False,
     'video_steps': 10,
 
-    'raw_image': False,
     'liveplot': False,
     'debug': False,
 

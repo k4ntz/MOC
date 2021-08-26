@@ -30,6 +30,7 @@ model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pt
 class Policy(nn.Module):
     def __init__(self, input, hidden, actions): 
         super(Policy, self).__init__()
+        print("Policy net has", input, "input nodes,", hidden, "hidden nodes and", actions, "output nodes")
         self.h = nn.Linear(input, hidden)
         self.out = nn.Linear(hidden, actions)
 
@@ -39,46 +40,6 @@ class Policy(nn.Module):
     def forward(self, x):
         x = F.relu(self.h(x))
         return F.softmax(self.out(x), dim=1)
-
-
-# with raw image as input
-class CNNPolicy(nn.Module):
-    def __init__(self, actions): 
-        super(CNNPolicy, self).__init__()
-        # 2 conv layers for image to raw features
-        self.conv1 = nn.Conv2d(in_channels=4,  out_channels=32, kernel_size=3)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(in_channels=32,  out_channels=16, kernel_size=2)
-        self.bn2 = nn.BatchNorm2d(16)
-
-        # fcl 
-        # first hidden layer raw features to meaningful features
-        self.h = nn.Linear(59536, 64)
-        self.h2 = nn.Linear(64, 32)
-        self.out = nn.Linear(32, actions)       # b: only two hidden layers with x->64->64->actions
-
-        self.saved_log_probs = []
-        self.rewards = []
-
-    def forward(self, x):
-        # conv
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        # flatten
-        x = x.view(x.size(0), -1) 
-        # fcl
-        x = F.relu(self.h(x))
-        x = F.relu(self.h2(x))
-        return F.softmax(self.out(x), dim=1)
-
-
-# helper function to return correct network
-def get_network(cfg, input, hidden, actions):
-    if not cfg.raw_image:
-        print("Policy net has", input, "input nodes,", hidden, "hidden nodes and", actions, "output nodes")
-        return Policy(input, hidden, actions)
-    else: 
-        return CNNPolicy(actions)
 
 
 def select_action(features, policy):
@@ -143,7 +104,7 @@ def train(cfg):
     _ = env.reset()
     _, features, _, _ = xutils.do_step(env)
     # init policy net
-    policy = get_network(cfg, len(features), cfg.train.hidden_layer_size, n_actions)
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
     optimizer = optim.Adam(policy.parameters(), lr=cfg.train.learning_rate) 
     eps = np.finfo(np.float32).eps.item()
     i_episode = 1
@@ -165,13 +126,13 @@ def train(cfg):
         # init env
         _, ep_reward = env.reset(), 0
         _, _, done, _ = env.step(1)
-        raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
+        raw_features, features, _, _ = xutils.do_step(env)
         # env loop
         t = 0
         while t < cfg.train.max_steps:  # Don't infinite loop while learning
             action, log_prob = select_action(features, policy)
             policy.saved_log_probs.append(log_prob)
-            raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
+            raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             if cfg.liveplot:
                 xutils.plot_screen(env, i_episode, t)
             policy.rewards.append(reward)
@@ -215,8 +176,8 @@ def eval(cfg):
     n_actions = env.action_space.n
     _, ep_reward = env.reset(), 0
     _, _, done, _ = env.step(1)
-    raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
-    policy = get_network(cfg, len(features), cfg.train.hidden_layer_size, n_actions)
+    raw_features, features, _, _ = xutils.do_step(env)
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
     i_episode = 1
     # load if exists
     model_path = model_name(cfg.exp_name)
@@ -240,7 +201,7 @@ def eval(cfg):
             ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
-        raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
+        raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         ep_reward += reward
         t += 1
         if done:
@@ -254,5 +215,5 @@ def eval(cfg):
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
         # prune 
-        policy = pruner.prune_nn(policy, "ig-pr", np.mean(ig_sum, axis=0))
+        #policy = pruner.prune_nn(policy, "ig-pr", np.mean(ig_sum, axis=0))
         #xutils.plot_igs(ig_sum, feature_titles)
