@@ -11,6 +11,7 @@ cfg = CfgNode({
     # 1: REINFORCE
     # 2: Deep Neuroevolution
     # 3: DreamerV2
+    # 4: Minidreamer
     'rl_algo': 1,
 
     # Resume training or not

@@ -3,6 +3,8 @@
 from xrl import reinforce
 from xrl import genetic_rl as genetic
 from xrl import dreamer_v2
+from xrl import minidreamer
+
 from xrl import utils
 
 # otherwise genetic loading model doesnt work, torch bug?
@@ -35,6 +37,15 @@ def use_dreamerv2(cfg):
         dreamer_v2.eval(cfg)
 
 
+# function to call minidreamer
+def use_minidreamer(cfg):
+    print("Selected algorithm: Minidreamer")
+    if cfg.mode == "train":
+        minidreamer.train(cfg)
+    elif cfg.mode == "eval":
+        print("Not implemented ...")
+
+
 # main
 if __name__ == '__main__':
     cfg = utils.get_config()
@@ -42,12 +53,15 @@ if __name__ == '__main__':
     # 1: REINFORCE
     # 2: Deep Neuroevolution
     # 3: DreamerV2
+    # 4: Minidreamer
     if cfg.rl_algo == 1:
         use_reinforce(cfg)
     elif cfg.rl_algo == 2:
         use_genetic(cfg)
     elif cfg.rl_algo == 3:
         use_dreamerv2(cfg)
+    elif cfg.rl_algo == 4:
+        use_minidreamer(cfg)
     else:
         print("Unknown algorithm selected")
 

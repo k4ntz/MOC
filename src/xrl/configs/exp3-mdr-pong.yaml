@@ -1,0 +1,14 @@
+env_name: 'PongDeterministic-v4'
+
+rl_algo: 4
+
+device: 'cpu'
+parallel: False
+
+logdir: '/xrl/mdrlogs/'
+
+train:
+  max_steps: 200000000 #2mio steps
+  save_every: 200000
+
+

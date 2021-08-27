@@ -25,9 +25,9 @@ class ModelDataset(Dataset):
         states = episode[idx_sample * 4 + 2 : idx_sample * 4 + self.seq_len * 4 + 2 : 4]
         rewards= episode[idx_sample * 4 + 3 : idx_sample * 4 + self.seq_len * 4 + 3 : 4]
 
-        last_states = torch.cat(last_states)
-        actions = torch.cat(actions)
-        states = torch.cat(states)
-        rewards = torch.Tensor(rewards)
+        last_states = torch.tensor(last_states)
+        actions = torch.tensor(actions)
+        states = torch.tensor(states)
+        rewards = torch.tensor(rewards)
 
         return last_states, actions, states, rewards
