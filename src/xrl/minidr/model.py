@@ -5,17 +5,19 @@ import torch.nn.functional as F
 
 # with preprocessed meaningful features
 class WorldPredictor(nn.Module):
-    def __init__(self, input): 
+    def __init__(self, input, batch_size, seq_len): 
         super(WorldPredictor, self).__init__()
+        
+        # memory of last input states
+        self.last_state = torch.zeros(batch_size, seq_len, input+1)
         # transition layers
         # Take in previous state s_{t-1} and action a_{t-1} and predicts the next state s_t , represents p(s_t|s_{t-1}, a_{t-1})
         self.transition = nn.Sequential(
-            nn.Linear(input + 1, 128),
+            nn.Linear((input + 1)*2, 128),
             nn.ReLU(),
             nn.Linear(128, 128),
             nn.ReLU(),
             nn.Linear(128, input),
-            nn.ReLU(),
         )
 
         # reward prediction layer
@@ -24,14 +26,17 @@ class WorldPredictor(nn.Module):
             nn.Linear(input, 128),
             nn.ReLU(),
             nn.Linear(128, 1),
-            nn.ReLU(),
         )
 
     # gets last state together concat with action
     # predicts next state 
     # then predicts its reward
     def forward(self, last_state, action):
-        state = self.transition(torch.cat((last_state, action.unsqueeze(2)), dim=2))
+        lsa = torch.cat((last_state, action), dim=2)
+        # predict next state with given state and prior state from memory
+        state = self.transition(torch.cat((lsa, self.last_state), dim=2))   
+        self.last_state = lsa     
+        # predict reward with given state
         reward = self.reward(state)
         return state, reward
 

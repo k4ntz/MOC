@@ -23,9 +23,10 @@ import xrl.utils as xutils
 
 # world pred parameter
 batch = 50
-L = 200 #seq len world training
+L = 50 #seq len world training
 history_size = 400
-lr_pred = 1e-3
+lr_pred = 1e-4
+alpha = 1e-4   #alpha to scale down loss of state for loss of reward
 
 # policy parameter
 lr_policy = 1e-2
@@ -90,6 +91,7 @@ def select_action(features, policy):
 def train(cfg):
     ### HYPERPARAMETERS ###
     print('Experiment name:', cfg.exp_name)
+    print('Seed:', torch.initial_seed())
     print('Env name:', cfg.env_name)
     print('Using device:', cfg.device)
     if 'cuda' in cfg.device:
@@ -118,7 +120,7 @@ def train(cfg):
     # init policy net
     
     ### MODELS ###
-    predictor = WorldPredictor(len(features)).to(device)
+    predictor = WorldPredictor(input=len(features), batch_size=batch, seq_len=L).to(device)
     policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions).to(device)
     criterion = torch.nn.MSELoss()
     optim_predictor = Adam(predictor.parameters(), lr=lr_pred, eps=adam_eps, weight_decay=decay)
@@ -175,7 +177,7 @@ def train(cfg):
     while len(history) < 50:
         # check every second if first history entry is inside
         print("Wainting until history large enough (current size: {}, needed: {})".format(len(history), 50), end="\r")
-        sleep(5.0)
+        sleep(1.0)
     print("done")
 
     ### DATASET ###
@@ -192,44 +194,50 @@ def train(cfg):
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=cfg.train.num_episodes)
     rtpt.start()
+    pbar = tqdm(total=cfg.train.max_steps)
+    pbar.update(n=steps_done[0])
     while steps_done[0] < cfg.train.max_steps:
+        tmp_steps_done = steps_done[0]
         loss_pred = 0
         loss_s = 0
         loss_r = 0
         loss_policy = 0
         len_h = 0
-        pbar = tqdm(loader)
-        for ls, a, s, r in pbar:
+        
+        for ls, a, s, r in loader:
             ls = ls.to(device)
-            a = a.to(device)
+            a = a.unsqueeze(2).to(device)
             s = s.to(device)
-            r = r.to(device)
-
+            r = r.unsqueeze(2).to(device)
+            
             # TRAIN PREDICTOR
             
             # predict
             ps, pr = predictor(ls, a)
 
             # calc loss
+            optim_predictor.zero_grad()
             loss_s = criterion(ps, s)
             loss_r = criterion(pr, r)
-            loss_pred = loss_s + loss_r
-            loss_pred.backward()
+            loss_pred = alpha * loss_s + loss_r
+            loss_pred.backward(retain_graph=True)
             optim_predictor.step()
 
             # TRAIN POLICY
 
             #TODO: implement training loop for policy with given REINFORCE stuff
 
-            # set logging variables
-            len_h = len(history)
-            # display
-            pbar.set_postfix(
-                l_pred = loss_pred,
-                l_policy = loss_policy,
-                len_h = len_h,
-                i_episode = i_episode
-            )
+            if i_episode % 5 == 0:
+                # set logging variables
+                len_h = len(history)
+                # display
+                pbar.set_postfix(
+                    l_pred = loss_pred.item(),
+                    l_policy = loss_policy,
+                    len_h = len_h,
+                    i_episode = i_episode
+                )
+        pbar.update(n=steps_done[0] - tmp_steps_done)
 
         # log all
         writer.add_scalar('Train/Loss World Predictor', loss_pred, i_episode)
