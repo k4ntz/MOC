@@ -32,7 +32,7 @@ class TcSpace(nn.Module):
         responses = [self.space(y1, global_step) for y1 in y]
         z_what_loss = z_what_loss_grid_cell(responses) if arch.adjacent_consistency_weight > 1e-3 else zero
         z_pres_loss = z_pres_loss_grid_cell(responses) if arch.pres_inconsistency_weight > 1e-3 else zero
-        z_what_loss_pool = z_what_consistency_pool(responses) if arch.area_object_weight > 1e-3 else zero
+        z_what_loss_pool = z_what_consistency_pool(responses) if arch.area_pool_weight > 1e-3 else zero
         z_what_loss_objects, objects_detected = z_what_consistency_objects(
             responses) if arch.area_object_weight > 1e-3 else (zero, zero)
         area_object_scaling = min(1, global_step / arch.full_object_weight)

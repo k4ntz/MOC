@@ -7,7 +7,7 @@ import skvideo.io as skv
 from PIL import Image
 import PIL
 import os.path as osp
-from .labels import get_labels, get_labels_moving
+from .labels import get_labels, get_labels_moving, to_relevant, filter_relevant_boxes
 import pandas as pd
 
 
@@ -75,3 +75,10 @@ class Atari(Dataset):
             img_idx = i * 4 + j + self.flow
             labels.append(get_labels_moving(self.all_labels.iloc[[img_idx]], self.game, boxes))
         return labels
+
+    def to_relevant(self, labels_moving):
+        return to_relevant(self.game, labels_moving)
+
+    def filter_relevant_boxes(self, boxes_batch):
+        return filter_relevant_boxes(self.game, boxes_batch)
+

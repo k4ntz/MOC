@@ -1,6 +1,6 @@
 seed: 1
 model: 'SPACE'
-exp_name: mspacman_atari_tmp
+exp_name: mspacman_atari
 resume: true
 load_time_consistency: true
 add_flow: true
@@ -12,12 +12,12 @@ resume_ckpt: '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 # '../output/checkpoints/mspacman_baseline/model_000177001.pth'
 # 'result_checkpoints/base_z_what_model_000078001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
-parallel: true
-device_ids: [6, 7]
-device: 'cuda:6'
+parallel: false
+device_ids: [3]
+device: 'cuda:3'
 
-logdir: '../output/logs/tmp'
-checkpointdir: '../output/checkpoints/tmp'
+logdir: '../output/logs/seed'
+checkpointdir: '../output/checkpoints/seed'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
@@ -28,23 +28,23 @@ dataset_roots:
 
 
 train:
-  batch_size: 16
+  batch_size: 8
   max_epochs: 100
-  max_steps: 170003
-  print_every: 20
+  max_steps: 160503
+  print_every: 200
   save_every: 500
   num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
-  eval_every: 20
+  eval_every: 200
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 1e-5
+      lr: 2e-5
     bg:
       optim: 'Adam'
-      lr: 1e-3
+      lr: 2e-3
 
 arch:
   flow: false

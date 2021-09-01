@@ -8,11 +8,11 @@ eval_cfg = CfgNode({
         'num_samples': {
             'mse': 64,
             'ap': 64,
-            'cluster': 320,
+            'cluster': 64,
         },
         
         # For dataloader
-        'batch_size': 16,
+        'batch_size': 64,
         'num_workers': 4,
     },
     'test': {

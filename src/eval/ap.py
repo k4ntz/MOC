@@ -95,13 +95,14 @@ def read_boxes(path, size, indices=None):
                     x_min = center_x
                     x_max = center_x + width
                     boxes.append([y_min, y_max, x_min, x_max])
-                    if "S" in line:
+                    if "M" in line:
                         boxes_moving.append([y_min, y_max, x_min, x_max])
         boxes = np.array(boxes) / size
+        boxes_moving = np.array(boxes_moving) / size
         boxes_all.append(boxes)
         boxes_moving_all.append(boxes_moving)
 
-    return boxes_all, boxes_moving_all
+    return boxes_all, boxes_moving_all, boxes_moving_all
 
 
 def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):

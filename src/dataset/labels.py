@@ -7,6 +7,28 @@ label_list_pacman = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
 label_list_carnival = ["owl", 'rabbit', 'shooter', 'refill', 'bonus', "duck",
                        "flying_duck", "score0", "no_label"]
 
+
+def filter_relevant_boxes(game, boxes_batch):
+    if "MsPacman" in game:
+        return [box_bat[box_bat[:, 1] < 105 / 128] for box_bat in boxes_batch]
+    elif "Carnival" in game:
+        return
+    else:
+        raise ValueError(f"Game {game} could not be found in labels")
+
+
+def to_relevant(game, labels_moving):
+    """
+    Return Labels from line in csv file
+    """
+    if "MsPacman" in game:
+        return labels_moving != label_list_pacman.index("no_label")
+    elif "Carnival" in game:
+        return labels_moving != label_list_carnival.index("no_label")
+    else:
+        raise ValueError(f"Game {game} could not be found in labels")
+
+
 def get_labels(row, game, boxes_batch):
     """
     Return Labels from line in csv file
@@ -64,9 +86,10 @@ def labels_for_pieces(bbs, row, pieces):
     return torch.LongTensor([label_list_pacman.index(lab) for lab in labels])
 
 
+# TODO: How to validate no_label distance
 def label_for_bb(bb, row, pieces):
     label = min(((name, bb_dist(bb, pos)) for name, pos in pieces.items()), key=lambda tup: tup[1])
-    if label[1] > 10:  # dist
+    if label[1] > 15:  # dist
         label = ("no_label", 0)
     label = label[0]  # name
     if f'{label}_blue' in row and row[f'{label}_blue'].item():
@@ -77,4 +100,4 @@ def label_for_bb(bb, row, pieces):
 
 
 def bb_dist(bb, pos):
-    return abs((bb[0] + bb[1]) / 2 - pos[0]) + abs((bb[2] + bb[3]) / 2 - pos[1])
+    return abs(bb[0] - pos[0]) + abs(bb[3] - pos[1])

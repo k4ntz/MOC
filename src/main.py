@@ -1,5 +1,6 @@
 from engine.utils import get_config
 from engine.train import train
+from engine.train_multi import train_multi
 from engine.eval import eval
 from engine.show import show
 from engine.data_gatherer import gather
@@ -15,7 +16,8 @@ if __name__ == '__main__':
         'show': show,
         'split_videos': split_videos,
         'gather': gather,
-        'test_flow': test_flow
+        'test_flow': test_flow,
+        'train_multi': train_multi
     }
     cfg, task = get_config()
     assert task in task_dict

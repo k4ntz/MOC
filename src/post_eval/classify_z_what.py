@@ -33,13 +33,14 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        }
 
 
-def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
+def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     """
     :param arguments: dict of properties
     :param z_what: (#objects, encoding_dim)
     :param labels: (#objects)
     # :param z_where: (#objects, 4)
     :param cfg:
+    :param title:
     :return:
         result: metrics
         path: to pca
@@ -49,8 +50,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
     c = Counter(labels.tolist())
     print("Distribution of matched labels:", c)
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else list(c.keys())
-    folder = f'hyper/{cfg.exp_name}{cfg.seed}' if cfg else f'{arguments["folder"]}1'
-    pca_path = f"../output/logs/{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
+    folder = f'{cfg.logdir}/{cfg.exp_name}{cfg.seed}' if cfg else f'{arguments["folder"]}1'
+    pca_path = f"{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
     label_list = get_label_list(cfg)
 
     relevant = torch.zeros(labels.shape, dtype=torch.bool)
@@ -104,7 +105,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
     few_shot_accuracy[f'few_shot_accuracy_cluster_nn'] = nn_class.score(test_x, test_y)
 
     train_all = torch.cat((z_what, labels.unsqueeze(1)), 1)
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'purple', 'orange',
+    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'key', 'pink', 'purple', 'orange',
               'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
     # SORT THE INDICES
     sorted = []
@@ -158,7 +159,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
                                c=colr,
                                edgecolors='black', s=100, linewidths=2)
         plt.legend(prop={'size': 6})
-        directory = f"../output/logs/{folder}"
+        directory = f"{folder}"
         if not os.path.exists(directory):
             print(f"Writing PCA to {directory}")
             os.makedirs(directory)
@@ -214,8 +215,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title="moving"):
 
         axs[0].legend(prop={'size': 6})
         axs[1].legend(prop={'size': 6})
-        if not os.path.exists(f"../output/logs/{folder}"):
-            os.makedirs(f"../output/logs/{folder}")
+        if not os.path.exists(f"{folder}"):
+            os.makedirs(f"{folder}")
         plt.tight_layout()
         plt.savefig(pca_path)
         plt.close(fig)

@@ -69,7 +69,7 @@ def train(cfg):
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
 
-    log_path = os.path.join(cfg.logdir, cfg.exp_name + str(cfg.seed))
+    log_path = os.path.join(cfg.logdir, cfg.exp_name)
     if os.path.exists(log_path) and len(log_path) > 15 and cfg.logdir and cfg.exp_name and str(cfg.seed):
         shutil.rmtree(log_path)
 
