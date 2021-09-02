@@ -1,9 +1,10 @@
 # own mini version of dreamer for processed features
 import gym
 import os
-from matplotlib.pyplot import step
+from matplotlib.pyplot import axis, step
 import torch
 import threading
+import numpy as np
 
 from atariari.benchmark.wrapper import AtariARIWrapper
 from torch.utils.tensorboard import SummaryWriter
@@ -19,17 +20,19 @@ from xrl.minidr.model import WorldPredictor, Policy
 
 import xrl.utils as xutils
 
+torch.autograd.set_detect_anomaly(True)
 
 
 # world pred parameter
 batch = 50
-L = 50 #seq len world training
+L = 4 #seq len world training
 history_size = 400
 lr_pred = 1e-4
 alpha = 1e-4   #alpha to scale down loss of state for loss of reward
 
 # policy parameter
 lr_policy = 1e-2
+gamma = 0.97
 
 # misc parameter
 adam_eps = 1e-5
@@ -88,6 +91,27 @@ def select_action(features, policy):
     return action.item(), log_prob
 
 
+# function to train after every episode/iteration
+def finish_episode(policy, optimizer, eps):
+    R = 0
+    policy_loss = []
+    returns = []
+    for r in policy.rewards[::-1]:
+        R = r + gamma * R
+        returns.insert(0, R)
+    returns = torch.tensor(returns)
+    returns = (returns - returns.mean()) / (returns.std() + eps)
+    for log_prob, R in zip(policy.saved_log_probs, returns):
+        policy_loss.append(-log_prob * R)
+    optimizer.zero_grad()
+    policy_loss = torch.cat(policy_loss).sum()
+    policy_loss.backward()
+    optimizer.step()
+    del policy.rewards[:]
+    del policy.saved_log_probs[:]
+    return policy, optimizer
+
+
 def train(cfg):
     ### HYPERPARAMETERS ###
     print('Experiment name:', cfg.exp_name)
@@ -126,6 +150,7 @@ def train(cfg):
     optim_predictor = Adam(predictor.parameters(), lr=lr_pred, eps=adam_eps, weight_decay=decay)
     optim_policy = Adam(policy.parameters(), lr=lr_policy, eps=adam_eps, weight_decay=decay)
 
+    eps = np.finfo(np.float32).eps.item()
     history = []
     steps_done = [0]  
     i_episode = 1
@@ -201,16 +226,21 @@ def train(cfg):
         loss_pred = 0
         loss_s = 0
         loss_r = 0
-        loss_policy = 0
         len_h = 0
+
+        # create copy of predictor for policy training
+        policy_predictor = WorldPredictor(input=len(features), batch_size=batch, seq_len=L).to(device)
+        policy_predictor.load_state_dict(predictor.state_dict())
+
+        train_s = None
         
         for ls, a, s, r in loader:
             ls = ls.to(device)
             a = a.unsqueeze(2).to(device)
             s = s.to(device)
             r = r.unsqueeze(2).to(device)
-            
-            # TRAIN PREDICTOR
+
+            ### TRAIN PREDICTOR
             
             # predict
             ps, pr = predictor(ls, a)
@@ -223,9 +253,28 @@ def train(cfg):
             loss_pred.backward(retain_graph=True)
             optim_predictor.step()
 
-            # TRAIN POLICY
+            ### TRAIN POLICY
 
-            #TODO: implement training loop for policy with given REINFORCE stuff
+            # set start of dream
+            if train_s is None:
+                train_s = ls.detach().clone()
+            train_s = train_s[0].unsqueeze(0)
+            # do training loop step
+            train_a, log_prob = select_action(train_s[0][0], policy)
+            policy.saved_log_probs.append(log_prob)
+            
+            # create action tensor with 4 times the same action for predictor
+            train_a = torch.tensor([train_a])
+            train_a = torch.cat((train_a, train_a, train_a, train_a), axis=0).unsqueeze(0).unsqueeze(2)
+            # create batch size for pred inference
+            train_s = torch.cat(batch*[train_s])
+            train_a = torch.cat(batch*[train_a])
+            # predict next 4 states    
+            train_s, train_r = policy_predictor(train_s, train_a)
+            train_r = train_r[0]
+            # add reward
+            train_r = torch.sum(train_r)
+            policy.rewards.append(train_r)
 
             if i_episode % 5 == 0:
                 # set logging variables
@@ -233,17 +282,19 @@ def train(cfg):
                 # display
                 pbar.set_postfix(
                     l_pred = loss_pred.item(),
-                    l_policy = loss_policy,
                     len_h = len_h,
                     i_episode = i_episode
                 )
+        # finish training policy for iteration
+        policy, optim_policy = finish_episode(policy, optim_policy, eps)
+
+        # update tqdm
         pbar.update(n=steps_done[0] - tmp_steps_done)
 
         # log all
         writer.add_scalar('Train/Loss World Predictor', loss_pred, i_episode)
         writer.add_scalar('Train/Loss World Predictor State', loss_s, i_episode)
         writer.add_scalar('Train/Loss World Predictor Reward', loss_r, i_episode)
-        writer.add_scalar('Train/Loss Actor', loss_policy, i_episode)
         # save
         #save once in a while
         if i_episode % cfg.train.save_every == 0:
