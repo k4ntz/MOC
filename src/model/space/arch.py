@@ -10,9 +10,14 @@ arch = CfgNode({
     'object_threshold': 0.5,
     'z_cos_match_weight': 5.0,
     'full_object_weight': 20000,
-    'flow': True,
+    'flow_input': True,
+    'flow_direct_weight': 1.0,
+    'flow_loss_weight': 0.0,
+    'flow_sigmoid_steepen': 1000.0,
+    'flow_cooling_end_step': 5000,
     # SPACE-config
     'img_shape': (128, 128),
+    'T': 4,
     
     # Grid size. There will be G*G slots
     'G': 8,

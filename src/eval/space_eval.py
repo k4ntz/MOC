@@ -25,8 +25,8 @@ class SpaceEval:
         self.first_eval = True
 
     @torch.no_grad()
-    def test_eval(self, model, testset, bb_path, device, evaldir, info):
-        losses, logs = self.apply_model(testset, device, model)
+    def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step):
+        losses, logs = self.apply_model(testset, device, model, global_step)
         result_dict = self.eval_ap_and_acc(logs, testset, bb_path)
         os.makedirs(evaldir, exist_ok=True)
         path = osp.join(evaldir, 'results_{}.json'.format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
@@ -75,12 +75,12 @@ class SpaceEval:
         """
         if self.first_eval:
             self.first_eval = False
-            self.eval_file_path = f'{cfg.logdir}/{cfg.exp_name}{cfg.seed}/metrics.csv'
+            self.eval_file_path = f'{cfg.logdir}/{cfg.exp_name}/metrics.csv'
             if os.path.exists(self.eval_file_path):
                 os.remove(self.eval_file_path)
             self.write_header()
 
-        losses, logs = self.apply_model(valset, device, model)
+        losses, logs = self.apply_model(valset, device, model, global_step)
         with open(self.eval_file_path, "a") as self.eval_file:
             self.write_metric(None, None, global_step, global_step, use_writer=False)
             if 'cluster' in eval_cfg.train.metrics:
@@ -91,13 +91,16 @@ class SpaceEval:
                 checkpointer.save_best('mutual_information_relevant',
                                        results['relevant'][0]['adjusted_mutual_info_score'],
                                        checkpoint, min_is_better=False)
+                checkpointer.save_best('nn_cluster_accuracy',
+                                       results['relevant'][2]['few_shot_accuracy_cluster_nn'],
+                                       checkpoint, min_is_better=False)
             if 'mse' in eval_cfg.train.metrics:
                 mse = self.train_eval_mse(logs, losses, writer, global_step)
                 print("MSE result: ", mse)
             if 'ap' in eval_cfg.train.metrics:
                 results = self.train_eval_ap_and_acc(logs, valset, bb_path, writer, global_step)
                 APs = results['APs_relevant']
-                checkpointer.save_best('error_rate_relevant', APs[len(APs) // 2], checkpoint, min_is_better=True)
+                checkpointer.save_best('AP0.5_relevant', APs[len(APs) // 2], checkpoint, min_is_better=True)
                 checkpointer.save_best('error_rate_relevant', results['error_rate_relevant'], checkpoint, min_is_better=True)
                 results = {k2: v2[len(v2) // 2] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for k2, v2, in
                            results.items()}
@@ -107,7 +110,7 @@ class SpaceEval:
             self.eval_file.write("\n")
 
     @torch.no_grad()
-    def apply_model(self, dataset, device, model):
+    def apply_model(self, dataset, device, model, global_step):
         print('Applying the model for evaluation...')
         if eval_cfg.train.num_samples:
             num_samples = max(eval_cfg.train.num_samples.values())
@@ -122,7 +125,7 @@ class SpaceEval:
         with torch.no_grad():
             for i, imgs in enumerate(dataloader):
                 imgs = imgs.to(device)
-                loss, log = model(imgs, global_step=100000000)
+                loss, log = model(imgs, global_step=global_step)
                 losses.append(loss)
                 logs.append(log)
         model.train()
@@ -167,12 +170,7 @@ class SpaceEval:
         num_batches = eval_cfg.train.num_samples.mse // eval_cfg.train.batch_size
         metric_logger = MetricLogger()
         for loss, log in zip(losses[:num_batches], logs):
-            B = eval_cfg.train.batch_size
-            for b in range(B):
-                metric_logger.update(
-                    mse=torch.mean(torch.tensor([log['space_log'][i]['mse'][b] for i in range(4)]))
-                )
-            metric_logger.update(loss=loss.mean())
+            metric_logger.update(mse=torch.mean(log['mse']))
         mse = metric_logger['mse'].global_avg
         self.write_metric(writer, f'all/mse', mse, global_step=global_step)
         return mse
@@ -209,31 +207,35 @@ class SpaceEval:
         all_labels = []
         all_labels_moving = []
         batch_size = eval_cfg.train.batch_size
-        num_batches = eval_cfg.train.num_samples.cluster // batch_size
-        for i, log in enumerate(logs[:num_batches]):
-            for j, img in enumerate(log['space_log']):
-                z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
-                z_pres_prob = z_pres_prob.squeeze()
-                z_pres = z_pres_prob > 0.5
-                # (N, 32)
-                z_enc = z_what[z_pres]
-                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-                z_encs.extend(z_enc)
-                all_labels.extend(dataset.get_labels(range(i * batch_size, (i + 1) * batch_size), j, boxes_batch))
-                all_labels_moving.extend(
-                    dataset.get_labels_moving(range(i * batch_size, (i + 1) * batch_size), j, boxes_batch))
+        for i, img in enumerate(logs):
+            z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
+            z_pres_prob = z_pres_prob.squeeze()
+            z_pres = z_pres_prob > 0.5
+            # (N, 32)
+            z_enc = z_what[z_pres]
+            boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+            z_encs.extend(z_enc)
+            all_labels.extend(dataset.get_labels(i * batch_size, (i + 1) * batch_size, boxes_batch))
+            all_labels_moving.extend(
+                dataset.get_labels_moving(i * batch_size, (i + 1) * batch_size, boxes_batch))
         args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation',
                 'edgecolors': False}
-        z_encs = torch.stack(z_encs).detach().cpu()
-        all_labels = torch.cat(all_labels).detach().cpu()
-        all_labels_moving = torch.cat(all_labels_moving).detach().cpu()
-        all_labels_relevant_idx = dataset.to_relevant(all_labels_moving)
-        all_labels_relevant = all_labels_moving[all_labels_relevant_idx]
-        z_encs_relevant = z_encs[all_labels_relevant_idx]
-        all_objects = evaluate_z_what(args, z_encs, all_labels, len(z_encs), cfg, title="all")
-        moving_objects = evaluate_z_what(args, z_encs, all_labels_moving, len(z_encs), cfg, title="moving")
-        relevant_objects = evaluate_z_what(args, z_encs_relevant, all_labels_relevant, len(z_encs), cfg, title="relevant")
+        if z_encs:
+            z_encs = torch.stack(z_encs).detach().cpu()
+            all_labels = torch.cat(all_labels).detach().cpu()
+            all_labels_moving = torch.cat(all_labels_moving).detach().cpu()
+            all_labels_relevant_idx = dataset.to_relevant(all_labels_moving)
+            all_labels_relevant = all_labels_moving[all_labels_relevant_idx]
+            z_encs_relevant = z_encs[all_labels_relevant_idx]
+            all_objects = evaluate_z_what(args, z_encs, all_labels, len(z_encs), cfg, title="all")
+            moving_objects = evaluate_z_what(args, z_encs, all_labels_moving, len(z_encs), cfg, title="moving")
+            relevant_objects = evaluate_z_what(args, z_encs_relevant, all_labels_relevant, len(z_encs), cfg, title="relevant")
+        else:
+            all_objects = evaluate_z_what(args, None, None, None, cfg, title="all")
+            moving_objects = evaluate_z_what(args, None, None, None, cfg, title="moving")
+            relevant_objects = evaluate_z_what(args, None, None, None, cfg, title="relevant")
         return {'all': all_objects, 'moving': moving_objects, 'relevant': relevant_objects}
+
 
     @torch.no_grad()
     def eval_ap_and_acc(self, logs, dataset, bb_path, iou_thresholds=None):
@@ -251,8 +253,7 @@ class SpaceEval:
         if iou_thresholds is None:
             iou_thresholds = np.linspace(0.05, 0.95, 19)
         boxes_gt_types = ['all', 'moving', 'relevant']
-        indices = [k * batch_size * 4 + i * 4 + j + dataset.flow for k in range(num_samples // batch_size) for j in
-                   range(4) for i in range(batch_size)]
+        indices = list(range(4 * num_samples))
         boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, 128, indices))}
         boxes_pred = []
         boxes_relevant = []
@@ -260,15 +261,14 @@ class SpaceEval:
         rgb_folder_src = f"../aiml_atari_data/rgb/MsPacman-v0/validation"
         rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/validation"
         num_batches = eval_cfg.train.num_samples.cluster // eval_cfg.train.batch_size
-        for log in logs[:num_batches]:
-            for j, img in enumerate(log['space_log']):
-                z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
-                z_where = z_where.detach().cpu()
-                z_pres_prob = z_pres_prob.detach().cpu().squeeze()
-                z_pres = z_pres_prob > 0.5
-                boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-                boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch))
-                boxes_pred.extend(boxes_batch)
+        for img in logs[:num_batches]:
+            z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
+            z_where = z_where.detach().cpu()
+            z_pres_prob = z_pres_prob.detach().cpu().squeeze()
+            z_pres = z_pres_prob > 0.5
+            boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
+            boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch))
+            boxes_pred.extend(boxes_batch)
 
         # print('Drawing bounding boxes for eval...')
         # for idx, pred, rel, gt, gt_m, gt_r in zip(indices, boxes_pred, boxes_relevant, *boxes_gts.values()):
@@ -286,13 +286,14 @@ class SpaceEval:
         #     gt_m_tensor = torch.index_select(gt_m_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
         #     gt_r_tensor = torch.FloatTensor(gt_r) * 128
         #     gt_r_tensor = torch.index_select(gt_r_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
-        #     bb_img = draw_bb(torch_img, gt_tensor, colors='red')
-        #     bb_img = draw_bb(bb_img, gt_m_tensor, colors='blue')
-        #     bb_img = draw_bb(bb_img, gt_r_tensor, colors='yellow')
-        #     bb_img = draw_bb(bb_img, pred_tensor, colors='green')
-        #     bb_img = draw_bb(bb_img, rel_tensor, colors='white')
+        #     bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
+        #     bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
+        #     bb_img = draw_bb(bb_img, gt_r_tensor, colors=["yellow"] * len(gt_r_tensor))
+        #     bb_img = draw_bb(bb_img, pred_tensor, colors=["orange"] * len(pred_tensor))
+        #     bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
         #     bb_img = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
-        #     bb_img.save(f'{rgb_folder}/temp_from_eval_objects_{idx:05}.png')
+        #     bb_img.save(f'{rgb_folder}/temp_from_eval_objects2_{idx:05}.png')
+        #     print(f'{rgb_folder}/temp_from_eval_objects2_{idx:05}.png')
         result = {}
         for gt_name, gt in boxes_gts.items():
             # Four numbers

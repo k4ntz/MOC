@@ -1,6 +1,5 @@
 import torch
 import torch.nn.functional as F
-from simple_net import Network
 from sklearn.linear_model import LogisticRegression, LinearRegression, SGDClassifier
 from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
@@ -47,13 +46,14 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         accuracy: few shot accuracy
     """
 
-    c = Counter(labels.tolist())
+    c = Counter(labels.tolist() if labels is not None else [])
     print("Distribution of matched labels:", c)
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else list(c.keys())
-    folder = f'{cfg.logdir}/{cfg.exp_name}{cfg.seed}' if cfg else f'{arguments["folder"]}1'
+    folder = f'{cfg.logdir}/{cfg.exp_name}' if cfg else f'{arguments["folder"]}'
     pca_path = f"{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
+    if len(c) < 2:
+        return Counter(), pca_path, Counter()
     label_list = get_label_list(cfg)
-
     relevant = torch.zeros(labels.shape, dtype=torch.bool)
     for rl in relevant_labels:
         relevant |= labels == rl
@@ -65,14 +65,17 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     test_y = labels[nb_sample:]
     train_x = z_what[:nb_sample]
     train_y = labels[:nb_sample]
+    if len(torch.unique(train_y)) < 2:
+        return Counter(), pca_path, Counter()
     few_shot_accuracy = {}
     z_what_by_game = {rl: train_x[train_y == rl] for rl in relevant_labels}
     labels_by_game = {rl: train_y[train_y == rl] for rl in relevant_labels}
     for training_objects_per_class in [1, 4, 16, 64]:
         current_train_sample = torch.cat([z_what_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
-        current__train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
+        current_train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         clf = LogisticRegression()
-        clf.fit(current_train_sample, current__train_labels)
+
+        clf.fit(current_train_sample, current_train_labels)
         acc = clf.score(test_x, test_y)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
 
@@ -82,9 +85,10 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         'adjusted_mutual_info_score': metrics.adjusted_mutual_info_score(labels, y),
         'adjusted_rand_score': metrics.adjusted_rand_score(labels, y),
     }
+
     centroids = clf.cluster_centers_
     X = train_x.numpy()
-    nn = NearestNeighbors(n_neighbors=N_NEIGHBORS).fit(X)
+    nn = NearestNeighbors(n_neighbors=min(N_NEIGHBORS, len(X))).fit(X)
     _, z_w_idx = nn.kneighbors(centroids)
     centroid_label = []
     for cent, nei in zip(centroids, z_w_idx):

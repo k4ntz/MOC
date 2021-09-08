@@ -20,7 +20,7 @@ class Atari(Dataset):
         self.mode = mode
         self.game = gamelist[0]
         self.flow = flow
-        self.valid_flow_threshold = 5
+        self.valid_flow_threshold = 20
         self.all_labels = pd.read_csv(os.path.join(self.image_path, self.game, f"{mode}_labels.csv"))
         if "MsPacman" in self.game:
             self.all_labels = self.all_labels.rename(columns={'player_y': 'pacman_y', 'player_x': 'pacman_x'})
@@ -51,8 +51,7 @@ class Atari(Dataset):
         if self.flow:
             flow = np.load(os.path.join(self.flow_path, path.replace('.png', '.npy')))
             flow = np.expand_dims((flow * flow).sum(axis=2), axis=2)
-            flow[flow > self.valid_flow_threshold] = 0
-            flow = flow * 255 / self.valid_flow_threshold
+            flow = flow * 255 / flow.max()
             image = np.append(image, flow, axis=2)
         return torch.from_numpy(image / 255).permute(2, 0, 1).float()
 
@@ -62,17 +61,17 @@ class Atari(Dataset):
         assert osp.exists(path), f'Bounding box path {path} does not exist.'
         return path
 
-    def get_labels(self, idx, j, boxes_batch):
+    def get_labels(self, batch_start, batch_end, boxes_batch):
         labels = []
-        for i, boxes in zip(idx, boxes_batch):
-            img_idx = i * 4 + j + self.flow
+        for i, boxes in zip(range(batch_start * 4, batch_end * 4), boxes_batch):
+            img_idx = i + self.flow
             labels.append(get_labels(self.all_labels.iloc[[img_idx]], self.game, boxes))
         return labels
 
-    def get_labels_moving(self, idx, j, boxes_batch):
+    def get_labels_moving(self, batch_start, batch_end, boxes_batch):
         labels = []
-        for i, boxes in zip(idx, boxes_batch):
-            img_idx = i * 4 + j + self.flow
+        for i, boxes in zip(range(batch_start * 4, batch_end * 4), boxes_batch):
+            img_idx = i + self.flow
             labels.append(get_labels_moving(self.all_labels.iloc[[img_idx]], self.game, boxes))
         return labels
 

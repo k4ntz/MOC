@@ -6,7 +6,7 @@ from torch.distributions import Normal, kl_divergence
 from .utils import NumericalRelaxedBernoulli, kl_divergence_bern_bern, get_boundary_kernel_new, get_boundary_kernel
 from .utils import spatial_transform, linear_annealing
 from .arch import arch
-
+import time
 
 class SpaceFg(nn.Module):
     def __init__(self):
@@ -114,11 +114,10 @@ class SpaceFg(nn.Module):
 
         # Everything is (B, G*G, D), where D varies
         z_pres, z_depth, z_scale, z_shift, z_where, \
-        z_pres_logits, z_depth_post, z_scale_post, z_shift_post = self.img_encoder(x, self.tau)
+        z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow = self.img_encoder(x, self.tau, global_step)
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
-
         # (B*G*G, 3, H, W), where G is the grid size
         # Extract glimpse
         x_att = spatial_transform(x_repeat, z_where.view(B * arch.G ** 2, 4),
@@ -126,8 +125,6 @@ class SpaceFg(nn.Module):
 
         # (B*G*G, D)
         z_what, z_what_post = self.z_what_net(x_att)
-
-        # t_cons_loss = self.t_cons_loss(z_what)
 
         # Decode z_what into small reconstructed glimpses
         # All (B*G*G, 3, H, W)
@@ -255,6 +252,7 @@ class SpaceFg(nn.Module):
             'z_scale': z_scale,
             'z_shift': z_shift,
             'z_depth': z_depth,
+            'grid_flow': torch.sigmoid(8.8 * grid_flow),
             'z_pres_prob': torch.sigmoid(z_pres_logits),
             'prior_z_pres_prob': self.prior_z_pres_prob.unsqueeze(0),
             'o_att': o_att,
@@ -336,7 +334,7 @@ class ImgEncoderFg(nn.Module):
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
         self.z_scale_net = nn.Conv2d(128, arch.z_where_scale_dim * 2, 1)
         self.z_shift_net = nn.Conv2d(128, arch.z_where_shift_dim * 2, 1)
-        self.z_pres_net = nn.Conv2d(128 + arch.flow, arch.z_pres_dim, 1)
+        self.z_pres_net = nn.Conv2d(128 + arch.flow_input, arch.z_pres_dim, 1)
         self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)
 
         # (G, G). Grid center offset. (offset_x[i, j], offset_y[i, j]) is the center for cell (i, j)
@@ -345,12 +343,13 @@ class ImgEncoderFg(nn.Module):
         # (2, G, G). I do this just to ensure that device is correct.
         self.register_buffer('offset', torch.stack((offset_x, offset_y), dim=0).float())
 
-    def forward(self, x, tau):
+    def forward(self, x, tau, global_step):
         """
         Given image, infer z_pres, z_depth, z_where
 
         :param x: (B, 3, H, W)
         :param tau: temperature for the relaxed bernoulli
+        :param global_step: step for cooling
         :return
             z_pres: (B, G*G, 1)
             z_depth: (B, G*G, 1)
@@ -382,13 +381,20 @@ class ImgEncoderFg(nn.Module):
             return out[0] if len(args) == 1 else out
 
         # Compute posteriors
-        avg = nn.AvgPool2d(128 // arch.G, 128 // arch.G)
+        grid_width = 128 // arch.G
+        avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
         # (B, 1, G, G)
-        if arch.flow:
+        if arch.flow_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
-        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc_z_pres))
+        # Warning: Removed 8.8
+        z_pres_logits = torch.tanh(self.z_pres_net(cat_enc_z_pres))
+        grid_flow = avg(x[:, 3:4])
+        grid_flow = torch.tanh(arch.flow_sigmoid_steepen * (grid_flow - grid_flow.mean()))
+        flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
+        z_pres_logits = (1 - arch.flow_direct_weight * flow_cooling_scaling) * z_pres_logits + \
+                        arch.flow_direct_weight * flow_cooling_scaling * grid_flow
         # (B, 1, G, G) - > (B, G*G, 1)
-        z_pres_logits = reshape(z_pres_logits)
+        z_pres_logits = 8.8 * reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
         # Unbounded
         z_pres_y = z_pres_post.rsample()
@@ -442,7 +448,7 @@ class ImgEncoderFg(nn.Module):
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
-               z_pres_logits, z_depth_post, z_scale_post, z_shift_post
+               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow
 
 
 class ZWhatEnc(nn.Module):

@@ -5,7 +5,7 @@ from attrdict import AttrDict
 from .arch import arch
 from .fg import SpaceFg
 from .bg import SpaceBg
-
+import time
 
 class Space(nn.Module):
     
@@ -29,7 +29,7 @@ class Space(nn.Module):
         # Background extraction
         # (B, 3, H, W), (B, 3, H, W), (B, T)
         bg_likelihood, bg, kl_bg, log_bg = self.bg_module(x[:, :3], global_step)
-        
+
         # Foreground extraction
         fg_likelihood, fg, alpha_map, kl_fg, loss_boundary, log_fg = self.fg_module(x, global_step)
 

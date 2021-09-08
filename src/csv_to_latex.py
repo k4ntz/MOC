@@ -8,8 +8,8 @@ import matplotlib.colors as mcolors
 RESULT_TEX = os.path.join("D:", "results", "seed", "result.tex")
 
 sns.set_theme()
-data_path = os.path.join("D:", "logs", "seed")
-result_path = os.path.join("D:", "results", "seed")
+data_path = os.path.join("D:", "logs", "flow")
+result_path = os.path.join("D:", "results", "flow")
 
 metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI'
@@ -112,7 +112,8 @@ def main():
     mutual_info_columns = ["all_adjusted_mutual_info_score", "moving_adjusted_mutual_info_score",
                            "relevant_adjusted_mutual_info_score"]
     table(experiments, mutual_info_columns, joined_df)
-    line_plot(experiments, mutual_info_columns[0], joined_df)
+    line_plot(experiments, "all_perfect", joined_df)
+    line_plot(experiments, "relevant_perfect", joined_df)
 
 
 if __name__ == '__main__':

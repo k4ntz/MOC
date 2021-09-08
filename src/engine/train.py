@@ -16,7 +16,7 @@ from tqdm import tqdm
 import shutil
 
 
-def train(cfg):
+def train(cfg, rtpt_active=True):
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -30,8 +30,9 @@ def train(cfg):
         print('Device ids:', cfg.device_ids)
 
     print('Loading data')
-    rtpt = RTPT(name_initials='TRo', experiment_name='Train TcSP', max_iterations=cfg.train.max_epochs)
-    rtpt.start()
+    if rtpt_active:
+        rtpt = RTPT(name_initials='TRo', experiment_name='SPACE-Time', max_iterations=cfg.train.max_epochs)
+        rtpt.start()
     dataset = get_dataset(cfg, 'train')
     trainloader = get_dataloader(cfg, 'train')
     if cfg.train.eval_on:
@@ -126,7 +127,7 @@ def train(cfg):
                 print(f'Log duration: {end - start}')
                 log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
-            if cfg.resume and global_step - checkpoint['global_step'] < 100 and global_step % start_log == 0:
+            if global_step - checkpoint['global_step'] if cfg.resume else 0 < 100 and global_step % start_log == 0:
                 start_log = int(start_log * 1.6)
                 log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
@@ -149,18 +150,20 @@ def train(cfg):
             if global_step > cfg.train.max_steps:
                 end_flag = True
                 break
-        rtpt.step()
+        if rtpt_active:
+            rtpt.step()
 
 
 def log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader):
     print()
     print(
         'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
-        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, batch time: '
+        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, flow_loss: {:.3f}, batch time: '
         '{:.4f}s, data time: {:.4f}s'.format(
             cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
             torch.sum(log['z_what_loss']).item(), torch.sum(log['z_pres_loss']).item(),
             torch.sum(log['z_what_loss_pool']).item(),
             torch.sum(log['z_what_loss_objects']).item(),
+            torch.sum(log['flow_loss']).item(),
             metric_logger['batch_time'].avg, metric_logger['data_time'].avg))
     print()

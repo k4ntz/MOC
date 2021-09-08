@@ -7,7 +7,7 @@ from .fg import SpaceFg
 from .bg import SpaceBg
 from .space import Space
 from rtpt import RTPT
-
+import time
 
 class TcSpace(nn.Module):
 
@@ -27,29 +27,40 @@ class TcSpace(nn.Module):
             loss: a scalar. Note it will be better to return (B,)
             log: a dictionary for visualization
         """
-        y = [x[:, i] for i in range(4)]
+        B, T, C, H, W = x.shape
+
         zero = torch.tensor(0.0).to(x.device)
-        responses = [self.space(y1, global_step) for y1 in y]
+        x = x.reshape(T * B, C, H, W)
+        loss, responses = self.space(x, global_step)
+
+        # Further losses
         z_what_loss = z_what_loss_grid_cell(responses) if arch.adjacent_consistency_weight > 1e-3 else zero
         z_pres_loss = z_pres_loss_grid_cell(responses) if arch.pres_inconsistency_weight > 1e-3 else zero
         z_what_loss_pool = z_what_consistency_pool(responses) if arch.area_pool_weight > 1e-3 else zero
-        z_what_loss_objects, objects_detected = z_what_consistency_objects(
-            responses) if arch.area_object_weight > 1e-3 else (zero, zero)
+        if arch.area_object_weight > 1e-3:
+            z_what_loss_objects, objects_detected = z_what_consistency_objects(responses)
+        else:
+            z_what_loss_objects, objects_detected = (zero, zero)
+        flow_loss = compute_flow_loss(responses) if arch.flow_loss_weight > 1e-3 else zero
+
         area_object_scaling = min(1, global_step / arch.full_object_weight)
-        log = {
-            'space_log': [get_log(r) for r in responses],
+        flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
+        tc_log = {
             'z_what_loss': z_what_loss,
             'z_what_loss_pool': z_what_loss_pool,
             'z_what_loss_objects': z_what_loss_objects,
             'z_pres_loss': z_pres_loss,
+            'flow_loss': flow_loss,
             'objects_detected': objects_detected
         }
-        loss = sum([get_loss(r) for r in responses]) \
+        responses.update(tc_log)
+        loss = loss \
                + z_what_loss * arch.adjacent_consistency_weight \
                + z_pres_loss * arch.pres_inconsistency_weight \
                + z_what_loss_pool * arch.area_pool_weight \
-               + z_what_loss_objects * area_object_scaling * arch.area_object_weight
-        return loss, log
+               + z_what_loss_objects * area_object_scaling * arch.area_object_weight \
+               + flow_loss * arch.flow_loss_weight * flow_cooling_scaling
+        return loss, responses
 
 
 def sq_delta(t1, t2):
@@ -65,15 +76,28 @@ def get_loss(res):
     return loss
 
 
+def compute_flow_loss(responses):
+    pool = nn.MaxPool2d(3, stride=1, padding=1)
+    # (T * B, G, G, 1)
+    z_pres = responses['z_pres_prob'].reshape(-1, 1, arch.G, arch.G)
+    z_pres_max = pool(z_pres).reshape(-1, arch.G * arch.G, 1)
+    # (T * B, G*G, 1)
+    flow = responses['grid_flow'].reshape(z_pres_max.shape)
+    # print(flow.max(), flow.min(), z_pres_max.max(), z_pres_max.min(), z_pres.sum() - flow.sum())
+    return nn.functional.mse_loss(z_pres_max[flow > 0.5], flow[flow > 0.5], reduction='sum') \
+           + 100 * max(0, z_pres.sum() - flow.sum())
+
+
 def z_what_consistency_objects(responses):
-    # (T, B, G*G, 1)
     cos = nn.CosineSimilarity(dim=1)
-    z_pres = torch.stack([get_log(r)['z_pres_prob'] for r in responses])
+    # (T, B, G*G, 1)
+    z_whats = responses['z_what']
+    _, GG, D = z_whats.shape
+    z_whats.reshape(arch.T, -1, GG, D)
+    T, B = z_whats.shape[:2]
+    # (T, B, G*G, 1)
+    z_pres = responses['z_pres_prob'].reshape(T, -1, GG, 1)
     # (T, B, G*G, D)
-    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
-    B = z_whats.shape[1]
-    T = z_whats.shape[0]
-    D = z_whats.shape[3]
     z_pres = z_pres.reshape(T, B, arch.G, arch.G)
     z_pres_idx = (z_pres[:-1] > arch.object_threshold).nonzero(as_tuple=False)
     z_whats = z_whats.reshape(T, B, arch.G, arch.G, D)
@@ -110,13 +134,12 @@ def z_what_consistency_objects(responses):
 def z_what_consistency_pool(responses):
     # O(n^2) matching of only high z_pres
     # (T, B, G*G, D)
-    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
-    z_whats = torch.abs(z_whats)
-    B = z_whats.shape[1]
-    T = z_whats.shape[0]
-    D = z_whats.shape[3]
+    z_whats = responses['z_what']
+    _, GG, D = z_whats.shape
+    z_whats = torch.abs(z_whats).reshape(arch.T, -1, GG, D)
+    T, B = z_whats.shape[:2]
     # (T, B, G*G, 1)
-    z_pres = torch.stack([get_log(r)['z_pres_prob'] for r in responses])
+    z_pres = responses['z_pres_prob'].reshape(T, -1, GG, 1)
 
     z_what_weighted = z_whats * z_pres
     pool = nn.MaxPool2d(3, stride=1, padding=1)
@@ -137,14 +160,15 @@ def z_what_consistency_pool(responses):
 
 def z_what_loss_grid_cell(responses):
     # (T, B, G*G, D)
-    z_whats = torch.stack([get_log(r)['z_what'] for r in responses])
+    _, GG, D = responses['z_what'].shape
+    z_whats = responses['z_what'].reshape(arch.T, -1, GG, D)
     # (T-1, B, G*G, D)
     z_what_deltas = sq_delta(z_whats[1:], z_whats[:-1])
     return torch.sum(z_what_deltas)
 
 
 def z_pres_loss_grid_cell(responses):
-    z_press = torch.stack([get_log(r)['z_pres'] for r in responses])
+    z_press = responses['z_pres_prob'].reshape(arch.T, -1, arch.G * arch.G, 1)
     # (T-2, B, G*G, 1)
     z_pres_similarity = (1 - sq_delta(z_press[2:], z_press[:-2]))
     z_pres_deltas = (sq_delta(z_press[2:], z_press[1:-1]) + sq_delta(z_press[:-2], z_press[1:-1]))

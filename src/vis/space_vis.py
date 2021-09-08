@@ -24,100 +24,86 @@ class SpaceVis:
     def train_vis(self, model, writer: SummaryWriter, log, global_step, mode, cfg, dataset, num_batch=10):
         """
         """
-        writer.add_scalar(f'{mode}_sum/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/z_what_loss_pool', torch.sum(log['z_what_loss_pool']).item(),
+        writer.add_scalar(f'{mode}/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}/z_what_loss_pool', torch.sum(log['z_what_loss_pool']).item(),
                           global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/z_what_loss_objects', torch.sum(log['z_what_loss_objects']).item(),
+        writer.add_scalar(f'{mode}/z_what_loss_objects', torch.sum(log['z_what_loss_objects']).item(),
                           global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/objects_detected', torch.sum(log['objects_detected']).item(),
+        writer.add_scalar(f'{mode}/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}/flow_loss', torch.sum(log['flow_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}/objects_detected', torch.sum(log['objects_detected']).item(),
                           global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/total_loss', log['loss'], global_step=global_step)
-        B = num_batch
-        for i, img in enumerate(log['space_log']):
-            for key, value in img.items():
-                if isinstance(value, torch.Tensor):
-                    img[key] = value.detach().cpu()
-                    if isinstance(img[key], torch.Tensor) and img[key].ndim > 0:
-                        img[key] = img[key][:num_batch]
-            log_img = AttrDict(img)
+        writer.add_scalar(f'{mode}/total_loss', log['loss'], global_step=global_step)
+        # FYI: For visualization only use some images of each stack in the batch
+        for key, value in log.items():
+            if isinstance(value, torch.Tensor):
+                log[key] = value.detach().cpu()
+                if isinstance(log[key], torch.Tensor) and log[key].ndim > 0:
+                    log[key] = log[key][:num_batch]
+        log_img = AttrDict(log)
 
-            # (B, 3, H, W)
-            fg_box = bbox_in_one(
-                log_img.fg, log_img.z_pres, log_img.z_scale, log_img.z_shift
-            )
-            # (B, 1, 3, H, W)
-            imgs = log_img.imgs[:, None]
-            fg = log_img.fg[:, None]
-            recon = log_img.y[:, None]
-            fg_box = fg_box[:, None]
-            bg = log_img.bg[:, None]
-            # (B, K, 3, H, W)
-            comps = log_img.comps
-            # (B, K, 3, H, W)
-            masks = log_img.masks.expand_as(comps)
-            masked_comps = comps * masks
-            alpha_map = log_img.alpha_map[:, None].expand_as(imgs)
-            grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
-            nrow = grid.size(1)
-            B, N, _, H, W = grid.size()
-            grid = grid.reshape(B * N, 3, H, W)
+        # (B, 3, H, W)
+        fg_box = bbox_in_one(
+            log_img.fg, log_img.z_pres, log_img.z_scale, log_img.z_shift
+        )
+        # (B, 1, 3, H, W)
+        imgs = log_img.imgs[:, None]
+        fg = log_img.fg[:, None]
+        recon = log_img.y[:, None]
+        fg_box = fg_box[:, None]
+        bg = log_img.bg[:, None]
+        # (B, K, 3, H, W)
+        comps = log_img.comps
+        # (B, K, 3, H, W)
+        masks = log_img.masks.expand_as(comps)
+        masked_comps = comps * masks
+        alpha_map = log_img.alpha_map[:, None].expand_as(imgs)
+        grid = torch.cat([imgs, recon, fg, fg_box, bg, masked_comps, masks, comps, alpha_map], dim=1)
+        nrow = grid.size(1)
+        B, N, _, H, W = grid.size()
+        grid = grid.reshape(B * N, 3, H, W)
 
-            grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
-            writer.add_image(f'{mode}{i}/#0-separations', grid_image, global_step)
+        grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/0-separations', grid_image, global_step)
 
-            grid_image = make_grid(log_img.imgs, 5, normalize=False, pad_value=1)
-            writer.add_image(f'{mode}{i}/1-image', grid_image, global_step)
+        grid_image = make_grid(log_img.imgs, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/1-image', grid_image, global_step)
 
-            grid_image = make_grid(log_img.y, 5, normalize=False, pad_value=1)
-            writer.add_image(f'{mode}{i}/2-reconstruction_overall', grid_image, global_step)
+        grid_image = make_grid(log_img.y, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/2-reconstruction_overall', grid_image, global_step)
 
-            grid_image = make_grid(log_img.bg, 5, normalize=False, pad_value=1)
-            writer.add_image(f'{mode}{i}/3-background', grid_image, global_step)
+        grid_image = make_grid(log_img.bg, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/3-background', grid_image, global_step)
 
-            mse = (log_img.y - log_img.imgs) ** 2
-            mse = mse.flatten(start_dim=1).sum(dim=1).mean(dim=0)
-            log_like, kl_z_what, kl_z_where, kl_z_pres, kl_z_depth, kl_bg = (
-                log_img['log_like'].mean(), log_img['kl_z_what'].mean(), log_img['kl_z_where'].mean(),
-                log_img['kl_z_pres'].mean(), log_img['kl_z_depth'].mean(), log_img['kl_bg'].mean()
-            )
-            loss_boundary = log_img.boundary_loss.mean()
-            loss = log_img.loss.mean()
+        grid_flow = log_img.grid_flow.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
+        flow_image = log_img.imgs * grid_flow
+        grid_image = make_grid(flow_image, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/4-flow', grid_image, global_step)
 
-            count = log_img.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
-            writer.add_scalar(f'{mode}{i}/mse', mse.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/loss', loss, global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/count', count, global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/log_like', log_like.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/loss_boundary', loss_boundary.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/What_KL', kl_z_what.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/Where_KL', kl_z_where.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/Pres_KL', kl_z_pres.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/Depth_KL', kl_z_depth.item(), global_step=global_step)
-            writer.add_scalar(f'{mode}{i}/Bg_KL', kl_bg.item(), global_step=global_step)
-        summed = Counter()
-        for i, img in enumerate(log['space_log']):
-            for key, value in img.items():
-                if isinstance(value, torch.Tensor):
-                    img[key] = value.detach().cpu()
-                    if isinstance(img[key], torch.Tensor) and img[key].ndim > 0:
-                        img[key] = img[key][:num_batch]
-            log_img = AttrDict(img)
-            mse = (log_img.y - log_img.imgs) ** 2
-            mse = mse.flatten(start_dim=1).sum(dim=1).mean(dim=0)
-            summed['mse'] += mse
-            for key in ['log_like', 'kl_z_what', 'kl_z_where', 'kl_z_pres', 'kl_z_depth', 'kl_bg']:
-                summed[key] += log_img[key].mean()
-        writer.add_scalar(f'{mode}_sum/mse', summed['mse'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/log_like', summed['log_like'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/What_KL', summed['kl_z_what'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/Where_KL', summed['kl_z_where'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/Pres_KL', summed['kl_z_pres'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/Depth_KL', summed['kl_z_depth'], global_step=global_step)
-        writer.add_scalar(f'{mode}_sum/Bg_KL', summed['kl_bg'], global_step=global_step)
-        bb_image = draw_image_bb(model, cfg, dataset)
+        count = log_img.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
+        loss = log['loss'].mean()
+        writer.add_scalar(f'{mode}/loss', loss, global_step=global_step)
+        writer.add_scalar(f'{mode}/count', count, global_step=global_step)
+
+        mse = (log_img.y - log_img.imgs) ** 2
+        mse = mse.flatten(start_dim=1).sum(dim=1).mean(dim=0)
+        writer.add_scalar(f'{mode}/mse', mse, global_step=global_step)
+        writer.add_scalar(f'{mode}/log_like', log_img['log_like'].mean(), global_step=global_step)
+        writer.add_scalar(f'{mode}/What_KL', log_img['kl_z_what'].mean(), global_step=global_step)
+        writer.add_scalar(f'{mode}/Where_KL', log_img['kl_z_where'].mean(), global_step=global_step)
+        writer.add_scalar(f'{mode}/Pres_KL', log_img['kl_z_pres'].mean(), global_step=global_step)
+        writer.add_scalar(f'{mode}/Depth_KL', log_img['kl_z_depth'].mean(), global_step=global_step)
+        writer.add_scalar(f'{mode}/Bg_KL', log_img['kl_bg'].mean(), global_step=global_step)
+
+        z_pres_prob = log_img.z_pres_prob.reshape(log_img.grid_flow.shape)
+        z_pres_prob = z_pres_prob.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
+        z_pres_image = log_img.imgs * z_pres_prob
+        grid_image = make_grid(z_pres_image, 5, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/5-z_pres', grid_image, global_step)
+
+        bb_image = draw_image_bb(model, cfg, dataset, global_step)
         grid_image = make_grid(bb_image, 5, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}_sum/4-bounding_boxes', grid_image, global_step)
+        writer.add_image(f'{mode}/6-bounding_boxes', grid_image, global_step)
 
     @torch.no_grad()
     def show_vis(self, model, dataset, indices, path, device):
@@ -188,27 +174,26 @@ class SpaceVis:
         plt.imshow(fg_box[0][0].permute(1, 2, 0))
         plt.show()
 
-
-def draw_image_bb(model, cfg, dataset):
+def draw_image_bb(model, cfg, dataset, global_step):
     indices = np.random.choice(len(dataset), size=10, replace=False)
+    png_indices = [4 * i + dataset.flow for i in indices]
     dataset = Subset(dataset, indices)
     dataloader = DataLoader(dataset, batch_size=len(indices), shuffle=False)
     data = next(iter(dataloader))
     data = data.to(cfg.device)
-    loss, log = model(data, 100000000)
-    space_log = log['space_log'][0]
+    loss, log = model(data, global_step)
     bb_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/train/bb"
     rgb_folder = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/train"
     boxes_gt = read_boxes(bb_path, 128, indices=indices)
     boxes_pred = []
-    z_where, z_pres_prob = space_log['z_where'], space_log['z_pres_prob']
+    z_where, z_pres_prob = log['z_where'][:10], log['z_pres_prob'][:10]
     z_where = z_where.detach().cpu()
     z_pres_prob = z_pres_prob.detach().cpu().squeeze()
     z_pres = z_pres_prob > 0.5
     boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
     boxes_pred.extend(boxes_batch)
     result = []
-    for idx, gt, pred in zip(indices, boxes_gt, boxes_pred):
+    for idx, gt, pred in zip(png_indices, boxes_gt, boxes_pred):
         pil_img = Image.open(f'{rgb_folder}/{idx:05}.png', ).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
         image = np.array(pil_img)
