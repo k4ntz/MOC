@@ -116,8 +116,14 @@ def train(cfg):
     print('Max Steps per Episode:', cfg.train.max_steps)
     print('Gamma:', cfg.train.gamma)
     print('Learning rate:', cfg.train.learning_rate)
+    print('Pruning Method:', cfg.train.pruning_method)
+    if cfg.train.pruning_method != "None":
+        print('Pruning Steps:', cfg.train.pruning_steps)
+    # setup last variables for init
     running_reward = None
     reward_buffer = 0
+    ig = IntegratedGradients(policy)
+    ig_sum = []
     # training loop
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=cfg.train.num_episodes)
@@ -127,10 +133,18 @@ def train(cfg):
         _, ep_reward = env.reset(), 0
         _, _, done, _ = env.step(1)
         raw_features, features, _, _ = xutils.do_step(env)
+        ig_pruning_episode = cfg.train.pruning_method == "ig-pr" and i_episode % cfg.train.pruning_steps == 0
+        # prepare ig pruning when step and dont prune at the start
+        if ig_pruning_episode:
+            ig = IntegratedGradients(policy)
+            ig_sum = []
         # env loop
         t = 0
         while t < cfg.train.max_steps:  # Don't infinite loop while learning
             action, log_prob = select_action(features, policy)
+            # when ig pruning episode
+            if ig_pruning_episode:
+                ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
             policy.saved_log_probs.append(log_prob)
             raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             if cfg.liveplot:
@@ -143,7 +157,6 @@ def train(cfg):
         # only optimize when t < max ep steps
         if t >= cfg.train.max_steps:
             ep_reward = -25 #TODO: change to automatically game specific
-        # finish episode and optimize nn
         # replace first running reward with last reward for loaded models
         if running_reward is None:
             running_reward = ep_reward
@@ -159,6 +172,13 @@ def train(cfg):
             reward_buffer = 0
         if i_episode % cfg.train.save_every == 0:
             save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
+        # do pruning when pruning step
+        pruning_feature = cfg.train.tr_value
+        if ig_pruning_episode:
+            pruning_feature = np.mean(np.asarray(ig_sum), axis=0)
+        if cfg.train.pruning_method != "None" and i_episode % cfg.train.pruning_steps == 0:
+            policy = pruner.prune_nn(policy, cfg.train.pruning_method, pruning_feature)
+        # finish episode
         i_episode += 1
         rtpt.step()
 

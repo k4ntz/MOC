@@ -43,6 +43,11 @@ cfg = CfgNode({
         'eps_decay': 100000,
         'learning_rate': 0.00025,
 
+        # None or ig-pr or threshold-pr
+        'pruning_method': "None",
+        'pruning_steps': 10000,
+        'tr_value': 0.01,
+
         'memory_size': 50000,
         'memory_min_size': 25000,
 

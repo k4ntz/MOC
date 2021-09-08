@@ -9,6 +9,6 @@ logdir: '/xrl/mdrlogs/'
 
 train:
   max_steps: 200000000 #2mio steps
-  save_every: 200000
+  save_every: 5000
 
 
