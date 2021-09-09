@@ -14,9 +14,9 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'result_checkpoints/base_z_what_model_000078001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
-parallel: false
-device_ids: [0]
-device: 'cuda:0'
+parallel: true
+device_ids: [5, 6, 7, 8]
+device: 'cuda:5'
 
 logdir: '../output/logs/flow_cooling'
 checkpointdir: '../output/checkpoints/flow_from_start'
@@ -30,7 +30,7 @@ dataset_roots:
 
 
 train:
-  batch_size: 4
+  batch_size: 16
   max_epochs: 100
   max_steps: 10003
   print_every: 200
@@ -43,10 +43,10 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-6
+      lr: 1e-5
     bg:
       optim: 'Adam'
-      lr: 5e-4
+      lr: 1e-3
 
 arch:
   flow_input: false
