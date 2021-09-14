@@ -71,6 +71,14 @@ def finish_episode(policy, optimizer, eps, cfg):
     del policy.saved_log_probs[:]
     return policy, optimizer
 
+
+# helper function to prune input when given list
+def prune_input(features, pruned_input):
+    for i in pruned_input:
+        features[i] = 0
+    return features
+
+
 # save model helper function
 def save_policy(training_name, policy, episode, optimizer):
     if not os.path.exists(PATH_TO_OUTPUTS):
@@ -124,11 +132,12 @@ def train(cfg):
     reward_buffer = 0
     ig = IntegratedGradients(policy)
     ig_sum = []
+    pruned_input = []
     # training loop
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=cfg.train.num_episodes)
     rtpt.start()
-    while i_episode <= cfg.train.num_episodes:
+    while i_episode < cfg.train.num_episodes:
         # init env
         _, ep_reward = env.reset(), 0
         _, _, done, _ = env.step(1)
@@ -141,6 +150,8 @@ def train(cfg):
         # env loop
         t = 0
         while t < cfg.train.max_steps:  # Don't infinite loop while learning
+            if cfg.train.pruning_method != "None" and len(pruned_input) > 0:
+                features = prune_input(features, pruned_input)
             action, log_prob = select_action(features, policy)
             # when ig pruning episode
             if ig_pruning_episode:
@@ -177,7 +188,11 @@ def train(cfg):
         if ig_pruning_episode:
             pruning_feature = np.mean(np.asarray(ig_sum), axis=0)
         if cfg.train.pruning_method != "None" and i_episode % cfg.train.pruning_steps == 0:
-            policy = pruner.prune_nn(policy, cfg.train.pruning_method, pruning_feature)
+            policy, tmp_pruned_input = pruner.prune_nn(policy, cfg.train.pruning_method, pruning_feature)
+            # add pruning input index to global list
+            for pi in tmp_pruned_input:
+                if pi not in pruned_input:
+                    pruned_input.append(pi)
         # finish episode
         i_episode += 1
         rtpt.step()

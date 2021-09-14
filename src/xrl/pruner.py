@@ -68,5 +68,12 @@ def prune_nn(nn, pruning_method = "threshold-pr", pruning_feature = 0.01):
             / float(nn.h.weight.nelement())
         )
     )
+    # create list which inputs should be set to zero
+    pruned_input = []
+    for i, param in enumerate(nn.parameters()):
+        if i == 1:
+            for i1 in range(param.shape[1]):
+                if param[0][i1] == 0:
+                    pruned_input.append(i1)
     # return pruned neural network
-    return nn
+    return nn, pruned_input
