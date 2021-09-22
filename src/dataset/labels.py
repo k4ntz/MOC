@@ -10,7 +10,7 @@ label_list_carnival = ["owl", 'rabbit', 'shooter', 'refill', 'bonus', "duck",
 
 def filter_relevant_boxes(game, boxes_batch):
     if "MsPacman" in game:
-        return [box_bat[box_bat[:, 1] < 105 / 128] for box_bat in boxes_batch]
+        return [box_bat[box_bat[:, 1] < 103 / 128] for box_bat in boxes_batch]
     elif "Carnival" in game:
         return
     else:

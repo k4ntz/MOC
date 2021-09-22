@@ -38,12 +38,12 @@ class Space(nn.Module):
             alpha_map = torch.full_like(alpha_map, arch.fix_alpha_value)
             
         # Compute final mixture likelihood
-        # (B, T, 3, H, W)
+        # (B, 3, H, W)
         fg_likelihood = (fg_likelihood + (alpha_map + 1e-5).log())
         bg_likelihood = (bg_likelihood + (1 - alpha_map + 1e-5).log())
-        # (B, T, 2, 3, H, W)
+        # (B, 2, 3, H, W)
         log_like = torch.stack((fg_likelihood, bg_likelihood), dim=1)
-        # (B, T, 3, H, W)
+        # (B, 3, H, W)
         log_like = torch.logsumexp(log_like, dim=1)
         # (B,)
         log_like = log_like.flatten(start_dim=1).sum(1)

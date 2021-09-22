@@ -13,8 +13,11 @@ arch = CfgNode({
     'flow_input': True,
     'flow_direct_weight': 1.0,
     'flow_loss_weight': 0.0,
-    'flow_sigmoid_steepen': 1000.0,
+    'flow_sigmoid_steepen': 10000.0,
     'flow_cooling_end_step': 5000,
+    'acceptable_non_moving': 8,
+    'flow_importance_map_scaling': 1.0,
+    'flow_requirement': 2.0,
     # SPACE-config
     'img_shape': (128, 128),
     'T': 4,

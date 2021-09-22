@@ -19,9 +19,16 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
+def grid_mult_img(grid, imgs, target_shape, scaling=4):
+    grid = grid.reshape(target_shape)
+    grid = grid.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
+    grid = imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
+    return make_grid(grid, 4, normalize=False, pad_value=1)
+
+
 class SpaceVis:
     @torch.no_grad()
-    def train_vis(self, model, writer: SummaryWriter, log, global_step, mode, cfg, dataset, num_batch=10):
+    def train_vis(self, model, writer: SummaryWriter, log, global_step, mode, cfg, dataset, num_batch=8):
         """
         """
         writer.add_scalar(f'{mode}/z_what_delta', torch.sum(log['z_what_loss']).item(), global_step=global_step)
@@ -31,6 +38,7 @@ class SpaceVis:
                           global_step=global_step)
         writer.add_scalar(f'{mode}/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
         writer.add_scalar(f'{mode}/flow_loss', torch.sum(log['flow_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}/flow_count_loss', torch.sum(log['flow_count_loss']).item(), global_step=global_step)
         writer.add_scalar(f'{mode}/objects_detected', torch.sum(log['objects_detected']).item(),
                           global_step=global_step)
         writer.add_scalar(f'{mode}/total_loss', log['loss'], global_step=global_step)
@@ -39,12 +47,12 @@ class SpaceVis:
             if isinstance(value, torch.Tensor):
                 log[key] = value.detach().cpu()
                 if isinstance(log[key], torch.Tensor) and log[key].ndim > 0:
-                    log[key] = log[key][:num_batch]
+                    log[key] = log[key][2:num_batch * 4:4]
         log_img = AttrDict(log)
 
-        # (B, 3, H, W)
+        # (B, 3, H, W) TR: Changed to z_pres_prob, why sample?
         fg_box = bbox_in_one(
-            log_img.fg, log_img.z_pres, log_img.z_scale, log_img.z_shift
+            log_img.fg, log_img.z_pres_prob, log_img.z_scale, log_img.z_shift
         )
         # (B, 1, 3, H, W)
         imgs = log_img.imgs[:, None]
@@ -66,19 +74,20 @@ class SpaceVis:
         grid_image = make_grid(grid, nrow, normalize=False, pad_value=1)
         writer.add_image(f'{mode}/0-separations', grid_image, global_step)
 
-        grid_image = make_grid(log_img.imgs, 5, normalize=False, pad_value=1)
+        grid_image = make_grid(log_img.imgs, 4, normalize=False, pad_value=1)
         writer.add_image(f'{mode}/1-image', grid_image, global_step)
 
-        grid_image = make_grid(log_img.y, 5, normalize=False, pad_value=1)
+        grid_image = make_grid(log_img.y, 4, normalize=False, pad_value=1)
         writer.add_image(f'{mode}/2-reconstruction_overall', grid_image, global_step)
 
-        grid_image = make_grid(log_img.bg, 5, normalize=False, pad_value=1)
+        grid_image = make_grid(log_img.bg, 4, normalize=False, pad_value=1)
         writer.add_image(f'{mode}/3-background', grid_image, global_step)
 
-        grid_flow = log_img.grid_flow.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
-        flow_image = log_img.imgs * grid_flow
-        grid_image = make_grid(flow_image, 5, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}/4-flow', grid_image, global_step)
+        grid_flow_shape = log_img.grid_flow.shape
+        writer.add_image(f'{mode}/4-flow', grid_mult_img(log_img.grid_flow, log_img.imgs, grid_flow_shape), global_step)
+
+        alpha_map = make_grid(log_img.alpha_map, 4, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/8-alpha_map', alpha_map, global_step)
 
         count = log_img.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
         loss = log['loss'].mean()
@@ -95,15 +104,15 @@ class SpaceVis:
         writer.add_scalar(f'{mode}/Depth_KL', log_img['kl_z_depth'].mean(), global_step=global_step)
         writer.add_scalar(f'{mode}/Bg_KL', log_img['kl_bg'].mean(), global_step=global_step)
 
-        z_pres_prob = log_img.z_pres_prob.reshape(log_img.grid_flow.shape)
-        z_pres_prob = z_pres_prob.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
-        z_pres_image = log_img.imgs * z_pres_prob
-        grid_image = make_grid(z_pres_image, 5, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}/5-z_pres', grid_image, global_step)
+        z_pres_grid = grid_mult_img(log_img.z_pres_prob, log_img.imgs, grid_flow_shape)
+        writer.add_image(f'{mode}/5-z_pres', z_pres_grid, global_step)
 
-        bb_image = draw_image_bb(model, cfg, dataset, global_step)
-        grid_image = make_grid(bb_image, 5, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}/6-bounding_boxes', grid_image, global_step)
+        z_pres_pure_grid = grid_mult_img(log_img.z_pres_prob_pure, log_img.imgs, grid_flow_shape, scaling=12)
+        writer.add_image(f'{mode}/6-z_pres_pure', z_pres_pure_grid, global_step)
+
+        bb_image = draw_image_bb(model, cfg, dataset, global_step, num_batch)
+        grid_image = make_grid(bb_image, 4, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/7-bounding_boxes', grid_image, global_step)
 
     @torch.no_grad()
     def show_vis(self, model, dataset, indices, path, device):
@@ -174,35 +183,40 @@ class SpaceVis:
         plt.imshow(fg_box[0][0].permute(1, 2, 0))
         plt.show()
 
-def draw_image_bb(model, cfg, dataset, global_step):
+
+def draw_image_bb(model, cfg, dataset, global_step, num_batch):
     indices = np.random.choice(len(dataset), size=10, replace=False)
-    png_indices = [4 * i + dataset.flow for i in indices]
+    png_indices = [4 * i + dataset.flow + 2 for i in indices]
     dataset = Subset(dataset, indices)
     dataloader = DataLoader(dataset, batch_size=len(indices), shuffle=False)
     data = next(iter(dataloader))
     data = data.to(cfg.device)
     loss, log = model(data, global_step)
     bb_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/train/bb"
-    rgb_folder = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/train"
-    boxes_gt = read_boxes(bb_path, 128, indices=indices)
+    rgb_folder_src = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/train"
+    boxes_gt, boxes_gt_moving, _ = read_boxes(bb_path, 128, indices=png_indices)
     boxes_pred = []
-    z_where, z_pres_prob = log['z_where'][:10], log['z_pres_prob'][:10]
+    z_where, z_pres_prob = log['z_where'][2:num_batch * 4:4], log['z_pres_prob'][2:num_batch * 4:4]
     z_where = z_where.detach().cpu()
     z_pres_prob = z_pres_prob.detach().cpu().squeeze()
     z_pres = z_pres_prob > 0.5
     boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
     boxes_pred.extend(boxes_batch)
     result = []
-    for idx, gt, pred in zip(png_indices, boxes_gt, boxes_pred):
-        pil_img = Image.open(f'{rgb_folder}/{idx:05}.png', ).convert('RGB')
+    for idx, pred, gt, gt_m in zip(png_indices, boxes_pred, boxes_gt, boxes_gt_moving):
+        pil_img = Image.open(f'{rgb_folder_src}/{idx:05}.png', ).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
         image = np.array(pil_img)
-        objects = torch.from_numpy(np.loadtxt(f'{bb_path}/bb_{idx}.txt', delimiter=',', usecols=[0, 1, 2, 3]))
-        objects[:, 2:] += objects[:, :2]
-        torch_img = torch.from_numpy(image).permute(2, 0, 1)
-        bb_img = draw_bb(torch_img, objects, colors=['red']*len(objects)).permute(0, 2, 1)
+        torch_img = torch.from_numpy(image).permute(2, 1, 0)
         pred_tensor = torch.FloatTensor(pred) * 128
         pred_tensor = torch.index_select(pred_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
-        bb_img = draw_bb(bb_img, pred_tensor, colors=['green']*len(pred_tensor)).permute(0, 2, 1)
+        gt_tensor = torch.FloatTensor(gt) * 128
+        gt_tensor = torch.index_select(gt_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
+        gt_m_tensor = torch.FloatTensor(gt_m) * 128
+        gt_m_tensor = torch.index_select(gt_m_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
+        bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
+        bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
+        bb_img = draw_bb(bb_img, pred_tensor, colors=["green"] * len(pred_tensor))
+        bb_img = bb_img.permute(0, 2, 1)
         result.append(bb_img)
     return torch.stack(result)

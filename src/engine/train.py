@@ -122,12 +122,12 @@ def train(cfg, rtpt_active=True):
                 log.update({
                     'loss': metric_logger['loss'].median,
                 })
+                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
                 vis_logger.train_vis(model, writer, log, global_step, 'train', cfg, dataset)
                 end = time.perf_counter()
                 print(f'Log duration: {end - start}')
-                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
-            if global_step - checkpoint['global_step'] if cfg.resume else 0 < 100 and global_step % start_log == 0:
+            if global_step % start_log == 0:
                 start_log = int(start_log * 1.6)
                 log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
@@ -158,12 +158,14 @@ def log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader):
     print()
     print(
         'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
-        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, flow_loss: {:.3f}, batch time: '
+        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, flow_loss: {:.3f}, '
+        'flow_count_loss: {:.3f} batch time: '
         '{:.4f}s, data time: {:.4f}s'.format(
             cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
             torch.sum(log['z_what_loss']).item(), torch.sum(log['z_pres_loss']).item(),
             torch.sum(log['z_what_loss_pool']).item(),
             torch.sum(log['z_what_loss_objects']).item(),
             torch.sum(log['flow_loss']).item(),
+            torch.sum(log['flow_count_loss']).item(),
             metric_logger['batch_time'].avg, metric_logger['data_time'].avg))
     print()

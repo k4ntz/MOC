@@ -21,7 +21,7 @@ def multi_train(cfg):
     experiment_sets = [
         {
             'fce': ('arch.flow_cooling_end_step', [5000], lambda v: f'{v // 1000}k'),
-            'flw': ('arch.flow_loss_weight', np.logspace(0, 1, 2), lambda v: f'{v:.1f}'),
+            'flw': ('arch.flow_loss_weight', np.logspace(1, 1, 1), lambda v: f'{v:.1f}'),
         },
     ]
     base_exp_name = cfg.exp_name

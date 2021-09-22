@@ -85,7 +85,10 @@ class SpaceEval:
             self.write_metric(None, None, global_step, global_step, use_writer=False)
             if 'cluster' in eval_cfg.train.metrics:
                 results = self.train_eval_clustering(logs, valset, writer, global_step, cfg)
-                print("Cluster Result:", results)
+                pp = pprint.PrettyPrinter(depth=2)
+                for res in results:
+                    print("Cluster Result:")
+                    pp.pprint(results[res])
                 checkpointer.save_best('mutual_information_all', results['all'][0]['adjusted_mutual_info_score'],
                                        checkpoint, min_is_better=False)
                 checkpointer.save_best('mutual_information_relevant',
@@ -106,7 +109,7 @@ class SpaceEval:
                            results.items()}
                 pp = pprint.PrettyPrinter(depth=2)
                 print("AP Result:")
-                pp.pprint(results)
+                pp.pprint({k: v for k, v in results.items() if "iou" not in k})
             self.eval_file.write("\n")
 
     @torch.no_grad()
@@ -150,7 +153,7 @@ class SpaceEval:
             for ap in APs:
                 self.write_metric(None, 'ignored', ap, global_step, use_writer=False)
             for ap, thres in zip(APs[1::4], iou_thresholds[1::4]):
-                writer.add_scalar(f'val_aps_{class_name}/ap_{thres}', ap, global_step)
+                writer.add_scalar(f'val_aps_{class_name}/ap_{thres:.1}', ap, global_step)
             writer.add_scalar(f'{class_name}/ap_avg_0.5', APs[len(APs) // 2], global_step)
             writer.add_scalar(f'{class_name}/ap_avg_up', np.mean(APs[len(APs) // 2:]), global_step)
             writer.add_scalar(f'{class_name}/ap_avg', np.mean(APs), global_step)
@@ -183,13 +186,19 @@ class SpaceEval:
         """
         print('Computing clustering and few-shot linear classifiers...')
         results = self.eval_clustering(logs, valset, cfg)
+
         for name, (result_dict, img_path, few_shot_accuracy) in results.items():
             writer.add_image(f'Clustering PCA {name.title()}', np.array(Image.open(img_path)), global_step,
                              dataformats='HWC')
-            for score in few_shot_accuracy:
-                self.write_metric(writer, f'{name}/{score}', few_shot_accuracy[score], global_step)
-            for score in result_dict:
-                self.write_metric(writer, f'{name}/{score}', result_dict[score], global_step)
+            for train_objects_per_class in [1, 4, 16, 64]:
+                self.write_metric(writer, f'{name}/few_shot_accuracy_with_{train_objects_per_class}',
+                                  few_shot_accuracy[f'few_shot_accuracy_with_{train_objects_per_class}'], global_step)
+            self.write_metric(writer, f'{name}/few_shot_accuracy_cluster_nn',
+                              few_shot_accuracy[f'few_shot_accuracy_cluster_nn'], global_step)
+            self.write_metric(writer, f'{name}/adjusted_mutual_info_score',
+                              result_dict[f'adjusted_mutual_info_score'], global_step)
+            self.write_metric(writer, f'{name}/adjusted_rand_score',
+                              result_dict[f'adjusted_rand_score'], global_step)
         return results
 
     @torch.no_grad()
@@ -253,14 +262,15 @@ class SpaceEval:
         if iou_thresholds is None:
             iou_thresholds = np.linspace(0.05, 0.95, 19)
         boxes_gt_types = ['all', 'moving', 'relevant']
-        indices = list(range(4 * num_samples))
+        indices = list(range(dataset.flow, dataset.flow + 4 * num_samples))
         boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, 128, indices))}
         boxes_pred = []
         boxes_relevant = []
 
         rgb_folder_src = f"../aiml_atari_data/rgb/MsPacman-v0/validation"
-        rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/validation"
+        rgb_folder = f"../aiml_atari_data/with_bounding_boxes/MsPacman-v0/sample"
         num_batches = eval_cfg.train.num_samples.cluster // eval_cfg.train.batch_size
+
         for img in logs[:num_batches]:
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
             z_where = z_where.detach().cpu()
@@ -269,6 +279,8 @@ class SpaceEval:
             boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
             boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch))
             boxes_pred.extend(boxes_batch)
+
+
 
         # print('Drawing bounding boxes for eval...')
         # for idx, pred, rel, gt, gt_m, gt_r in zip(indices, boxes_pred, boxes_relevant, *boxes_gts.values()):
@@ -287,13 +299,13 @@ class SpaceEval:
         #     gt_r_tensor = torch.FloatTensor(gt_r) * 128
         #     gt_r_tensor = torch.index_select(gt_r_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
         #     bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
-        #     bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
-        #     bb_img = draw_bb(bb_img, gt_r_tensor, colors=["yellow"] * len(gt_r_tensor))
-        #     bb_img = draw_bb(bb_img, pred_tensor, colors=["orange"] * len(pred_tensor))
+        #     #bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
+        #     #bb_img = draw_bb(bb_img, gt_r_tensor, colors=["yellow"] *ss len(gt_r_tensor))
+        #     #bb_img = draw_bb(bb_img, pred_tensor, colors=["orange"] * len(pred_tensor))
         #     bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
         #     bb_img = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
-        #     bb_img.save(f'{rgb_folder}/temp_from_eval_objects2_{idx:05}.png')
-        #     print(f'{rgb_folder}/temp_from_eval_objects2_{idx:05}.png')
+        #     bb_img.save(f'{rgb_folder}/temp_flow_objects_{idx:05}.png')
+            # print(f'{rgb_folder}/temp_flow_objects_{idx:05}.png')
         result = {}
         for gt_name, gt in boxes_gts.items():
             # Four numbers

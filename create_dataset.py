@@ -29,6 +29,8 @@ parser.add_argument('-g', '--game', type=str, help='An atari game',
 #                     help='Wether to store original image from the gamef
 parser.add_argument('--render', default=False, action="store_true",
                     help='renders the environment')
+parser.add_argument('-s', '--stacks', default=True, action="store_false",
+                    help='renders the environment')
 parser.add_argument('-r', '--random', default=False, action="store_true",
                     help='renders the environment')
 parser.add_argument('-f', '--folder', type=str, choices=folder_sizes.keys(),
@@ -73,10 +75,11 @@ agent_path = glob(f'agents/*{args.game}*')[0]
 agent = load_agent(agent_path)
 
 limit = folder_sizes[args.folder]
-index = np.arange(limit)
 if args.random:
     np.random.shuffle(index)
 image_count = 0
+consecutive_images = 0
+consecutive_images_info = []
 series = []
 # if arguments.game == "MsPacman":
 for _ in range(200):
@@ -92,55 +95,75 @@ for _ in range(200):
 i = 0
 pbar = tqdm(total=limit)
 obs = None
-while True:
+
+
+def if_done(state, done):
+    global consecutive_images, consecutive_images_info
+    if done:
+        consecutive_images, consecutive_images_info = 0, []
+        env.reset()
+        action = None
+        for _ in range(99):
+            action = agent.draw_action(state)
+            state, reward, done, info, obs = env.step(action)
+        return env.step(action)
+
+
+def draw_images(obs, image_n):
+    ## RAW IMAGE
+    img = Image.fromarray(obs, 'RGB')
+    img.save(f'{rgb_folder}/{image_n:05}.png')
+    ## BGR SPACE IMAGES
+    img = Image.fromarray(
+        obs[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
+    img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
+
+
+def draw_action(args, agent, state):
     action = agent.draw_action(state)
-    if augmented:
-        state, reward, done, info, obs = env.step(action)
-    else:
-        state, reward, done, info = env.step(action)
     if args.render:
         env.render()
         sleep(0.001)
-    if (not args.random) or np.random.rand() < 0.01:
-        image_n = index[image_count]
-        print("Augmenting...")
-        augment_dict(obs if augmented else state, info, args.game)
-        # if True:
-        #     env.reset()
-        #     for _ in range(10):
-        #         action = agent.draw_action(state)
-        #         # action = env.action_space.sample()
-        #         if augmented:
-        #             state, reward, done, info, obs = env.step(action)
-        #         else:
-        #             state, reward, done, info = env.step(action)
-        # continue
-        ## RAW IMAGE
-        img = Image.fromarray(obs, 'RGB')
-        img.save(f'{rgb_folder}/{image_n:05}.png')
+    return env.step(action)
 
-        ## BGR SPACE IMAGES
-        img = Image.fromarray(
-            obs[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
-        img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
-        series.append(dict_to_serie(info))
-        if done:
-            env.reset()
-            for _ in range(100):
-                action = agent.draw_action(state)
-                if augmented:
+
+# Add Flow
+# Make sure dataset works with the new setting
+while True:
+    state, reward, done, info, obs = draw_action(args, agent, state)
+    if (not args.random) or np.random.rand() < 0.01:
+        augment_dict(obs if augmented else state, info, args.game)
+        if args.stacks:
+            draw_images(obs, consecutive_images)
+            consecutive_images += 1
+            consecutive_images_info.append(dict_to_serie(info))
+            if consecutive_images == 4:
+                consecutive_images = 0
+                for i in range(4):
+                    os.rename(f'{rgb_folder}/{i:05}.png', f'{rgb_folder}/{image_count:05}_{i}.png')
+                    os.rename(f'{bgr_folder}/{i:05}.png', f'{bgr_folder}/{image_count:05}_{i}.png')
+                    series.append(consecutive_images_info[i])
+                for _ in range(20):
+                    if_done(state, done)
+                    action = agent.draw_action(state)
                     state, reward, done, info, obs = env.step(action)
-                else:
-                    state, reward, done, info = env.step(action)
-        pbar.update(1)
-        image_count += 1
+                pbar.update(1)
+                image_count += 1
+            else:
+                if_done(state, done)
+        else:
+            draw_images(obs, image_count)
+            series.append(dict_to_serie(info))
+            for _ in range(20):
+                if_done(state, done)
+                action = agent.draw_action(state)
+                state, reward, done, info, obs = env.step(action)
+            pbar.update(1)
+            image_count += 1
         if image_count == limit:
             break
 
 df = pd.DataFrame(series, dtype=int)
-# enemy_list = ['sue', 'inky', 'pinky', 'blinky', 'player']
-# for en in enemy_list:
-#     df.drop([f"{en}_x", f"{en}_y"], axis=1, inplace=True)
 if args.game == "MsPacman":
     df.drop(["player_score", "num_lives", "ghosts_count", "player_direction"], axis=1, inplace=True)
     df["nb_visible"] = df[['sue_visible', 'inky_visible', 'pinky_visible', 'blinky_visible']].sum(1)

@@ -89,11 +89,11 @@ def read_boxes(path, size, indices=None):
         with open(filename, 'r') as f:
             for line in f:
                 if line.strip():
-                    center_x, center_y, width, height = [float(x) for x in line.strip().replace(",S", "").replace(",M", "").split(',')]
-                    y_min = center_y
-                    y_max = center_y + height
-                    x_min = center_x
-                    x_max = center_x + width
+                    min_x, min_y, width, height = [float(x) for x in line.strip().replace(",S", "").replace(",M", "").split(',')]
+                    y_min = min_y
+                    y_max = min_y + height
+                    x_min = min_x
+                    x_max = min_x + width
                     boxes.append([y_min, y_max, x_min, x_max])
                     if "M" in line:
                         boxes_moving.append([y_min, y_max, x_min, x_max])

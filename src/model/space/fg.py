@@ -8,6 +8,7 @@ from .utils import spatial_transform, linear_annealing
 from .arch import arch
 import time
 
+
 class SpaceFg(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
@@ -113,8 +114,8 @@ class SpaceFg(nn.Module):
         self.anneal(global_step)
 
         # Everything is (B, G*G, D), where D varies
-        z_pres, z_depth, z_scale, z_shift, z_where, \
-        z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow = self.img_encoder(x, self.tau, global_step)
+        z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post,\
+        z_scale_post, z_shift_post, grid_flow, z_pres_prob_pure = self.img_encoder(x, self.tau, global_step)
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
@@ -144,9 +145,11 @@ class SpaceFg(nn.Module):
 
         # (B*G*G, 1, H, W) -> (B, G*G, 1, H, W)
         importance_map_full_res = importance_map_full_res.view(B, arch.G ** 2, 1, *arch.img_shape)
+
+        # flow_att = torch.ones_like(flow_att) * (1 - flow_cooling_scaling) + flow_cooling_scaling * flow_att
+        # importance_map_full_res = importance_map_full_res * flow_att
         # Normalize (B, >G*G<, 1, H, W)
         importance_map_full_res_norm = torch.softmax(importance_map_full_res, dim=1)
-
         # To full resolution
         # (B*G*G, 3, H, W) -> (B, G*G, 3, H, W)
         y_each_cell = spatial_transform(y_att, z_where.view(B * arch.G ** 2, 4), (B * arch.G ** 2, 3, *arch.img_shape),
@@ -162,6 +165,11 @@ class SpaceFg(nn.Module):
 
         # Weighted sum, (B, 1, H, W)
         alpha_map = (alpha_map * importance_map_full_res_norm).sum(dim=1)
+        # Domain transform (-1, 1) -> (0, 1)
+        grid_flow = torch.sigmoid(8.8 * grid_flow)
+        flow_att = grid_flow.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
+        flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step) * arch.flow_importance_map_scaling
+        alpha_map = (1 - flow_cooling_scaling) * alpha_map + flow_cooling_scaling * flow_att
 
         # Everything is computed. Now let's compute loss
         # Compute KL divergences
@@ -252,8 +260,9 @@ class SpaceFg(nn.Module):
             'z_scale': z_scale,
             'z_shift': z_shift,
             'z_depth': z_depth,
-            'grid_flow': torch.sigmoid(8.8 * grid_flow),
+            'grid_flow': grid_flow,
             'z_pres_prob': torch.sigmoid(z_pres_logits),
+            'z_pres_prob_pure': torch.sigmoid(8.8 * z_pres_prob_pure),
             'prior_z_pres_prob': self.prior_z_pres_prob.unsqueeze(0),
             'o_att': o_att,
             'alpha_att_hat': alpha_att_hat,
@@ -386,14 +395,15 @@ class ImgEncoderFg(nn.Module):
         # (B, 1, G, G)
         if arch.flow_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
-        # Warning: Removed 8.8
-        z_pres_logits = torch.tanh(self.z_pres_net(cat_enc_z_pres))
+        z_pres_original = self.z_pres_net(cat_enc_z_pres)
+        z_pres_logits_pure = torch.tanh(z_pres_original)
         grid_flow = avg(x[:, 3:4])
-        grid_flow = torch.tanh(arch.flow_sigmoid_steepen * (grid_flow - grid_flow.mean()))
+        grid_flow = torch.tanh(arch.flow_sigmoid_steepen * (grid_flow - grid_flow.mean() * arch.flow_requirement))
         flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
-        z_pres_logits = (1 - arch.flow_direct_weight * flow_cooling_scaling) * z_pres_logits + \
+        z_pres_logits = (1 - arch.flow_direct_weight * flow_cooling_scaling) * z_pres_logits_pure + \
                         arch.flow_direct_weight * flow_cooling_scaling * grid_flow
         # (B, 1, G, G) - > (B, G*G, 1)
+        # Warning: 8.8 is only here to allow sigmoid(tanh(x)) to be around zero and one
         z_pres_logits = 8.8 * reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
         # Unbounded
@@ -448,7 +458,7 @@ class ImgEncoderFg(nn.Module):
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
-               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow
+               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow, z_pres_logits_pure
 
 
 class ZWhatEnc(nn.Module):

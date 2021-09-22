@@ -12,7 +12,7 @@ eval_cfg = CfgNode({
         },
         
         # For dataloader
-        'batch_size': 8,
+        'batch_size': 16,
         'num_workers': 4,
     },
     'test': {
