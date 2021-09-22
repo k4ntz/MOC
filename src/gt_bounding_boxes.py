@@ -43,7 +43,6 @@ def draw_images(args):
         result.save(f'{rgb_folder}/{idx:05}.png')
         pbar.update(1)
 
-# TODO: Blue? Eyes?
 def _bb_pacman():
     img_gt = gt.iloc[[idx]]
     enemy_list = ['sue', 'inky', 'pinky', 'blinky']
@@ -65,6 +64,7 @@ def _bb_pacman():
 
 def _bb_carnival():
     import ast
+    print("Warning: Carnival does not yet mark moving objects")
     img_gt = gt.iloc[[idx]]
     bbs = [(img_gt['bullets_x'].item() * 128 / 160.0 - 2, 198 * 128 / 210.0, 0.04 * 128, 0.04 * 128)]
     for animal in ['shooters', 'rabbits', 'owls', 'ducks', 'flying_ducks']:

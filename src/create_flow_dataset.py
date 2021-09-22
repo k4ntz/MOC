@@ -40,7 +40,7 @@ for idx in range(folder_sizes[args.folder] - 1):
     frame2 = cv.cvtColor(frame2, cv.COLOR_BGR2GRAY)
     # TODO: Parameters
     flow = cv.calcOpticalFlowFarneback(frame1, frame2, None, 0.6, 5, 15, 30, 5, 1.5, 0)
-    # np.save(f'../aiml_atari_data/flow/{args.game}-v0/{args.folder}/{idx + 1:05}', flow)
+    np.save(f'../aiml_atari_data/flow/{args.game}-v0/{args.folder}/{idx + 1:05}', flow)
     pbar.update(1)
     if args.draw_images:
         flow = np.load(f'../aiml_atari_data/flow/{args.game}-v0/{args.folder}/{idx + 1:05}.npy')

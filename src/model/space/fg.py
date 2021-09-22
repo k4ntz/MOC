@@ -391,8 +391,8 @@ class ImgEncoderFg(nn.Module):
 
         # Compute posteriors
         grid_width = 128 // arch.G
-        avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
         # (B, 1, G, G)
+        avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
         if arch.flow_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
