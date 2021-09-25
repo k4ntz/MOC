@@ -105,6 +105,8 @@ def load_model(model_path, policy, optimizer=None):
 
 def train(cfg):
     print('Experiment name:', cfg.exp_name)
+    torch.manual_seed(cfg.seed)
+    print('Seed:', torch.initial_seed())
     writer = SummaryWriter(os.getcwd() + cfg.logdir + cfg.exp_name)
     # init env to get params for policy net
     env = AtariARIWrapper(gym.make(cfg.env_name))

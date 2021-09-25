@@ -11,10 +11,13 @@ video_steps: 100
 
 train:
   gamma: 0.97
-  learning_rate: 0.001
+  learning_rate: 0.0001
 
-  num_episodes: 30000
+  num_episodes: 50000
   max_steps: 100000
+
+  pruning_method: "ig-pr"
+  pruning_steps: 10000
   
   log_steps: 25
   # save every is for episodes

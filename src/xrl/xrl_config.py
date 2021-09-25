@@ -5,6 +5,7 @@ from yacs.config import CfgNode
 cfg = CfgNode({
     # exp name
     'exp_name': '', 
+    'seed': 1,
     'mode': 'train',
 
     # algo selection 

@@ -1,4 +1,5 @@
 env_name: 'PongDeterministic-v4'
+seed: 4
 
 rl_algo: 1
 

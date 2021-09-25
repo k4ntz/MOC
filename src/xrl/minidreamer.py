@@ -28,10 +28,10 @@ batch = 50
 L = 4 #seq len world training
 history_size = 400
 lr_pred = 1e-4
-alpha = 1e-4   #alpha to scale down loss of state for loss of reward
+alpha = 1e-5   #alpha to scale down loss of state for loss of reward
 
 # policy parameter
-lr_policy = 1e-2
+lr_policy = 1e-3
 gamma = 0.97
 
 # misc parameter
@@ -115,6 +115,7 @@ def finish_episode(policy, optimizer, eps):
 def train(cfg):
     ### HYPERPARAMETERS ###
     print('Experiment name:', cfg.exp_name)
+    torch.manual_seed(16647026488111611222)
     print('Seed:', torch.initial_seed())
     print('Env name:', cfg.env_name)
     print('Using device:', cfg.device)
@@ -244,6 +245,10 @@ def train(cfg):
             
             # predict
             ps, pr = predictor(ls, a)
+
+            print((ls-ps).detach().numpy())
+            print((ls-s).detach().numpy())
+            print("###")
 
             # calc loss
             optim_predictor.zero_grad()
