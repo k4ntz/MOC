@@ -1,12 +1,12 @@
 import numpy as np
 import torch
+from torch._C import dtype
 import torch.nn as nn
 from torch.utils.data import Dataset
 
 class ModelDataset(Dataset):
-    def __init__(self, history, seq_len, history_size):
+    def __init__(self, history, history_size):
         self.h = history #history is passed as list and updated outside
-        self.seq_len = seq_len
         self.history_size = history_size
 
     def __len__(self):
@@ -17,17 +17,20 @@ class ModelDataset(Dataset):
         episode = self.h[idx]
 
         idx_sample = np.random.randint(0, (len(episode)-1)//4) #sample random part of episode
-        idx_sample = min(idx_sample, (len(episode)-1)//4 - self.seq_len) #clip to not exceed limit
 
         # one entry is last state, action, state and reward as seperate entries
-        last_states = episode[idx_sample * 4 : idx_sample * 4 + self.seq_len * 4 : 4]
-        actions= episode[idx_sample * 4 + 1 : idx_sample * 4 + self.seq_len * 4 + 1 : 4]
-        states = episode[idx_sample * 4 + 2 : idx_sample * 4 + self.seq_len * 4 + 2 : 4]
-        rewards= episode[idx_sample * 4 + 3 : idx_sample * 4 + self.seq_len * 4 + 3 : 4]
+        last_states = episode[idx_sample * 4]
+        actions= episode[idx_sample * 4 + 1]
+        states = episode[idx_sample * 4 + 2]
+        rewards= episode[idx_sample * 4 + 3]
 
-        last_states = torch.tensor(last_states)
+        # flatten raw features list
+        last_states = [[0,0] if x==None else x for x in last_states]
+        last_states = np.array(np.array(last_states).tolist()).flatten()
+        # convert to tensor
+        last_states = torch.tensor(last_states).float()
         actions = torch.tensor(actions)
-        states = torch.tensor(states)
+        states = torch.tensor(np.array(states.tolist()).flatten()).float()
         rewards = torch.tensor(rewards)
 
         return last_states, actions, states, rewards

@@ -203,9 +203,8 @@ def get_lineq_param(obj1, obj2):
 # helper function to convert env info into custom list
 # raw_features contains player x, y, ball x, y, oldplayer x, y, oldball x, y, 
 # features are processed stuff for policy
-def preprocess_raw_features(env_info, last_raw_features=None):
+def preprocess_raw_features(raw_features):
     features = []
-    raw_features = get_raw_features(env_info, last_raw_features)
     for i in range(0, 3):
         obj1, obj1_past = raw_features[i], raw_features[i + 3]
         # when object has moved and has history
@@ -246,6 +245,7 @@ def preprocess_raw_features(env_info, last_raw_features=None):
 def do_step(env, action=1, last_raw_features=None):
     obs, reward, done, info = env.step(action)
     # calculate meaningful features from given raw features and last raw features
-    raw_features, features = preprocess_raw_features(info, last_raw_features)
+    raw_features = get_raw_features(info, last_raw_features)
+    raw_features, features = preprocess_raw_features(raw_features)
     return raw_features, features, reward, done
 
