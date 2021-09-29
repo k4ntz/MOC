@@ -48,7 +48,9 @@ train:
       lr: 1e-3
 
 arch:
-  flow_input: false
+  motion_input: false
+  motion: true
+  motion_kind: 'mode'
   G: 16
   fg_sigma: 0.20
   z_pres_start_step: 1000

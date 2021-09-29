@@ -114,7 +114,6 @@ def _augment_dict_tennis(obs, info):
 
 def _augment_dict_pong(obs, info):
     labels = info['labels']
-    # print(labels)
     objects_colors = {"enemy": [213, 130, 74], "player": [92, 186, 92],
                       "ball": [236, 236, 236], "background": [144, 72, 17]}
     scores = {"score_enemy_0": ((1, 36), (1, 40)),
@@ -122,27 +121,19 @@ def _augment_dict_pong(obs, info):
               "score_player_0": ((1, 116), (1, 120)),
               "score_player_1": ((1, 104), (1, 108))}
     for obj in ['ball', "player", "enemy"]:
-        x, y = labels[f'{obj}_y'] - 13, labels[f'{obj}_x'] - 48
+        y, x = labels[f'{obj}_y'] - 13, labels[f'{obj}_x'] - 48
         if obj == 'ball':
-            pres = enough_color_around(obs, x, y, objects_colors["background"],
-                                       threshold=4)
-            if not pres:
+            if not tr_color_around(obs, y, x, objects_colors["background"]):
                 del labels[f"ball_x"]
                 del labels[f"ball_y"]
                 continue
         labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
     for score in scores:
         for potential_pos in scores[score]:
-            try:
-                x, y = potential_pos
-            except:
-                import ipdb
-                ipdb.set_trace()
-            if enough_color_around(obs, x, y, objects_colors[score.split("_")[1]],
-                                   threshold=4):
+            y, x = potential_pos
+            if tr_color_around(obs, y, x, objects_colors[score.split("_")[1]]):
                 labels[f"{score}_x"] = x
                 labels[f"{score}_y"] = y
-                # mark_point(obs, x, y, (255, 0, 0))
                 break
     return labels
 
@@ -355,9 +346,9 @@ def tr_color_around(image_array, y, x, color, size=2):
     """
     checks if the color is present in the square around the (x, y) point.
     """
-
     points_around = [(image_array[i, j] == color).all()
-                     for i in range(max(0, y - size), min(y + size + 1, 209)) for j in range(max(0, x - size), min(x + size + 1, 159))]
+                     for i in range(max(0, y - size), min(y + size + 1, 210))
+                     for j in range(max(0, x - size), min(x + size + 1, 160))]
     return np.any(points_around)
 
 
@@ -450,6 +441,10 @@ def load_agent(path):
     agent.policy._predict_params = {}  # mushroom_rl compatibility
     return agent
 
+
+def put_lives(info_dict):
+    info_dict['labels']['lives'] = info_dict['ale.lives']
+    return info_dict['labels']
 
 def dict_to_serie(info_dict):
     info_dict['labels']['lives'] = info_dict['ale.lives']

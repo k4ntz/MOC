@@ -3,12 +3,17 @@ from .train import train
 import numpy as np
 from rtpt import RTPT
 
+
 def boolean_print(v):
     return f'{v + 0}'
 
 
 def identity_print(v):
     return f'{v}'
+
+
+def thousand_print(v):
+    return f'{v // 1000}k'
 
 
 def multi_train(cfg):
@@ -20,7 +25,7 @@ def multi_train(cfg):
 
     experiment_sets = [
         {
-            'fce': ('arch.flow_cooling_end_step', [5000], lambda v: f'{v // 1000}k'),
+            'fce': ('arch.flow_cooling_end_step', [5000], thousand_print),
             'flw': ('arch.flow_loss_weight', np.logspace(1, 1, 1), lambda v: f'{v:.1f}'),
         },
     ]

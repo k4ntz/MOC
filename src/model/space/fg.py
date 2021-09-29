@@ -115,7 +115,7 @@ class SpaceFg(nn.Module):
 
         # Everything is (B, G*G, D), where D varies
         z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post,\
-        z_scale_post, z_shift_post, grid_flow, z_pres_prob_pure = self.img_encoder(x, self.tau, global_step)
+        z_scale_post, z_shift_post, grid_flow, z_pres_prob_pure, z_where_pure = self.img_encoder(x, self.tau, global_step)
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
@@ -256,6 +256,7 @@ class SpaceFg(nn.Module):
             'fg': y_nobg,
             'z_what': z_what,
             'z_where': z_where,
+            'z_where_pure': z_where_pure,
             'z_pres': z_pres,
             'z_scale': z_scale,
             'z_shift': z_shift,
@@ -280,6 +281,8 @@ class SpaceFg(nn.Module):
             'kl_z_where': kl_z_where,
         }
         return fg_likelihood, y_nobg, alpha_map, kl, boundary_loss, log
+
+
 
 
 class ImgEncoderFg(nn.Module):
@@ -392,19 +395,17 @@ class ImgEncoderFg(nn.Module):
         # Compute posteriors
         grid_width = 128 // arch.G
         # (B, 1, G, G)
+        motion_z_pres, motion_z_where = process_motion(x[:, 3:4])
         avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
         if arch.flow_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
         z_pres_logits_pure = torch.tanh(z_pres_original)
-        grid_flow = avg(x[:, 3:4])
-        grid_flow = torch.tanh(arch.flow_sigmoid_steepen * (grid_flow - grid_flow.mean() * arch.flow_requirement))
         flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
-        z_pres_logits = (1 - arch.flow_direct_weight * flow_cooling_scaling) * z_pres_logits_pure + \
-                        arch.flow_direct_weight * flow_cooling_scaling * grid_flow
         # (B, 1, G, G) - > (B, G*G, 1)
-        # Warning: 8.8 is only here to allow sigmoid(tanh(x)) to be around zero and one
-        z_pres_logits = 8.8 * reshape(z_pres_logits)
+        z_pres_logits = (1 - flow_cooling_scaling) * reshape(z_pres_logits_pure) + flow_cooling_scaling * motion_z_pres
+        # 8.8 is only here to allow sigmoid(tanh(x)) to be around zero and one
+        z_pres_logits = 8.8 * z_pres_logits
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
         # Unbounded
         z_pres_y = z_pres_post.rsample()
@@ -446,7 +447,8 @@ class ImgEncoderFg(nn.Module):
         z_shift = (2.0 / arch.G) * (offset + 0.5 + z_shift.tanh()) - 1
 
         # (B, G*G, 4)
-        z_where = torch.cat((z_scale, z_shift), dim=-1)
+        z_where_pure = torch.cat((z_scale, z_shift), dim=-1)
+        z_where = (1 - flow_cooling_scaling) * z_where_pure + flow_cooling_scaling * motion_z_where
 
         # Check dimensions
         assert (
@@ -458,7 +460,7 @@ class ImgEncoderFg(nn.Module):
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
-               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow, z_pres_logits_pure
+               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow, z_pres_logits_pure, z_where_pure
 
 
 class ZWhatEnc(nn.Module):
