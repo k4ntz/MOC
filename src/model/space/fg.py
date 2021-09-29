@@ -95,7 +95,7 @@ class SpaceFg(nn.Module):
             loss: the loss coming from two adjacent images differences
         """
 
-    def forward(self, x, global_step):
+    def forward(self, x, motion_z_pres, motion_z_where, global_step):
         """
         Forward pass
 
@@ -114,8 +114,9 @@ class SpaceFg(nn.Module):
         self.anneal(global_step)
 
         # Everything is (B, G*G, D), where D varies
-        z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post,\
-        z_scale_post, z_shift_post, grid_flow, z_pres_prob_pure, z_where_pure = self.img_encoder(x, self.tau, global_step)
+        z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post, \
+            z_scale_post, z_shift_post, z_pres_prob_pure, \
+            z_where_pure = self.img_encoder(x, motion_z_pres, motion_z_where, self.tau, global_step)
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
@@ -165,9 +166,7 @@ class SpaceFg(nn.Module):
 
         # Weighted sum, (B, 1, H, W)
         alpha_map = (alpha_map * importance_map_full_res_norm).sum(dim=1)
-        # Domain transform (-1, 1) -> (0, 1)
-        grid_flow = torch.sigmoid(8.8 * grid_flow)
-        flow_att = grid_flow.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
+        flow_att = motion_z_pres.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
         flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step) * arch.flow_importance_map_scaling
         alpha_map = (1 - flow_cooling_scaling) * alpha_map + flow_cooling_scaling * flow_att
 
@@ -261,7 +260,8 @@ class SpaceFg(nn.Module):
             'z_scale': z_scale,
             'z_shift': z_shift,
             'z_depth': z_depth,
-            'grid_flow': grid_flow,
+            'motion_z_pres': motion_z_pres,
+            'motion_z_where': motion_z_where,
             'z_pres_prob': torch.sigmoid(z_pres_logits),
             'z_pres_prob_pure': torch.sigmoid(8.8 * z_pres_prob_pure),
             'prior_z_pres_prob': self.prior_z_pres_prob.unsqueeze(0),
@@ -281,8 +281,6 @@ class SpaceFg(nn.Module):
             'kl_z_where': kl_z_where,
         }
         return fg_likelihood, y_nobg, alpha_map, kl, boundary_loss, log
-
-
 
 
 class ImgEncoderFg(nn.Module):
@@ -355,7 +353,7 @@ class ImgEncoderFg(nn.Module):
         # (2, G, G). I do this just to ensure that device is correct.
         self.register_buffer('offset', torch.stack((offset_x, offset_y), dim=0).float())
 
-    def forward(self, x, tau, global_step):
+    def forward(self, x, motion_z_pres, motion_z_where, tau, global_step):
         """
         Given image, infer z_pres, z_depth, z_where
 
@@ -395,15 +393,15 @@ class ImgEncoderFg(nn.Module):
         # Compute posteriors
         grid_width = 128 // arch.G
         # (B, 1, G, G)
-        motion_z_pres, motion_z_where = process_motion(x[:, 3:4])
         avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
         if arch.flow_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
         z_pres_logits_pure = torch.tanh(z_pres_original)
         flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
+        transformed_motion_z_pres = motion_z_pres * 2 - 1
         # (B, 1, G, G) - > (B, G*G, 1)
-        z_pres_logits = (1 - flow_cooling_scaling) * reshape(z_pres_logits_pure) + flow_cooling_scaling * motion_z_pres
+        z_pres_logits = (1 - flow_cooling_scaling) * reshape(z_pres_logits_pure) + flow_cooling_scaling * transformed_motion_z_pres
         # 8.8 is only here to allow sigmoid(tanh(x)) to be around zero and one
         z_pres_logits = 8.8 * z_pres_logits
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
@@ -460,7 +458,8 @@ class ImgEncoderFg(nn.Module):
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
-               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, grid_flow, z_pres_logits_pure, z_where_pure
+               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, motion_z_pres, z_pres_logits_pure, \
+               z_where_pure, motion_z_where
 
 
 class ZWhatEnc(nn.Module):

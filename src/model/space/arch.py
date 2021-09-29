@@ -15,6 +15,7 @@ arch = CfgNode({
     'motion_kind': 'mode',
     'motion_direct_weight': 1.0,
     'motion_loss_weight': 0.0,
+    'motion_loss_weight_z_where': 0.0,
     'motion_sigmoid_steepen': 10000.0,
     'motion_cooling_end_step': 5000,
     'acceptable_non_moving': 8,

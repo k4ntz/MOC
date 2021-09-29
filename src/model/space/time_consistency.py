@@ -41,18 +41,18 @@ class TcSpace(nn.Module):
             z_what_loss_objects, objects_detected = z_what_consistency_objects(responses)
         else:
             z_what_loss_objects, objects_detected = (zero, zero)
-        flow_loss, flow_count_loss = compute_flow_loss(responses) if arch.flow_loss_weight > 1e-3 else (zero, zero)
+        flow_loss = compute_flow_loss(responses) if arch.motion_loss_weight > 1e-3 else zero
+        flow_loss_z_where = compute_flow_loss_z_where(responses) if arch.motion_loss_weight_z_where > 1e-3 else zero
 
         area_object_scaling = min(1, global_step / arch.full_object_weight)
         flow_scaling = min(0, 1 - global_step / arch.flow_cooling_end_step / 2)
-        if flow_count_loss < 1e-3:
-            flow_count_loss = zero
         tc_log = {
             'z_what_loss': z_what_loss,
             'z_what_loss_pool': z_what_loss_pool,
             'z_what_loss_objects': z_what_loss_objects,
             'z_pres_loss': z_pres_loss,
             'flow_loss': flow_loss,
+            'flow_loss_z_where': flow_loss_z_where,
             'flow_count_loss': flow_count_loss,
             'objects_detected': objects_detected
         }
@@ -62,7 +62,8 @@ class TcSpace(nn.Module):
                + z_pres_loss * arch.pres_inconsistency_weight \
                + z_what_loss_pool * arch.area_pool_weight \
                + z_what_loss_objects * area_object_scaling * arch.area_object_weight \
-               + (flow_loss + flow_count_loss) * arch.flow_loss_weight * flow_scaling
+               + flow_loss * arch.motion_loss_weight * flow_scaling \
+               + flow_loss * arch.motion_loss_weight_z_where * flow_scaling
         return loss, responses
 
 
@@ -78,17 +79,14 @@ def get_loss(res):
     loss = res[0]
     return loss
 
-
 def compute_flow_loss(responses):
-    pool = nn.MaxPool2d(3, stride=1, padding=1)
-    # (T * B, G, G, 1)
-    z_pres = responses['z_pres_prob_pure'].reshape(-1, 1, arch.G, arch.G)
-    z_pres_max = pool(z_pres).reshape(-1, arch.G * arch.G, 1)
-    # (T * B, G*G, 1)
-    flow = responses['grid_flow'].reshape(z_pres_max.shape)
-    return nn.functional.mse_loss(z_pres_max[flow > 0.5], flow[flow > 0.5], reduction='sum'),\
-           max(0, z_pres.sum() - flow.sum() - arch.acceptable_non_moving)
+    return nn.functional.mse_loss(responses['z_pres_prob_pure'], responses['motion_z_pres'], reduction='sum')
 
+def compute_flow_loss_z_where(responses):
+    z_pres = responses['z_pres_prob_pure']
+    z_where = responses['z_where_pure']
+    motion_z_where = responses['motion_z_where']
+    return nn.functional.mse_loss(z_where[z_pres > 0.5], motion_z_where[z_pres > 0.5], reduction='sum')
 
 def z_what_consistency_objects(responses):
     cos = nn.CosineSimilarity(dim=1)

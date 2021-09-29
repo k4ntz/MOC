@@ -87,13 +87,15 @@ def train(cfg, rtpt_active=True):
         if end_flag:
             break
         start = time.perf_counter()
-        for i, data in enumerate(trainloader):
+        for (img_stacks, motion_z_pres, motion_z_where) in trainloader:
             end = time.perf_counter()
             data_time = end - start
             start = end
             model.train()
-            vids = data.to(cfg.device)
-            loss, log = model(vids, global_step)
+            img_stacks = img_stacks.to(cfg.device)
+            motion_z_pres = motion_z_pres.to(cfg.device)
+            motion_z_where = motion_z_where.to(cfg.device)
+            loss, log = model(img_stacks, motion_z_pres, motion_z_where, global_step)
             # In case of using DataParallel
             loss = loss.mean()
 
@@ -154,14 +156,14 @@ def train(cfg, rtpt_active=True):
             rtpt.step()
 
 
-def log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader):
+def log_state(cfg, epoch, global_step, log, metric_logger):
     print()
     print(
-        'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
+        'exp: {}, epoch: {}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
         ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, flow_loss: {:.3f}, '
         'flow_count_loss: {:.3f} batch time: '
         '{:.4f}s, data time: {:.4f}s'.format(
-            cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
+            cfg.exp_name, epoch + 1, global_step, metric_logger['loss'].median,
             torch.sum(log['z_what_loss']).item(), torch.sum(log['z_pres_loss']).item(),
             torch.sum(log['z_what_loss_pool']).item(),
             torch.sum(log['z_what_loss_objects']).item(),
