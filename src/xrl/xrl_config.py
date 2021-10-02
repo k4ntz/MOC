@@ -45,6 +45,7 @@ cfg = CfgNode({
         'learning_rate': 0.00025,
 
         # None or ig-pr or threshold-pr
+        'init_corr_pruning': False,
         'pruning_method': "None",
         'pruning_steps': 10000,
         'tr_value': 0.01,

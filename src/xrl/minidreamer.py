@@ -10,7 +10,7 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical
 from tqdm import tqdm
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from itertools import count
 from rtpt import RTPT
 from time import sleep, time
@@ -22,21 +22,19 @@ import xrl.utils as xutils
 
 torch.autograd.set_detect_anomaly(True)
 
-
 # world pred parameter
-batch = 50
-history_size = 400
-min_history = 50
-lr_pred = 1e-4
-alpha = 1e-2   #alpha to scale down loss of state for loss of reward #old 1e-5
+batch = 10
+history_size = 50
+min_history = 10
+lr_pred = 1e-5
+alpha = 1e-1   #alpha to scale down loss of state for loss of reward #old 1e-5
 
 # policy parameter
 lr_policy = 1e-3
 gamma = 0.97
 
 # misc parameter
-adam_eps = 1e-5
-decay = 1e-6
+decay = 0
 
 
 # helper function to save all models
@@ -121,13 +119,12 @@ def train(cfg):
     # init policy net
     
     ### MODELS ###
-    predictor = WorldPredictor(input=len_raw_features, batch_size=batch).to(device)
+    predictor = WorldPredictor(input=len_raw_features).to(device)
     policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions).to(device)
     criterion = torch.nn.MSELoss()
-    optim_predictor = Adam(predictor.parameters(), lr=lr_pred, eps=adam_eps, weight_decay=decay)
-    optim_policy = Adam(policy.parameters(), lr=lr_policy, eps=adam_eps, weight_decay=decay)
+    optim_predictor = Adam(predictor.parameters(), lr=lr_pred, weight_decay=decay)
+    optim_policy = Adam(policy.parameters(), lr=lr_policy, weight_decay=decay)
 
-    eps = np.finfo(np.float32).eps.item()
     history = []
     steps_done = [0]  
     i_episode = 1
@@ -206,8 +203,8 @@ def train(cfg):
         len_h = 0
 
         # create copy of predictor for policy training
-        policy_predictor = WorldPredictor(input=len_raw_features, batch_size=batch).to(device)
-        policy_predictor.load_state_dict(predictor.state_dict())
+        #policy_predictor = WorldPredictor(input=len_raw_features).to(device)
+        #policy_predictor.load_state_dict(predictor.state_dict())
 
         train_s = None
         

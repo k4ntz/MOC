@@ -8,12 +8,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sn
 import pandas as pd
+import seaborn as sns
 
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from tqdm import tqdm
 
 from argparse import ArgumentParser
 from xrl.xrl_config import cfg
+
+# player enemy ball
+features_names = [
+    "0: player speed",
+    "1: x enemy - player",
+    "2: y enemy - player",
+    "3: x ball - player",
+    "4: y ball - player",
+    "5: y enemy-target - player",
+    "6: x enemy-target - player",
+    "7: y ball-target - player",
+    "8: x ball-target - player",
+    "9: enemy speed",
+    "10: x ball - enemy",
+    "11: y ball - enemy",
+    "12: y player-target - enemy",
+    "13: x player-target - enemy",
+    "14: y ball-target - enemy",
+    "15: x ball-target - enemy",
+    "16: ball speed",
+    "17: y player-target - ball",
+    "18: x player-target - ball",
+    "19: y enemy-target - ball",
+    "20: x enemy-target - ball",
+]
 
 ######################
 ######## INIT ########
@@ -164,6 +191,23 @@ def plot_igs(ig_sum, plot_titles):
             plt.title(plot_titles[i])
         plt.show()
 
+
+# plot correlation matrix with given set of features
+def plot_corr(features):
+    df = pd.DataFrame(data=features, columns=features_names)
+    sns.set(font_scale=0.7)
+    corrplot = sns.heatmap(
+        df.corr(), 
+        vmin=-1, vmax=1, center=0,
+        cmap=sns.diverging_palette(20, 220, n=200),
+        square=True
+    )
+    corrplot.set_title("Meaningful Features - Correlation Map")
+    plt.tight_layout()
+    plt.savefig("untrained-meaningful-features-corr-m.pdf", dpi=300)
+    plt.show()
+    return None
+
 ###############################
 ##### PROCESSING FEATURES #####
 ###############################
@@ -248,4 +292,29 @@ def do_step(env, action=1, last_raw_features=None):
     raw_features = get_raw_features(info, last_raw_features)
     raw_features, features = preprocess_raw_features(raw_features)
     return raw_features, features, reward, done
+
+
+# do 5 episodes and get features to prune from corr matrix
+def init_corr_prune(env, it = 5, tr = 0.75):
+    features_list = []
+    # run it episodes to collect features data
+    for i in tqdm(range(it)):
+        n_actions = env.action_space.n
+        _ = env.reset()
+        _, _, done, _ = env.step(1)
+        raw_features, features, _, _ = do_step(env)
+        for t in range(50000):  # max 50k steps per episode
+            action = np.random.randint(0, n_actions)
+            raw_features, features, reward, done = do_step(env, action, raw_features)
+            features_list.append(features)
+            if done:
+                break
+    # now make corr matrix
+    df = pd.DataFrame(data=features_list)
+    corr = df.corr().abs()
+    # Select upper triangle of correlation matrix
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(np.bool))
+    # Find features with correlation greater than tr
+    to_drop = [column for column in upper.columns if any(upper[column] > tr)]
+    return to_drop
 

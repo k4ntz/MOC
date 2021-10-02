@@ -127,6 +127,11 @@ def train(cfg):
     print('Gamma:', cfg.train.gamma)
     print('Learning rate:', cfg.train.learning_rate)
     print('Pruning Method:', cfg.train.pruning_method)
+    pruned_input = []
+    if cfg.train.init_corr_pruning:
+        print('Initial pruning based on feature correlation: True')
+        pruned_input = xutils.init_corr_prune(env)
+        print('Features to prune based on correlation:', str(pruned_input))
     if cfg.train.pruning_method != "None":
         print('Pruning Steps:', cfg.train.pruning_steps)
     # setup last variables for init
@@ -134,7 +139,6 @@ def train(cfg):
     reward_buffer = 0
     ig = IntegratedGradients(policy)
     ig_sum = []
-    pruned_input = []
     # training loop
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                     max_iterations=cfg.train.num_episodes)
@@ -152,7 +156,7 @@ def train(cfg):
         # env loop
         t = 0
         while t < cfg.train.max_steps:  # Don't infinite loop while learning
-            if cfg.train.pruning_method != "None" and len(pruned_input) > 0:
+            if len(pruned_input) > 0:
                 features = prune_input(features, pruned_input)
             action, log_prob = select_action(features, policy)
             # when ig pruning episode
@@ -251,6 +255,4 @@ def eval(cfg):
         ig_sum = np.asarray(ig_sum)
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
-        # prune 
-        #policy = pruner.prune_nn(policy, "ig-pr", np.mean(ig_sum, axis=0))
-        #xutils.plot_igs(ig_sum, feature_titles)
+    #xutils.plot_corr(features_list)
