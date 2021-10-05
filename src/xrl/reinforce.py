@@ -28,17 +28,25 @@ model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pt
 
 # with preprocessed meaningful features
 class Policy(nn.Module):
-    def __init__(self, input, hidden, actions): 
+    def __init__(self, input, hidden, actions, make_hidden = True): 
         super(Policy, self).__init__()
-        print("Policy net has", input, "input nodes,", hidden, "hidden nodes and", actions, "output nodes")
-        self.h = nn.Linear(input, hidden)
-        self.out = nn.Linear(hidden, actions)
+        # should make one hidden layer
+        self.make_hidden = make_hidden
+
+        if self.make_hidden:
+            print("Policy net has", input, "input nodes,", hidden, "hidden nodes and", actions, "output nodes")
+            self.h = nn.Linear(input, hidden)
+            self.out = nn.Linear(hidden, actions)
+        else:
+            print("Linear model, no hidden layer! Policy net has", input, "input nodes and", actions, "output nodes")
+            self.out = nn.Linear(input, actions)
 
         self.saved_log_probs = []
         self.rewards = []
 
     def forward(self, x):
-        x = F.relu(self.h(x))
+        if self.make_hidden:
+            x = F.relu(self.h(x))
         return F.softmax(self.out(x), dim=1)
 
 
@@ -114,7 +122,8 @@ def train(cfg):
     _ = env.reset()
     _, features, _, _ = xutils.do_step(env)
     # init policy net
-    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
+    print("Make hidden layer in nn:", cfg.train.make_hidden)
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
     optimizer = optim.Adam(policy.parameters(), lr=cfg.train.learning_rate) 
     eps = np.finfo(np.float32).eps.item()
     i_episode = 1
@@ -187,7 +196,7 @@ def train(cfg):
             avg_r = reward_buffer / cfg.train.log_steps
             writer.add_scalar('Train/Avg reward', avg_r, i_episode)
             reward_buffer = 0
-        if i_episode % cfg.train.save_every == 0:
+        if (i_episode + 1) % cfg.train.save_every == 0:
             save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
         # do pruning when pruning step
         pruning_feature = cfg.train.tr_value
@@ -218,7 +227,8 @@ def eval(cfg):
     _, ep_reward = env.reset(), 0
     _, _, done, _ = env.step(1)
     raw_features, features, _, _ = xutils.do_step(env)
-    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions)
+    print("Make hidden layer in nn:", cfg.train.make_hidden)
+    policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
     i_episode = 1
     # load if exists
     model_path = model_name(cfg.exp_name)

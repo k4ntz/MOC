@@ -1,4 +1,5 @@
 env_name: 'PongDeterministic-v4'
+seed: 5
 
 rl_algo: 1
 
@@ -15,11 +16,9 @@ train:
 
   num_episodes: 50000
   max_steps: 100000
-
-  pruning_method: "threshold-pr"
-  pruning_steps: 10000
-  tr_value: 0.01
   
-  log_steps: 25
+  log_steps: 50
   # save every is for episodes
   save_every: 100
+
+  make_hidden: False

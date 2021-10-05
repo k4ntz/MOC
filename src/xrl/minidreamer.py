@@ -26,7 +26,7 @@ torch.autograd.set_detect_anomaly(True)
 batch = 10
 history_size = 50
 min_history = 10
-lr_pred = 1e-5
+lr_pred = 1e-3
 alpha = 1e-1   #alpha to scale down loss of state for loss of reward #old 1e-5
 
 # policy parameter
@@ -34,7 +34,6 @@ lr_policy = 1e-3
 gamma = 0.97
 
 # misc parameter
-decay = 0
 
 
 # helper function to save all models
@@ -122,8 +121,8 @@ def train(cfg):
     predictor = WorldPredictor(input=len_raw_features).to(device)
     policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions).to(device)
     criterion = torch.nn.MSELoss()
-    optim_predictor = Adam(predictor.parameters(), lr=lr_pred, weight_decay=decay)
-    optim_policy = Adam(policy.parameters(), lr=lr_policy, weight_decay=decay)
+    optim_predictor = Adam(predictor.parameters(), lr=lr_pred)
+    optim_policy = Adam(policy.parameters(), lr=lr_policy)
 
     history = []
     steps_done = [0]  
@@ -226,6 +225,9 @@ def train(cfg):
             #print((s[0]-ps[0]).detach().numpy())
             #print(torch.mean(ls[0]-ps[0]))
             #print(torch.mean(s[0]-ps[0]))
+            #print("###")
+            #print(r)
+            #print(pr)
             #print(ss)
 
             # calc loss

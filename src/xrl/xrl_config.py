@@ -63,6 +63,7 @@ cfg = CfgNode({
         'save_every': 5,
 
         ### XRL SPECIFIC
+        'make_hidden': True,
         'hidden_layer_size': 32,
     },
 })

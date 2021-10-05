@@ -34,16 +34,22 @@ model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_model.pt
 
 # define policy network for genetic algo
 class policy_net(nn.Module):
-    def __init__(self, input, hidden, actions): 
+    def __init__(self, input, hidden, actions, make_hidden = True): 
         super(policy_net, self).__init__()
-        self.h = nn.Linear(input, hidden)
-        self.out = nn.Linear(hidden, actions)
+        # should make one hidden layer
+        self.make_hidden = make_hidden
 
-    # define forward pass with one hidden layer with ReLU activation and sofmax after output layer
+        if self.make_hidden:
+            self.h = nn.Linear(input, hidden)
+            self.out = nn.Linear(hidden, actions)
+        else:
+            self.out = nn.Linear(input, actions)
+
+
     def forward(self, x):
-        x = F.relu(self.h(x))
-        x = F.softmax(self.out(x), dim=1)
-        return x
+        if self.make_hidden:
+            x = F.relu(self.h(x))
+        return F.softmax(self.out(x), dim=1)
 
 
 def init_weights(m):
@@ -61,9 +67,12 @@ def init_weights(m):
 # function to create random agents of given count
 def return_random_agents(n_inputs, num_agents, n_actions, cfg):
     agents = []
-    print("Agents have", n_inputs, "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
+    if cfg.train.make_hidden:
+        print("Agents have", n_inputs, "input nodes,", cfg.train.hidden_layer_size, "hidden nodes and", n_actions, "output nodes")
+    else:
+        print("Linear model, no hidden layer! Policy net has", n_inputs, "input nodes and", n_actions, "output nodes")
     for _ in range(num_agents):
-        agent = policy_net(n_inputs, cfg.train.hidden_layer_size, n_actions)
+        agent = policy_net(n_inputs, cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
         for param in agent.parameters():
             param.requires_grad = False
         init_weights(agent)
@@ -95,12 +104,12 @@ def run_agents(env, agents, cfg):
     _, _, done, info = env.step(1)
     for agent in agents:
         agent.eval()
-        raw_features, features, _, _ = xutils.do_step(env, raw_image=cfg.raw_image)
+        raw_features, features, _, _ = xutils.do_step(env)
         r = 0
         t = 0
         while t < cfg.train.max_steps:
             action = select_action(features, agent)
-            raw_features, features, reward, done = xutils.do_step(env, action, raw_features, raw_image=cfg.raw_image)
+            raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
             r = r + reward
             if(done):
                 break
