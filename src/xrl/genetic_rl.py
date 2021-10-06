@@ -18,6 +18,7 @@ from itertools import count
 from PIL import Image
 from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
+from torchinfo import summary
 
 from rtpt import RTPT
 
@@ -334,6 +335,12 @@ def play_agent(cfg):
             elite_index = t_elite_index
     print('Selected elite agent:', elite_index)
     elite_agent = agents[elite_index]
+    # print nn structure
+    dummy = policy_net(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
+    summary(dummy, input_size=(1, len(features)))
+    # because old trained runs does not have make_hidden param
+    dummy.load_state_dict(elite_agent.state_dict())
+    elite_agent = dummy
 
     # play with elite agent
     logger = vlogger.VideoLogger(size=(480,480))
