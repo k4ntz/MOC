@@ -5,6 +5,7 @@ import numpy as np
 import os
 import copy
 import multiprocessing
+import random
 
 import torch
 import torch.nn as nn
@@ -88,12 +89,16 @@ def return_random_agents(n_inputs, num_agents, n_actions, cfg):
 # 3: "RIGHT",
 # 4: "LEFT",
 # 5: "DOWN",
-def select_action(features, policy):
-    # calculate probabilities of taking each action
-    probs = policy(torch.tensor(features).unsqueeze(0).float())
-    # sample an action from that set of probs
-    sampler = Categorical(probs)
-    action = sampler.sample()
+def select_action(features, policy, random_tr = -1):
+    sample = random.random()
+    if sample > random_tr:
+        # calculate probabilities of taking each action
+        probs = policy(torch.tensor(features).unsqueeze(0).float())
+        # sample an action from that set of probs
+        sampler = Categorical(probs)
+        action = sampler.sample()
+    else:
+        action = random.randint(0, 5)
     # return action
     return action
 
@@ -346,7 +351,7 @@ def play_agent(cfg):
     logger = vlogger.VideoLogger(size=(480,480))
     ig = IntegratedGradients(elite_agent)
     ig_sum = []
-    feature_titles = xutils.get_feature_titles()
+    feature_titles = xutils.features_names
     elite_agent.eval()
     r = 0
     for t in count():
@@ -360,6 +365,10 @@ def play_agent(cfg):
         else:
             #TODO: REMOVE!!
             ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
+        #if abs(reward) > 0:
+        #    env.seed(random.randint(0,1000))
+        #    env.reset()
+        #    raw_features, features, _, _ = xutils.do_step(env)
         r = r + reward
         if(done):
             break

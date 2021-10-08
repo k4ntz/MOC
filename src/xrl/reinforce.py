@@ -238,7 +238,7 @@ def eval(cfg):
     # init intgrad
     ig = IntegratedGradients(policy)
     ig_sum = []
-    feature_titles = xutils.get_feature_titles()
+    feature_titles = xutils.get_feature_titles(int(len(raw_features)/2))
     # env loop
     t = 0
     while t  < cfg.train.max_steps:  # Don't infinite loop while playing
