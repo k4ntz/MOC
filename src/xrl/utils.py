@@ -14,6 +14,7 @@ import seaborn as sns
 # Use Agg backend for canvas
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from tqdm import tqdm
+from sklearn.decomposition import PCA
 
 from argparse import ArgumentParser
 from xrl.xrl_config import cfg
@@ -177,19 +178,58 @@ def plot_integrated_gradient_img(ig, exp_name, input, feature_titles, target_cla
     return resized
 
 
+# 0: "NOOP",
+# 1: "FIRE",
+# 2: "UP",
+# 3: "RIGHT",
+# 4: "LEFT",
+# 5: "DOWN",
+# helper function to create pcas based on actions
+def ig_pca(ig_action_sum, action_meanings):
+    plt.figure(figsize=(8,6))
+    # process ig df with actions
+    mapping = {i: action_meanings[i] for i in range(len(action_meanings))}
+    # watch out, n_cols is -1 from col count 
+    n_cols = len(ig_action_sum[1,:]) - 1
+    ig_df = pd.DataFrame(data=ig_action_sum).replace({n_cols: mapping}).rename(columns={n_cols: "action"})
+    # pca for ig values
+    cut_ig_df = ig_df.iloc[:,:n_cols]
+    pca = PCA(n_components=2)
+    pca.fit(cut_ig_df)
+    x = pca.transform(cut_ig_df)
+    plot = sns.scatterplot(x[:,0], x[:,1], hue=ig_df["action"], palette="deep")
+    plot.set_title("PCA on Integrated Gradient Values")
+    plt.tight_layout()
+    plt.show()
+    
+
+
+
 # helper function to plot igs of each feature over whole episode
-def plot_igs(ig_sum, plot_titles):
-    for i, igs in enumerate(ig_sum.T):
-        plt.plot(igs)
-        plt.xlabel("Steps")
-        plt.ylabel("Integrated Gradient Value")
+def plot_igs(ig_sum, plot_titles, action_meanings):
+    # process ig df with actions
+    mapping = {i: action_meanings[i] for i in range(len(action_meanings))}
+    # watch out, n_cols is -1 from col count 
+    n_cols = len(ig_sum[1,:]) - 1
+    ig_df = pd.DataFrame(data=ig_sum).replace({n_cols: mapping}).rename(columns={n_cols: "action"})
+    # pca for ig values
+    cut_ig_df = ig_df.iloc[:,:n_cols]
+    for i, col in enumerate(cut_ig_df):
+        igs = cut_ig_df[col]
+        fig, ax = plt.subplots(1,2, figsize=(12,6))
+        sns.set(font_scale=0.7)
+        sns.set_style("ticks")
+        ## seaborn lineplot 
+        scatter = sns.scatterplot(x=igs.index, y=igs, size=0.02, alpha=0.7, palette="deep", hue=ig_df["action"], ax=ax[0])
+        scatter.set(xlabel='Step', ylabel='Integrated gradient')
         if plot_titles is not None:
-            plt.title(plot_titles[i])
-        plt.show()
-        plt.hist(igs, bins=20)
-        plt.xlabel("Integrated Gradient Value")
+            scatter.set_title("Integrated gradient values for feature: " + plot_titles[i])
+        ## seaborn histogram
+        hist = sns.histplot(x=igs, hue=ig_df["action"], palette="deep", bins=25, element="bars", fill=False, ax=ax[1])
         if plot_titles is not None:
-            plt.title(plot_titles[i])
+            hist.set_title("Integrated gradient histogram for feature: " + plot_titles[i])
+        fig.tight_layout()
+        #plt.savefig("ig_" + plot_titles[i] + ".png", dpi=300)
         plt.show()
 
 

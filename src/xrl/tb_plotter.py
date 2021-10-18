@@ -13,6 +13,8 @@ assert major_ver >= 2 and minor_ver >= 3, \
     "This notebook requires TensorBoard 2.3 or later."
 print("TensorBoard version: ", tb.__version__)
 
+sns.set_style("ticks")
+
 #runs = ["exp2-re-pong-v2", "exp2-re-pong-v2-2", "exp2-re-pong-v2-3"]
 runs = ["exp4-re-pong-ptr12", "exp4-re-pong-ptr12-2", "exp4-re-pong-ptr12-3", "exp4-re-pong-ptr12-4"]
 
@@ -28,5 +30,5 @@ for run in runs:
 df = pd.concat(df_list)
 print(df)
 
-sns.lineplot(data=df, x="step", y="value").set_title("Average reward of runs")
+sns.lineplot(data=df, x="step", y="reward").set_title("Average reward of runs")
 plt.show()

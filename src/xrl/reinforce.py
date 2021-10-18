@@ -238,6 +238,7 @@ def eval(cfg):
     # init intgrad
     ig = IntegratedGradients(policy)
     ig_sum = []
+    ig_action_sum = []
     feature_titles = xutils.get_feature_titles(int(len(raw_features)/2))
     # env loop
     t = 0
@@ -250,6 +251,7 @@ def eval(cfg):
                 i_episode, ep_reward, t), end="\r")
         else:
             ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
+            ig_action_sum.append(np.append(xutils.get_integrated_gradients(ig, features, action), [action]))
             print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
                 i_episode, ep_reward, t), end="\r")
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
@@ -263,6 +265,8 @@ def eval(cfg):
         i_episode, ep_reward))
     else:
         ig_sum = np.asarray(ig_sum)
+        ig_action_sum = np.asarray(ig_action_sum)
         print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
-    #xutils.plot_corr(features_list)
+    #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())
+    #xutils.plot_igs(ig_action_sum, feature_titles, env.unwrapped.get_action_meanings())

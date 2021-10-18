@@ -354,14 +354,12 @@ def play_agent(cfg):
     feature_titles = xutils.features_names
     elite_agent.eval()
     r = 0
-    for t in count():
+    for t in range(5000):
         action = select_action(features, elite_agent)
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
-            print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
-                generation, r, t), end="\r")
         else:
             #TODO: REMOVE!!
             ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
@@ -369,6 +367,8 @@ def play_agent(cfg):
         #    env.seed(random.randint(0,1000))
         #    env.reset()
         #    raw_features, features, _, _ = xutils.do_step(env)
+        print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
+                generation, r, t), end="\r")
         r = r + reward
         if(done):
             break
