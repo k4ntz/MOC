@@ -119,19 +119,15 @@ def train(cfg, rtpt_active=True):
             metric_logger.update(batch_time=batch_time)
             metric_logger.update(loss=loss.item())
 
-            if global_step % cfg.train.print_every == 0:
-                start = time.perf_counter()
+            if global_step == start_log:
+                start_log = int(start_log * 1.2) + 1
+                log_state(cfg, epoch, global_step, log, metric_logger)
+
+            if global_step % cfg.train.print_every == 0 or never_evaluated:
                 log.update({
                     'loss': metric_logger['loss'].median,
                 })
-                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
                 vis_logger.train_vis(model, writer, log, global_step, 'train', cfg, dataset)
-                end = time.perf_counter()
-                print(f'Log duration: {end - start}')
-
-            if global_step % start_log == 0:
-                start_log = int(start_log * 1.6)
-                log_state(cfg, epoch, global_step, i, log, metric_logger, trainloader)
 
             if global_step % cfg.train.save_every == 0:
                 start = time.perf_counter()
@@ -160,14 +156,15 @@ def log_state(cfg, epoch, global_step, log, metric_logger):
     print()
     print(
         'exp: {}, epoch: {}, global_step: {}, loss: {:.2f}, z_what_con: {:.2f},'
-        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, flow_loss: {:.3f}, '
-        'flow_count_loss: {:.3f} batch time: '
+        ' z_pres_con: {:.3f}, z_what_loss_pool: {:.3f}, z_what_loss_objects: {:.3f}, motion_loss: {:.3f}, '
+        'motion_loss_z_where: {:.3f} motion_loss_alpha: {:.3f} batch time: '
         '{:.4f}s, data time: {:.4f}s'.format(
             cfg.exp_name, epoch + 1, global_step, metric_logger['loss'].median,
             torch.sum(log['z_what_loss']).item(), torch.sum(log['z_pres_loss']).item(),
             torch.sum(log['z_what_loss_pool']).item(),
             torch.sum(log['z_what_loss_objects']).item(),
             torch.sum(log['flow_loss']).item(),
-            torch.sum(log['flow_count_loss']).item(),
+            torch.sum(log['flow_loss_z_where']).item(),
+            torch.sum(log['flow_loss_alpha_map']).item(),
             metric_logger['batch_time'].avg, metric_logger['data_time'].avg))
     print()

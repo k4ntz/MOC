@@ -47,7 +47,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     """
 
     c = Counter(labels.tolist() if labels is not None else [])
-    print("Distribution of matched labels:", c)
+    if cfg.train.log:
+        print("Distribution of matched labels:", c)
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else list(c.keys())
     folder = f'{cfg.logdir}/{cfg.exp_name}' if cfg else f'{arguments["folder"]}'
     pca_path = f"{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
@@ -109,7 +110,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     few_shot_accuracy[f'few_shot_accuracy_cluster_nn'] = nn_class.score(test_x, test_y)
 
     train_all = torch.cat((z_what, labels.unsqueeze(1)), 1)
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'key', 'pink', 'purple', 'orange',
+    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'pink', 'purple', 'orange',
               'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
     # SORT THE INDICES
     sorted = []

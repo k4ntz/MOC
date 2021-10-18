@@ -52,6 +52,7 @@ cfg = CfgNode({
 
     # For engine.train
     'train': {
+        'log': True,
         'batch_size': 16,
         'max_epochs': 1000,
         'max_steps': 1000000,

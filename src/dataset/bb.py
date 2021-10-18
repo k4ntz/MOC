@@ -45,25 +45,17 @@ def _bb_carnival(img_gt):
 
 
 def _bb_pong(img_gt):
-    bbs = [(img_gt['enemy_x'] * 128 / 160.0, img_gt['enemy_y'] * 128 / 210.0, 0.07 * 128, 0.05 * 128, "M"),
-           (img_gt['player_x'] * 128 / 160.0, img_gt['player_y'] * 128 / 210.0, 0.07 * 128, 0.05 * 128, "M"),
+    bbs = [(img_gt['enemy_x'] * 128 / 160.0 - 2, img_gt['enemy_y'] * 128 / 210.0 - 2, 0.05 * 128, 0.10 * 128, "M"),
+           (img_gt['player_x'] * 128 / 160.0 - 2, img_gt['player_y'] * 128 / 210.0 - 2, 0.05 * 128, 0.10 * 128, "M"),
            (
-               img_gt['score_enemy_0_x'] * 128 / 160.0,
-               img_gt['score_enemy_0_y'] * 128 / 210.0,
-               0.1 * 128 if 'score_enemy_1_x' in img_gt else 0.05 * 128,
-               0.1 * 128,
-               "S"
+               16, 0, 24, 13, "S"
            ),
            (
-               img_gt['score_player_0_x'] * 128 / 160.0,
-               img_gt['score_player_0_y'] * 128 / 210.0,
-               0.1 * 128 if 'score_player_1_x' in img_gt else 0.05 * 128,
-               0.1 * 128,
-               "S"
+               79, 0, 24, 13, "S"
            )]
     if 'ball_x' in img_gt:
-        bbs.append((img_gt['ball_x'] * 128 / 160.0, img_gt['ball_y'] * 128 / 210.0,
-                    0.07 * 128, 0.05 * 128, "M"))
+        bbs.append((img_gt['ball_x'] * 128 / 160.0 - 2, img_gt['ball_y'] * 128 / 210.0 - 2,
+                    0.04 * 128, 0.04 * 128, "M"))
     return pd.DataFrame.from_dict({i: [bb[0], bb[1], bb[2], bb[3], bb[4]] for i, bb in enumerate(bbs)}, orient='index')
 
 

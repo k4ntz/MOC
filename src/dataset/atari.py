@@ -9,35 +9,35 @@ import PIL
 import os.path as osp
 from .labels import get_labels, get_labels_moving, to_relevant, filter_relevant_boxes
 import pandas as pd
+import cv2 as cv
 from skimage.morphology import (disk, square)
 from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
 
 
 class Atari(Dataset):
-    def __init__(self, cfg, mode, ):
+    def __init__(self, cfg, mode):
         assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'
         mode = 'validation' if mode == 'val' else mode
         self.image_path = cfg.dataset_roots.ATARI
         self.flow_path = self.image_path.replace('space_like', 'median_delta')
         self.mode = mode
         self.game = cfg.gamelist[0]
+        self.arch = cfg.arch
         self.motion = cfg.arch.motion
         self.motion_kind = cfg.arch.motion_kind
         self.valid_flow_threshold = 20
         self.all_labels = pd.read_csv(os.path.join(self.image_path, self.game, f"{mode}_labels.csv"))
         if "MsPacman" in self.game:
             self.all_labels = self.all_labels.rename(columns={'player_y': 'pacman_y', 'player_x': 'pacman_x'})
-        if len(gamelist) > 1:
-            print(f"Evaluation currently only supported for exactly one game not {gamelist}")
-        image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root) \
-                    if gamelist is None or fn in gamelist \
-                    for img in os.listdir(os.path.join(root, fn, mode))
-                    if img.endswith(".png")]
+        if len(cfg.gamelist) > 1:
+            print(f"Evaluation currently only supported for exactly one game not {cfg.gamelist}")
+        image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(self.image_path)
+                    if cfg.gamelist is None or fn in cfg.gamelist
+                    for img in os.listdir(os.path.join(self.image_path, fn, mode)) if img.endswith(".png")]
         self.image_fn = image_fn
-        self.image_fn.sort()
 
     def __getitem__(self, stack_idx):
-        fn = self.image_fn[index:index + 4]
+        # fn = self.image_fn[index:index + 4]
         tensors = [self.img_path_to_tensor(stack_idx, i) for i in range(4)]
         if self.motion:
             torch_stack = torch.stack([t[0] for t in tensors])
@@ -57,10 +57,9 @@ class Atari(Dataset):
 
         image = np.array(pil_img)
         if self.motion:
-            motion = np.load(path.replace(f'{i:05}.png', f'{i:05}.npy').replace('space_like', self.motion_kind))
-            z_pres, z_where = process_motion(motion)
-            return torch.from_numpy(image / 255).permute(2, 0, 1).float(), torch.from_numpy(z_pres), torch.from_numpy(
-                z_where)
+            motion = np.load(path.replace(".png", ".npy").replace('space_like', self.motion_kind))
+            z_pres, z_where = self.process_motion(image, motion)
+            return torch.from_numpy(image / 255).permute(2, 0, 1).float(), z_pres, z_where
         else:
             return torch.from_numpy(image / 255).permute(2, 0, 1).float()
 
@@ -88,32 +87,33 @@ class Atari(Dataset):
     def filter_relevant_boxes(self, boxes_batch):
         return filter_relevant_boxes(self.game, boxes_batch)
 
-
-def process_motion(motion):
-    """
-    Converts the motion as magnitude of flow / delta to the median or mode of the last few images into
-    z_pres and z_where, i.e. giving hints where the objects are so SPACE can one the one hand imitate it and
-    on the other concentrate on finding sensible z_what representations
-    :param motion: (B, 1, H_img, W_img)
-    :return z_pres: (B, 1, G, G) in (-1, 1) (tanh)
-    :return z_where: (B, 4, G, G), where all grid cells without z_pres are only contain zero
-    """
-    motion = motion > motion.mean()
-    motion = (closing(motion, square(3)) * 255).astype(np.uint8)
-    canny_output = cv.Canny(motion, 100, 200)  # Parameters irrelevant for our binary case
-    contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    contours = contours[0] if len(contours) == 2 else contours[1]
-    motion_z_pres = torch.zeros((arch.G * arch.G, 1))
-    motion_z_where = torch.zeros((arch.G * arch.G, 4))
-    for c in contours:
-        x, y, w, h = cv.boundingRect(c)
-        selection = np.apply_along_axis(unique_color, axis=2, arr=frame_copy[y:y + h, x:x + w])
-        if w * h >= 30 and np.var(selection) > 1e-4:
-            z_where_x = ((x + w / 2) / 128) * 2 - 1
-            z_where_y = ((y + h / 2) / 128) * 2 - 1
-            motion_z_where[(y + h // 2) // 8 * (x + w // 2) // 8] = np.array([w / 128, h / 128, z_where_x, z_where_y])
-            motion_z_pres[(y + h // 2) // 8 * (x + w // 2) // 8, 0] = 1.0
-    return motion_z_pres, motion_z_where
+    def process_motion(self, img, motion):
+        """
+        Converts the motion as magnitude of flow / delta to the median or mode of the last few images into
+        z_pres and z_where, i.e. giving hints where the objects are so SPACE can one the one hand imitate it and
+        on the other concentrate on finding sensible z_what representations
+        :param motion: (H_img, W_img)
+        :param img: (3, H_img, W_img)
+        :return z_pres: (1, G * G) in (-1, 1) (tanh)
+        :return z_where: (4, G * G), where all grid cells without z_pres == 1 only contain zero
+        """
+        motion = motion > motion.mean()
+        motion = (closing(motion, square(3)) * 255).astype(np.uint8)
+        canny_output = cv.Canny(motion, 100, 200)  # Parameters irrelevant for our binary case
+        contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours = contours[0] if len(contours) == 2 else contours[1]
+        motion_z_pres = torch.zeros((self.arch.G, self.arch.G, 1))
+        motion_z_where = torch.zeros((self.arch.G, self.arch.G, 4))
+        for c in contours:
+            x, y, w, h = cv.boundingRect(c)
+            selection = np.apply_along_axis(unique_color, axis=2, arr=img[y:y + h, x:x + w])
+            if w * h >= 30 and np.var(selection) > 1e-4:
+                z_where_x = ((x + w / 2) / 128) * 2 - 1
+                z_where_y = ((y + h / 2) / 128) * 2 - 1
+                motion_z_where[(y + h // 2) // 8, (x + w // 2) // 8] = torch.tensor(
+                    [w / 128, h / 128, z_where_x, z_where_y])
+                motion_z_pres[(y + h // 2) // 8, (x + w // 2) // 8] = 1.0
+        return motion_z_pres.reshape(self.arch.G * self.arch.G, -1), motion_z_where.reshape(self.arch.G * self.arch.G, -1)
 
 
 def unique_color(color):

@@ -6,6 +6,7 @@ from torch.distributions import Normal, kl_divergence
 from .utils import NumericalRelaxedBernoulli, kl_divergence_bern_bern, get_boundary_kernel_new, get_boundary_kernel
 from .utils import spatial_transform, linear_annealing
 from .arch import arch
+from eval import convert_to_boxes
 import time
 
 
@@ -85,21 +86,13 @@ class SpaceFg(nn.Module):
                                     arch.tau_start_step, arch.tau_end_step,
                                     arch.tau_start_value, arch.tau_end_value)
 
-    def t_cons_loss(self, z_what):
-        """
-        add loss for temporal consistency
-
-        :param z_what: (B, 3, H, W)
-        :param global_step: global step (training)
-        :return:
-            loss: the loss coming from two adjacent images differences
-        """
-
     def forward(self, x, motion_z_pres, motion_z_where, global_step):
         """
         Forward pass
 
         :param x: (B, 3, H, W)
+        :param motion_z_pres: z_pres hint from motion
+        :param motion_z_where: z_where hint from motion
         :param global_step: global step (training)
         :return:
             fg_likelihood: (B, 3, H, W)
@@ -115,8 +108,8 @@ class SpaceFg(nn.Module):
 
         # Everything is (B, G*G, D), where D varies
         z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post, \
-            z_scale_post, z_shift_post, z_pres_prob_pure, \
-            z_where_pure = self.img_encoder(x, motion_z_pres, motion_z_where, self.tau, global_step)
+        z_scale_post, z_shift_post, z_pres_prob_pure, \
+        z_where_pure = self.img_encoder(x, motion_z_pres, motion_z_where, self.tau, global_step)
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
@@ -160,15 +153,21 @@ class SpaceFg(nn.Module):
 
         # To full resolution
         # (B*G*G, 1, H, W) -> (B, G*G, 1, H, W)
-        alpha_map = spatial_transform(alpha_att_hat, z_where.view(B * arch.G ** 2, 4),
+        alpha_map_pure = spatial_transform(alpha_att_hat, z_where.view(B * arch.G ** 2, 4),
                                       (B * arch.G ** 2, 1, *arch.img_shape),
                                       inverse=True).view(B, arch.G ** 2, 1, *arch.img_shape)
 
         # Weighted sum, (B, 1, H, W)
-        alpha_map = (alpha_map * importance_map_full_res_norm).sum(dim=1)
-        flow_att = motion_z_pres.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
-        flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step) * arch.flow_importance_map_scaling
-        alpha_map = (1 - flow_cooling_scaling) * alpha_map + flow_cooling_scaling * flow_att
+        alpha_map_pure = (alpha_map_pure * importance_map_full_res_norm).sum(dim=1)
+        # (B, 1, H, W)
+        motion_att = torch.zeros_like(alpha_map_pure)
+        boxes_batch = convert_to_boxes(motion_z_where, motion_z_pres.squeeze(), motion_z_pres.squeeze())
+        for i, boxes in enumerate(boxes_batch):
+            for box in boxes:
+                y_min, y_max, x_min, x_max = [int(e * arch.img_shape[0]) for e in box]
+                motion_att[i][0][y_min:y_max, x_min:x_max] = 1
+        motion_cooling = max(0, 1 - global_step / arch.motion_cooling_end_step)
+        alpha_map = (1 - motion_cooling) * alpha_map_pure + motion_cooling * motion_att
 
         # Everything is computed. Now let's compute loss
         # Compute KL divergences
@@ -257,8 +256,6 @@ class SpaceFg(nn.Module):
             'z_where': z_where,
             'z_where_pure': z_where_pure,
             'z_pres': z_pres,
-            'z_scale': z_scale,
-            'z_shift': z_shift,
             'z_depth': z_depth,
             'motion_z_pres': motion_z_pres,
             'motion_z_where': motion_z_where,
@@ -269,6 +266,7 @@ class SpaceFg(nn.Module):
             'alpha_att_hat': alpha_att_hat,
             'alpha_att': alpha_att,
             'alpha_map': alpha_map,
+            'alpha_map_pure': alpha_map_pure,
             'boundary_loss': boundary_loss,
             'boundary_map': boundary_map,
             'importance_map_full_res_norm': importance_map_full_res_norm,
@@ -344,7 +342,7 @@ class ImgEncoderFg(nn.Module):
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
         self.z_scale_net = nn.Conv2d(128, arch.z_where_scale_dim * 2, 1)
         self.z_shift_net = nn.Conv2d(128, arch.z_where_shift_dim * 2, 1)
-        self.z_pres_net = nn.Conv2d(128 + arch.flow_input, arch.z_pres_dim, 1)
+        self.z_pres_net = nn.Conv2d(128 + arch.motion_input, arch.z_pres_dim, 1)
         self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)
 
         # (G, G). Grid center offset. (offset_x[i, j], offset_y[i, j]) is the center for cell (i, j)
@@ -358,6 +356,8 @@ class ImgEncoderFg(nn.Module):
         Given image, infer z_pres, z_depth, z_where
 
         :param x: (B, 3, H, W)
+        :param motion_z_pres: z_pres hint from motion
+        :param motion_z_where: z_where hint from motion
         :param tau: temperature for the relaxed bernoulli
         :param global_step: step for cooling
         :return
@@ -372,7 +372,6 @@ class ImgEncoderFg(nn.Module):
             z_shift_post: Normal, (B, G*G, 2)
         """
         B = x.size(0)
-
         # (B, C, H, W)
         img_enc = self.enc(x[:, :3])
         # (B, E, G, G)
@@ -394,14 +393,15 @@ class ImgEncoderFg(nn.Module):
         grid_width = 128 // arch.G
         # (B, 1, G, G)
         avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
-        if arch.flow_input:
+        if arch.motion_input:
             cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
         z_pres_logits_pure = torch.tanh(z_pres_original)
-        flow_cooling_scaling = max(0, 1 - global_step / arch.flow_cooling_end_step)
+        motion_cooling_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step)
         transformed_motion_z_pres = motion_z_pres * 2 - 1
         # (B, 1, G, G) - > (B, G*G, 1)
-        z_pres_logits = (1 - flow_cooling_scaling) * reshape(z_pres_logits_pure) + flow_cooling_scaling * transformed_motion_z_pres
+        z_pres_logits = (1 - motion_cooling_scaling) * reshape(
+            z_pres_logits_pure) + motion_cooling_scaling * transformed_motion_z_pres
         # 8.8 is only here to allow sigmoid(tanh(x)) to be around zero and one
         z_pres_logits = 8.8 * z_pres_logits
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
@@ -446,8 +446,7 @@ class ImgEncoderFg(nn.Module):
 
         # (B, G*G, 4)
         z_where_pure = torch.cat((z_scale, z_shift), dim=-1)
-        z_where = (1 - flow_cooling_scaling) * z_where_pure + flow_cooling_scaling * motion_z_where
-
+        z_where = (1 - motion_cooling_scaling) * z_where_pure + motion_cooling_scaling * motion_z_where
         # Check dimensions
         assert (
                 (z_pres.size() == (B, arch.G ** 2, 1)) and
@@ -458,8 +457,8 @@ class ImgEncoderFg(nn.Module):
         )
 
         return z_pres, z_depth, z_scale, z_shift, z_where, \
-               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, motion_z_pres, z_pres_logits_pure, \
-               z_where_pure, motion_z_where
+               z_pres_logits, z_depth_post, z_scale_post, z_shift_post, z_pres_logits_pure, \
+               z_where_pure
 
 
 class ZWhatEnc(nn.Module):

@@ -98,7 +98,9 @@ def add_bbox(x, score, z_where_scale, z_where_shift, rbox=rbox, gbox=gbox, num_o
     return bbox
 
 
-def bbox_in_one(x, z_pres, z_where_scale, z_where_shift, gbox=gbox):
+def bbox_in_one(x, z_pres, z_where, gbox=gbox):
+    z_where_scale = z_where[..., :2]
+    z_where_shift = z_where[..., 2:]
     B, _, *img_shape = x.size()
     B, N, _ = z_pres.size()
     z_pres = z_pres.reshape(-1, 1, 1, 1)

@@ -9,9 +9,9 @@ def get_model(cfg):
     :param cfg:
     :return:
     """
-    
     model = None
-    if cfg.model == 'SPACE':
+    if cfg.model.lower() == 'tcspace':
         model = TcSpace()
-        
+    if cfg.model.lower() == 'space':
+        model = Space()
     return model

@@ -15,11 +15,13 @@ class Space(nn.Module):
         self.fg_module = SpaceFg()
         self.bg_module = SpaceBg()
         
-    def forward(self, x, global_step):
+    def forward(self, x, motion_z_pres, motion_z_where, global_step):
         """
         Inference.
         With time-dimension for consistency
-        :param x: (B, 3/5, H, W)
+        :param x: (B, 3/4, H, W)
+        :param motion_z_pres: z_pres hint from motion
+        :param motion_z_where: z_where hint from motion
         :param global_step: global training step
         :return:
             loss: a scalar. Note it will be better to return (B,)
@@ -31,7 +33,8 @@ class Space(nn.Module):
         bg_likelihood, bg, kl_bg, log_bg = self.bg_module(x[:, :3], global_step)
 
         # Foreground extraction
-        fg_likelihood, fg, alpha_map, kl_fg, loss_boundary, log_fg = self.fg_module(x, global_step)
+        fg_likelihood, fg, alpha_map, kl_fg, loss_boundary, log_fg = self.fg_module(x, motion_z_pres,
+                                                                                    motion_z_where, global_step)
 
         # Fix alpha trick
         if global_step and global_step < arch.fix_alpha_steps:

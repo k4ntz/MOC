@@ -6,9 +6,9 @@ eval_cfg = CfgNode({
         'metrics': ['ap', 'mse', 'cluster'],
         # Number of samples for evaluation
         'num_samples': {
-            'mse': 64,
-            'ap': 64,
-            'cluster': 64,
+            'mse': 128,
+            'ap': 128,
+            'cluster': 128,
         },
         
         # For dataloader

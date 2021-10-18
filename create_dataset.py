@@ -67,6 +67,7 @@ bgr_folder = None
 rgb_folder = None
 flow_folder = None
 median_folder = None
+mode_folder = None
 bb_folder = None
 vis_folder = None
 env = None
@@ -98,7 +99,7 @@ def main():
                         default='Pong')
     parser.add_argument('--rootmedian', default=False, action="store_true",
                         help='instead compute the root-median of all found images')
-    parser.add_argument('--noroot', default=False, action="store_true",
+    parser.add_argument('--noroot', default=True, action="store_false",
                         help='instead compute the root-median of all found images')
     parser.add_argument('--render', default=False, action="store_true",
                         help='renders the environment')
@@ -120,10 +121,9 @@ def main():
                         required=True,
                         help='folder to write to: train, test or validation')
     args = parser.parse_args()
-
-    folder_sizes = {"train": 6000, "test": 1500, "validation": 1500}
+    folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
     data_base_folder = "aiml_atari_data2"
-    REQ_CONSECUTIVE_IMAGE = 100
+    REQ_CONSECUTIVE_IMAGE = 80
     create_folders(args, data_base_folder)
     visualizations_flow = [
         IteratedCentroidSelection(vis_folder, "Flow"),
@@ -165,12 +165,14 @@ def main():
             state, reward, done, info = env.step(action)
 
     pbar = tqdm(total=limit)
+
     try:
         root_median = np.array(Image.open(f"{data_base_folder}/space_like/{args.game}-v0/median.png"))
         root_mode = np.array(Image.open(f"{data_base_folder}/space_like/{args.game}-v0/mode.png"))
     except:
         root_median, root_mode = None, None
-        print("No root_median was found. Taking median of trail instead.")
+        if not args.noroot:
+            print("No root_median was found. Taking median of trail instead.")
     if args.noroot:
         root_median, root_mode = None, None
     while True:
@@ -195,12 +197,12 @@ def main():
                         series.append(img_info)
                     space_stack = np.stack([np.array(frame_space) for frame_space in imgs_space])
                     if args.flow:
-                        flow.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.png', visualizations_flow)
+                        flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.npy', visualizations_flow)
                     if args.median:
-                        median.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.png', visualizations_median,
+                        median.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.npy', visualizations_median,
                                     median=root_median)
                     if args.median:
-                        mode.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.png', visualizations_mode,
+                        mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.npy', visualizations_mode,
                                     mode=root_mode)
                     while done:
                         state, reward, done, info, obs = some_steps(agent, state)
@@ -273,22 +275,25 @@ def configure(args):
 
 
 def create_folders(args, data_base_folder):
-    global rgb_folder, bgr_folder, flow_folder, median_folder, bb_folder, vis_folder
+    global rgb_folder, bgr_folder, flow_folder, median_folder, bb_folder, vis_folder, mode_folder
     rgb_folder = f"{data_base_folder}/rgb/{args.game}-v0/{args.folder}"
     bgr_folder = f"{data_base_folder}/space_like/{args.game}-v0/{args.folder}"
     bb_folder = f"{data_base_folder}/space_like/{args.game}-v0/{args.folder}/bb"
     flow_folder = f"{data_base_folder}/flow/{args.game}-v0/{args.folder}"
-    median_folder = f"{data_base_folder}/median-delta/{args.game}-v0/{args.folder}"
+    median_folder = f"{data_base_folder}/median/{args.game}-v0/{args.folder}"
+    mode_folder = f"{data_base_folder}/mode/{args.game}-v0/{args.folder}"
     vis_folder = f"{data_base_folder}/vis/{args.game}-v0/{args.folder}"
     os.makedirs(bgr_folder, exist_ok=True)
     os.makedirs(rgb_folder, exist_ok=True)
     os.makedirs(flow_folder, exist_ok=True)
     os.makedirs(median_folder, exist_ok=True)
+    os.makedirs(mode_folder, exist_ok=True)
     os.makedirs(bb_folder, exist_ok=True)
     os.makedirs(vis_folder + "/BoundingBox", exist_ok=True)
     os.makedirs(vis_folder + "/Median", exist_ok=True)
     os.makedirs(vis_folder + "/Flow", exist_ok=True)
     os.makedirs(vis_folder + "/Mode", exist_ok=True)
+
 
 
 if __name__ == '__main__':

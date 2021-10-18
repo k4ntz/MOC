@@ -9,6 +9,10 @@ from .space import Space
 from rtpt import RTPT
 import time
 
+
+# TODO: Investigate Time, i.e. saving preprocessing steps when training
+# Low IOU might be enough, eval metric
+# alpha map allows more precise influence of motion in pixel space
 class TcSpace(nn.Module):
 
     def __init__(self):
@@ -17,11 +21,13 @@ class TcSpace(nn.Module):
         self.space = Space()
         self.dummy_param = nn.Parameter(torch.empty(0))
 
-    def forward(self, x, global_step):
+    def forward(self, x, motion_z_pres, motion_z_where, global_step):
         """
         Inference.
         With time-dimension for consistency
-        :param x: (B, T, 3/4, H, W)
+        :param x: (B, T, 3, H, W)
+        :param motion_z_pres: z_pres hint from motion
+        :param motion_z_where: z_where hint from motion
         :param global_step: global training step
         :return:
             loss: a scalar. Note it will be better to return (B,)
@@ -31,7 +37,9 @@ class TcSpace(nn.Module):
 
         zero = torch.tensor(0.0).to(x.device)
         x = x.reshape(T * B, C, H, W)
-        loss, responses = self.space(x, global_step)
+        motion_z_pres = motion_z_pres.reshape(T * B, arch.G * arch.G, 1)
+        motion_z_where = motion_z_where.reshape(T * B, arch.G * arch.G, 4)
+        loss, responses = self.space(x, motion_z_pres, motion_z_where, global_step)
 
         # Further losses
         z_what_loss = z_what_loss_grid_cell(responses) if arch.adjacent_consistency_weight > 1e-3 else zero
@@ -43,9 +51,11 @@ class TcSpace(nn.Module):
             z_what_loss_objects, objects_detected = (zero, zero)
         flow_loss = compute_flow_loss(responses) if arch.motion_loss_weight > 1e-3 else zero
         flow_loss_z_where = compute_flow_loss_z_where(responses) if arch.motion_loss_weight_z_where > 1e-3 else zero
+        flow_loss_alpha_map = compute_flow_loss_alpha(responses) if arch.motion_loss_weight_alpha > 1e-3 else zero
 
         area_object_scaling = min(1, global_step / arch.full_object_weight)
-        flow_scaling = min(0, 1 - global_step / arch.flow_cooling_end_step / 2)
+        # TODO: Cooling slower than direct influence eval
+        flow_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step / 2)
         tc_log = {
             'z_what_loss': z_what_loss,
             'z_what_loss_pool': z_what_loss_pool,
@@ -53,7 +63,7 @@ class TcSpace(nn.Module):
             'z_pres_loss': z_pres_loss,
             'flow_loss': flow_loss,
             'flow_loss_z_where': flow_loss_z_where,
-            'flow_count_loss': flow_count_loss,
+            'flow_loss_alpha_map': flow_loss_alpha_map,
             'objects_detected': objects_detected
         }
         responses.update(tc_log)
@@ -63,7 +73,8 @@ class TcSpace(nn.Module):
                + z_what_loss_pool * arch.area_pool_weight \
                + z_what_loss_objects * area_object_scaling * arch.area_object_weight \
                + flow_loss * arch.motion_loss_weight * flow_scaling \
-               + flow_loss * arch.motion_loss_weight_z_where * flow_scaling
+               + flow_loss_alpha_map * arch.motion_loss_weight_alpha * flow_scaling \
+               + flow_loss_z_where * arch.motion_loss_weight_z_where * flow_scaling
         return loss, responses
 
 
@@ -79,26 +90,38 @@ def get_loss(res):
     loss = res[0]
     return loss
 
+
 def compute_flow_loss(responses):
-    return nn.functional.mse_loss(responses['z_pres_prob_pure'], responses['motion_z_pres'], reduction='sum')
+    z_pres = responses['z_pres_prob_pure']
+    motion_z_pres = responses['motion_z_pres']
+    return nn.functional.mse_loss(z_pres, motion_z_pres.reshape(z_pres.shape), reduction='sum')
+
+
+def compute_flow_loss_alpha(responses):
+    alpha_map = responses['alpha_map']
+    alpha_map_pure = responses['alpha_map_pure']
+    return nn.functional.mse_loss(alpha_map, alpha_map_pure, reduction='sum')
+
 
 def compute_flow_loss_z_where(responses):
-    z_pres = responses['z_pres_prob_pure']
+    motion_z_pres = responses['motion_z_pres'].squeeze()
     z_where = responses['z_where_pure']
     motion_z_where = responses['motion_z_where']
-    return nn.functional.mse_loss(z_where[z_pres > 0.5], motion_z_where[z_pres > 0.5], reduction='sum')
+    return nn.functional.mse_loss(z_where[motion_z_pres > 0.5], motion_z_where[motion_z_pres > 0.5], reduction='sum')
+
 
 def z_what_consistency_objects(responses):
     cos = nn.CosineSimilarity(dim=1)
     # (T, B, G*G, 1)
     z_whats = responses['z_what']
     _, GG, D = z_whats.shape
-    z_whats.reshape(arch.T, -1, GG, D)
-    T, B = z_whats.shape[:2]
+    z_whats = z_whats.reshape(-1, arch.T, GG, D)
+    B, T = z_whats.shape[:2]
+
     # (T, B, G*G, 1)
-    z_pres = responses['z_pres_prob'].reshape(T, -1, GG, 1)
+    z_pres = responses['z_pres_prob'].reshape(B, T, GG, 1).transpose(0, 1)
     # (T, B, G*G, D)
-    z_pres = z_pres.reshape(T, B, arch.G, arch.G)
+    z_pres = z_pres.reshape(B, T, arch.G, arch.G).transpose(0, 1)
     z_pres_idx = (z_pres[:-1] > arch.object_threshold).nonzero(as_tuple=False)
     z_whats = z_whats.reshape(T, B, arch.G, arch.G, D)
     # (T, B, G+2, G+2)

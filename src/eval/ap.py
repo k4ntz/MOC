@@ -46,13 +46,13 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
 
     # each (B, N, 1)
     width, height, center_x, center_y = torch.split(z_where, 1, dim=-1)
+
     center_x = (center_x + 1.0) / 2.0
     center_y = (center_y + 1.0) / 2.0
     x_min = center_x - width / 2
     x_max = center_x + width / 2
     y_min = center_y - height / 2
     y_max = center_y + height / 2
-
     # (B, N, 4)
     pos = torch.cat([y_min, y_max, x_min, x_max], dim=-1)
 
@@ -82,24 +82,24 @@ def read_boxes(path, size, indices=None):
     boxes_all = []
     boxes_moving_all = []
 
-    for i in indices if (indices is not None) else range(240):  # len(filenames)):
-        boxes = []
-        boxes_moving = []
-        filename = os.path.join(path, 'bb_{}.txt'.format(i))
-        with open(filename, 'r') as f:
-            for line in f:
-                if line.strip():
-                    x_min, y_min, width, height = [float(x) for x in line.strip().replace(",S", "").replace(",M", "").split(',')]
-                    y_max = y_min + height
-                    x_max = x_min + width
-                    boxes.append([y_min, y_max, x_min, x_max])
-                    if "M" in line:
-                        boxes_moving.append([y_min, y_max, x_min, x_max])
-        boxes = np.array(boxes) / size
-        boxes_moving = np.array(boxes_moving) / size
-        boxes_all.append(boxes)
-        boxes_moving_all.append(boxes_moving)
-
+    for stack_idx in indices if (indices is not None) else range(240):
+        for i in range(4):
+            boxes = []
+            boxes_moving = []
+            filename = os.path.join(path, f'{stack_idx:05}_{i}.txt')
+            with open(filename, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        x_min, y_min, width, height = [float(x) for x in line.strip().replace(",S", "").replace(",M", "").split(',')]
+                        y_max = y_min + height
+                        x_max = x_min + width
+                        boxes.append([y_min, y_max, x_min, x_max])
+                        if "M" in line:
+                            boxes_moving.append([y_min, y_max, x_min, x_max])
+            boxes = np.array(boxes) / size
+            boxes_moving = np.array(boxes_moving) / size
+            boxes_all.append(boxes)
+            boxes_moving_all.append(boxes_moving)
     return boxes_all, boxes_moving_all, boxes_moving_all
 
 

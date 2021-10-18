@@ -14,6 +14,7 @@ from torchvision.utils import draw_bounding_boxes as draw_bb
 from PIL import Image
 import PIL
 from eval import convert_to_boxes, read_boxes
+import math
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -25,6 +26,16 @@ def grid_mult_img(grid, imgs, target_shape, scaling=4):
     grid = imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
     return make_grid(grid, 4, normalize=False, pad_value=1)
 
+
+def grid_z_where_vis(z_where, imgs, z_pres, scaling=4):
+    boxes_batch = convert_to_boxes(z_where, z_pres.squeeze(), z_pres.squeeze(), with_conf=False)
+    grid = torch.zeros_like(imgs)[:, 0:1]
+    for i, boxes in enumerate(boxes_batch):
+        for box in boxes:
+            y_min, y_max, x_min, x_max = [int(e * 128) for e in box]
+            grid[i][0][y_min:y_max, x_min:x_max] = 1
+    grid = imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
+    return make_grid(grid, 4, normalize=False, pad_value=1)
 
 class SpaceVis:
     @torch.no_grad()
@@ -38,7 +49,8 @@ class SpaceVis:
                           global_step=global_step)
         writer.add_scalar(f'{mode}/z_pres_loss', torch.sum(log['z_pres_loss']).item(), global_step=global_step)
         writer.add_scalar(f'{mode}/flow_loss', torch.sum(log['flow_loss']).item(), global_step=global_step)
-        writer.add_scalar(f'{mode}/flow_count_loss', torch.sum(log['flow_count_loss']).item(), global_step=global_step)
+        writer.add_scalar(f'{mode}/flow_loss_z_where', torch.sum(log['flow_loss_z_where']).item(),
+                          global_step=global_step)
         writer.add_scalar(f'{mode}/objects_detected', torch.sum(log['objects_detected']).item(),
                           global_step=global_step)
         writer.add_scalar(f'{mode}/total_loss', log['loss'], global_step=global_step)
@@ -52,7 +64,7 @@ class SpaceVis:
 
         # (B, 3, H, W) TR: Changed to z_pres_prob, why sample?
         fg_box = bbox_in_one(
-            log_img.fg, log_img.z_pres_prob, log_img.z_scale, log_img.z_shift
+            log_img.fg, log_img.z_pres_prob, log_img.z_where
         )
         # (B, 1, 3, H, W)
         imgs = log_img.imgs[:, None]
@@ -83,11 +95,11 @@ class SpaceVis:
         grid_image = make_grid(log_img.bg, 4, normalize=False, pad_value=1)
         writer.add_image(f'{mode}/3-background', grid_image, global_step)
 
-        grid_flow_shape = log_img.grid_flow.shape
-        writer.add_image(f'{mode}/4-flow', grid_mult_img(log_img.grid_flow, log_img.imgs, grid_flow_shape), global_step)
-
-        alpha_map = make_grid(log_img.alpha_map, 4, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}/8-alpha_map', alpha_map, global_step)
+        B = log_img.motion_z_pres.shape[0]
+        G = int(math.sqrt(log_img.motion_z_pres.shape[1]))
+        motion_z_pres_shape = (B, 1, G, G)
+        writer.add_image(f'{mode}/4-motion', grid_mult_img(log_img.motion_z_pres, log_img.imgs, motion_z_pres_shape),
+                         global_step)
 
         count = log_img.z_pres.flatten(start_dim=1).sum(dim=1).mean(dim=0)
         loss = log['loss'].mean()
@@ -104,15 +116,24 @@ class SpaceVis:
         writer.add_scalar(f'{mode}/Depth_KL', log_img['kl_z_depth'].mean(), global_step=global_step)
         writer.add_scalar(f'{mode}/Bg_KL', log_img['kl_bg'].mean(), global_step=global_step)
 
-        z_pres_grid = grid_mult_img(log_img.z_pres_prob, log_img.imgs, grid_flow_shape)
+        z_pres_grid = grid_mult_img(log_img.z_pres_prob, log_img.imgs, motion_z_pres_shape)
         writer.add_image(f'{mode}/5-z_pres', z_pres_grid, global_step)
 
-        z_pres_pure_grid = grid_mult_img(log_img.z_pres_prob_pure, log_img.imgs, grid_flow_shape, scaling=12)
+        z_pres_pure_grid = grid_mult_img(log_img.z_pres_prob_pure, log_img.imgs, motion_z_pres_shape, scaling=6)
         writer.add_image(f'{mode}/6-z_pres_pure', z_pres_pure_grid, global_step)
 
-        bb_image = draw_image_bb(model, cfg, dataset, global_step, num_batch)
-        grid_image = make_grid(bb_image, 4, normalize=False, pad_value=1)
-        writer.add_image(f'{mode}/7-bounding_boxes', grid_image, global_step)
+        writer.add_image(f'{mode}/7-z_where', grid_z_where_vis(log_img.z_where, log_img.imgs, log_img.motion_z_pres),
+                         global_step)
+
+        gg_z_pres = log_img.z_pres_prob_pure.reshape(log_img.motion_z_pres.shape) > 0.5
+        writer.add_image(f'{mode}/8-z_where_pure', grid_z_where_vis(log_img.z_where_pure, log_img.imgs, gg_z_pres),
+                                                                    global_step)
+
+        alpha_map = make_grid(log_img.alpha_map, 4, normalize=False, pad_value=1)
+        writer.add_image(f'{mode}/9-alpha_map', alpha_map, global_step)
+        # bb_image = draw_image_bb(model, cfg, dataset, global_step, num_batch)
+        # grid_image = make_grid(bb_image, 4, normalize=False, pad_value=1)
+
 
     @torch.no_grad()
     def show_vis(self, model, dataset, indices, path, device):
@@ -185,16 +206,17 @@ class SpaceVis:
 
 
 def draw_image_bb(model, cfg, dataset, global_step, num_batch):
-    indices = np.random.choice(len(dataset), size=10, replace=False)
-    png_indices = [4 * i + dataset.flow + 2 for i in indices]
+    indices = np.random.choice(len(dataset), size=num_batch, replace=False)
     dataset = Subset(dataset, indices)
     dataloader = DataLoader(dataset, batch_size=len(indices), shuffle=False)
-    data = next(iter(dataloader))
+    data, motion_z_pres, motion_z_where = next(iter(dataloader))
     data = data.to(cfg.device)
-    loss, log = model(data, global_step)
-    bb_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/train/bb"
-    rgb_folder_src = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/train"
-    boxes_gt, boxes_gt_moving, _ = read_boxes(bb_path, 128, indices=png_indices)
+    motion_z_pres = motion_z_pres.to(cfg.device)
+    motion_z_where = motion_z_where.to(cfg.device)
+    loss, log = model(data, motion_z_pres, motion_z_where, global_step)
+    bb_path = f"{cfg.dataset_roots.ATARI}/{cfg.gamelist[0]}/train/bb"
+    rgb_folder_src = f"{cfg.dataset_roots.ATARI.replace('space_like', 'rgb')}/{cfg.gamelist[0]}/train"
+    boxes_gt, boxes_gt_moving, _ = read_boxes(bb_path, 128, indices=indices)
     boxes_pred = []
     z_where, z_pres_prob = log['z_where'][2:num_batch * 4:4], log['z_pres_prob'][2:num_batch * 4:4]
     z_where = z_where.detach().cpu()
@@ -203,8 +225,8 @@ def draw_image_bb(model, cfg, dataset, global_step, num_batch):
     boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
     boxes_pred.extend(boxes_batch)
     result = []
-    for idx, pred, gt, gt_m in zip(png_indices, boxes_pred, boxes_gt, boxes_gt_moving):
-        pil_img = Image.open(f'{rgb_folder_src}/{idx:05}.png', ).convert('RGB')
+    for idx, pred, gt, gt_m in zip(indices, boxes_pred[2::4], boxes_gt[2::4], boxes_gt_moving[2::4]):
+        pil_img = Image.open(f'{rgb_folder_src}/{idx:05}_2.png', ).convert('RGB')
         pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
         image = np.array(pil_img)
         torch_img = torch.from_numpy(image).permute(2, 1, 0)

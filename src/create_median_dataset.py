@@ -101,14 +101,12 @@ for idx in range(folder_sizes[args.folder]):
         avg_pool = nn.AvgPool2d(grid_width, 1, padding=0, count_include_pad=False)
         grid_flow = avg_pool(torch.tensor(flow).unsqueeze(0).unsqueeze(0))
         grid_flow = torch.squeeze(grid_flow).numpy()
-        print(grid_flow.shape)
         result_flow = np.zeros_like(flow)
         base_pad = 10
         grid_flow = np.pad(grid_flow, pad_width=((base_pad, base_pad), (base_pad, base_pad)), mode='constant',
                            constant_values=0)
         while grid_flow.max() > 0.07:
             x, y = np.unravel_index(np.argmax(grid_flow), grid_flow.shape)
-            print(x, y)
             result_flow[x - base_pad, y - base_pad] = 1
             x_slice = slice(x - 7, x + 8)
             y_slice = slice(y - 7, y + 8)
