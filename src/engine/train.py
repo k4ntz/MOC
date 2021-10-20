@@ -10,11 +10,10 @@ from torch.utils.tensorboard import SummaryWriter
 from vis import get_vislogger
 import time
 from torch.nn.utils import clip_grad_norm_
-
-
+import shutil
+from tqdm import tqdm
 
 def train(cfg):
-    
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -26,7 +25,7 @@ def train(cfg):
         print('Using parallel:', cfg.parallel)
     if cfg.parallel:
         print('Device ids:', cfg.device_ids)
-    
+
     print('Loading data')
 
     trainloader = get_dataloader(cfg, 'train')
@@ -51,24 +50,27 @@ def train(cfg):
             global_step = checkpoint['global_step'] + 1
     if cfg.parallel:
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
-    
+    log_path = os.path.join(cfg.logdir, cfg.exp_name)
+    if os.path.exists(log_path) and len(log_path) > 15 and cfg.logdir and cfg.exp_name and str(cfg.seed):
+        shutil.rmtree(log_path)
     writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
-    metric_logger =  MetricLogger()
+    metric_logger = MetricLogger()
 
     print('Start training')
     end_flag = False
     for epoch in range(start_epoch, cfg.train.max_epochs):
+        pbar = tqdm(total=len(trainloader))
         if end_flag:
             break
-    
+
         start = time.perf_counter()
         for i, data in enumerate(trainloader):
-        
+
             end = time.perf_counter()
             data_time = end - start
             start = end
-        
+
             model.train()
             imgs = data
             imgs = imgs.to(cfg.device)
@@ -80,19 +82,19 @@ def train(cfg):
             loss.backward()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
-        
+
             optimizer_fg.step()
-        
+
             # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
             optimizer_bg.step()
-        
+
             end = time.perf_counter()
             batch_time = end - start
-        
+
             metric_logger.update(data_time=data_time)
             metric_logger.update(batch_time=batch_time)
             metric_logger.update(loss=loss.item())
-        
+
             if (global_step) % cfg.train.print_every == 0:
                 start = time.perf_counter()
                 log.update({
@@ -100,31 +102,28 @@ def train(cfg):
                 })
                 vis_logger.train_vis(writer, log, global_step, 'train')
                 end = time.perf_counter()
-            
+
                 print(
                     'exp: {}, epoch: {}, iter: {}/{}, global_step: {}, loss: {:.2f}, batch time: {:.4f}s, data time: {:.4f}s, log time: {:.4f}s'.format(
                         cfg.exp_name, epoch + 1, i + 1, len(trainloader), global_step, metric_logger['loss'].median,
                         metric_logger['batch_time'].avg, metric_logger['data_time'].avg, end - start))
-                
+
             if (global_step) % cfg.train.save_every == 0:
                 start = time.perf_counter()
                 checkpointer.save_last(model, optimizer_fg, optimizer_bg, epoch, global_step)
                 print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
-        
+
             if (global_step) % cfg.train.eval_every == 0 and cfg.train.eval_on:
                 print('Validating...')
                 start = time.perf_counter()
                 checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
-                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, checkpoint, checkpointer)
+                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, checkpoint,
+                                     checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
-        
+
             start = time.perf_counter()
             global_step += 1
+            pbar.update(1)
             if global_step > cfg.train.max_steps:
                 end_flag = True
                 break
-
-
-
-
-
