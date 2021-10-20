@@ -284,7 +284,7 @@ class SpaceEval:
             z_pres_prob = z_pres_prob.detach().cpu().squeeze()
             z_pres = z_pres_prob > 0.5
             boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-            boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch))
+            boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch, boxes_gts['all']))
             boxes_pred.extend(boxes_batch)
 
         # print('Drawing bounding boxes for eval...')

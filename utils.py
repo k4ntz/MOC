@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import cv2
 from collections import Counter
+from skimage.morphology import (disk, square)
+from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
 
 
 def augment_dict(obs, info, game):
@@ -14,28 +16,30 @@ def augment_dict(obs, info, game):
     elif game == "Carnival":
         return _augment_dict_carnival(obs, info)
     elif game == "SpaceInvaders":
-        return _augment_dict_spaceinvaders(obs, info)
+        return _augment_dict_space_invaders(obs, info)
     elif game == "Pong":
         return _augment_dict_pong(obs, info)
     else:
         raise ValueError
 
 
-def _augment_dict_spaceinvaders(obs, info):
-    raise NotImplementedError
+def _augment_dict_space_invaders(obs, info):
     labels = info['labels']
-    objects_colors = {"player": (50, 132, 50), "planet": (151, 25, 122),
-                      "enemy": (134, 134, 29), "shield": (181, 83, 40),
-                      "gfig": (50, 132, 50), "yfig": (162, 134, 56)}
-    x, y = labels['enemies_x'], labels['enemies_x']
-    # x, y = labels['enemies_x'], labels['enemies_x']
-    x = x + 100
-    y_player = labels['player_x'] + 2
-    x_player = 190
-    find_objects(obs, objects_colors['enemy'])
+    objects_colors = {"player": (50, 132, 50), "space_ship": (151, 25, 122),
+                      "enemy": (134, 134, 29), "block": (181, 83, 40),
+                      "left_score": (50, 132, 50), "right_score": (162, 134, 56)}
+
+    detected = find_objects(obs, objects_colors['enemy'], min_distance=10)
+    cur_y = min((y for y, x in detected), default=0)
+    for idx in range(6):
+        labels[f"enemies_{idx}"] = [(y, x) for y, x in detected if cur_y + 10 > y >= cur_y]
+        cur_y += 12
     print(labels)
-    mark_point(obs, x, y, color=(255, 0, 0), show=False, size=1)
-    mark_point(obs, x_player, y_player, color=(0, 255, 0))
+    labels["player_y"] = 190
+    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 0), show=False)
+    for y, x in detected:
+        mark_point(obs, y, x, color=(255, 0, 0), show=False)
+    return labels
 
 
 def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
@@ -43,15 +47,16 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     """
     image: image to detects objects from
     color: fixed color of the object
-    size: presuposed size
+    size: presupposed size
     tol_s: tolerance on the size
-    position: presuposed position
+    position: presupposed position
     tol_p: tolerance on the position
     min_distance: minimal distance between two detected objects
     """
     mask = cv2.inRange(image, np.array(color), np.array(color))
-    output = cv2.bitwise_and(image, image, mask=mask)
-    contours, _ = cv2.findContours(mask.copy(), 1, 1)
+    print(mask)
+    closed = closing(mask, square(3))
+    contours, _ = cv2.findContours(closed.copy(), 1, 1)
     detected = []
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
@@ -128,6 +133,7 @@ def _augment_dict_pong(obs, info):
                 del labels[f"ball_y"]
                 continue
         labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
+
     for score in scores:
         for potential_pos in scores[score]:
             y, x = potential_pos
@@ -135,6 +141,10 @@ def _augment_dict_pong(obs, info):
                 labels[f"{score}_x"] = x
                 labels[f"{score}_y"] = y
                 break
+    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 0), show=False)
+    mark_point(obs, labels["enemy_y"], labels["enemy_x"], color=(255, 255, 0), show=False)
+    if "ball_y" in labels:
+        mark_point(obs, labels["ball_y"], labels["ball_x"], color=(255, 255, 0), show=False)
     return labels
 
 
@@ -182,7 +192,8 @@ def _augment_dict_carnival(obs, info):
                         continue
                     else:
                         obj = obj[0]
-                    if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color, size=2):
+                    if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x,
+                                                                                                  main_color, size=2):
                         obj = 'refill'
                     wings, fly_y, fly_x = found_wings(obs, x - 1, y)
                     if main_color == tuple(base_objects_colors['duck']) and wings:
@@ -201,7 +212,8 @@ def _augment_dict_carnival(obs, info):
                 x += 1
         if prior_amount > 10:
             obj = [k for k, v in base_objects_colors.items() if tuple(v) == main_color][0]
-            if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color, size=2):
+            if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color,
+                                                                                          size=2):
                 obj = 'refill'
             wings, fly_y, fly_x = found_wings(obs, x - 1, y)
             if main_color == tuple(base_objects_colors['duck']) and wings:
@@ -283,25 +295,24 @@ def _augment_dict_mspacman(obs, info):
         labels[f'{enemy}_visible'] = True
         labels[f'{enemy}_blue'] = False
         labels[f'{enemy}_white'] = False
-        x, y = labels[f'{enemy}_x'], labels[f'{enemy}_y']
-        x_t, y_t = y + 7, x - 9  # x and y in the tensor
-        if not enough_color_around(obs, x_t, y_t, base_objects_colors[enemy]):
-            if enough_color_around(obs, x_t, y_t, vulnerable_ghost_color):  # enemy is blue
+        labels[f'{enemy}_x'] -= 13
+        if not enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, base_objects_colors[enemy]):
+            if enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, vulnerable_ghost_color):  # enemy is blue
                 labels[f'{enemy}_blue'] = True
-            elif enough_color_around(obs, x_t, y_t, wo_vulnerable_ghost_color):  # enemy is white
+            elif enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, wo_vulnerable_ghost_color):  # enemy is white
                 labels[f'{enemy}_white'] = True
             else:
                 labels[f'{enemy}_visible'] = False
-    x, y = labels['player_x'], labels['player_y']
-    x_t, y_t = y + 8, x - 9  # x and y in the tensor
-    if not color_around(obs, x_t, y_t, base_objects_colors["pacman"]):
-        return False
     labels['fruit_visible'] = False
-    x, y = labels['fruit_x'], labels['fruit_y']
-    x_t, y_t = y + 8, x - 9  # x and y in the tensor
-    if color_around(obs, x_t, y_t, base_objects_colors["fruit"]):
+    labels['fruit_x'] -= 13
+    labels['player_x'] -= 13
+    if tr_color_around(obs, labels['fruit_y'], labels['fruit_x'], base_objects_colors["fruit"]):
         labels['fruit_visible'] = True
-    return True
+    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 255), show=False)
+    mark_point(obs, labels["fruit_y"], labels["fruit_x"], color=(255, 255, 255) if labels['fruit_visible'] else (0, 0, 0), show=False)
+    for enemy in enemy_list:
+        mark_point(obs, labels[f"{enemy}_y"], labels[f"{enemy}_x"], color=(255, 255, 255) if labels[f'{enemy}_visible'] else (0, 0, 0), show=False)
+    return labels
 
 
 def draw_names(obs, info):
@@ -346,22 +357,7 @@ def tr_color_around(image_array, y, x, color, size=2):
     """
     checks if the color is present in the square around the (x, y) point.
     """
-    points_around = [(image_array[i, j] == color).all()
-                     for i in range(max(0, y - size), min(y + size + 1, 210))
-                     for j in range(max(0, x - size), min(x + size + 1, 160))]
-    return np.any(points_around)
-
-
-def color_around(image_array, x, y, color, size=2):
-    """
-    checks if the color is present in the square around the (x, y) point.
-    """
-    ran = list(range(-size, size + 1))
-    while x + size >= image_array.shape[0] or y + size >= image_array.shape[1]:
-        size -= 1
-    points_around = [(image_array[x + i, y + j] == color).all()
-                     for i in ran for j in ran]
-    return np.any(points_around)
+    return np.any(points_around(image_array, y, x, color, size))
 
 
 def only_background(image_array, x, y, size=3):
@@ -380,15 +376,13 @@ def only_background(image_array, x, y, size=3):
     return np.all(points_around)
 
 
-def mark_point(image_array, x, y, color=(255, 0, 0), size=2, show=True, cross=True):
+def mark_point(image_array, y, x, color=(255, 0, 0), size=1, show=True, cross=True):
     """
     marks a point on the image at the (x,y) position and displays it
     """
-    ran = list(range(-size, size + 1))
-    for i in ran:
-        for j in ran:
-            if not cross or i == j or i == -j:
-                image_array[x + i, y + j] = color
+    for i in range(max(0, y - size), min(y + size + 1, 210)):
+        for j in range(max(0, x - size), min(x + size + 1, 160)):
+            image_array[i, j] = color
     if show:
         plt.imshow(image_array)
         plt.show()
@@ -421,15 +415,18 @@ def show_image(image_array, save_path=None, save=False):
 #         raise ValueError
 
 
-def enough_color_around(image_array, x, y, color, size=3, threshold=10):
+def enough_color_around(image_array, y, x, color, size=3, threshold=10):
     """
     checks if the color is present in the square of (2*size+1) x (2*size+1)
     around the (x, y) point.
     """
-    ran = list(range(-size, size + 1))
-    points_around = [(image_array[x + i, y + j] == color).all()
-                     for i in ran for j in ran]
-    return np.sum(points_around) >= threshold
+    return np.sum(points_around(image_array, y, x, color, size)) >= threshold
+
+
+def points_around(image_array, y, x, color, size):
+    return [(image_array[i, j] == color).all()
+            for i in range(max(0, y - size), min(y + size + 1, 210))
+            for j in range(max(0, x - size), min(x + size + 1, 160))]
 
 
 def load_agent(path):
@@ -445,6 +442,7 @@ def load_agent(path):
 def put_lives(info_dict):
     info_dict['labels']['lives'] = info_dict['ale.lives']
     return info_dict['labels']
+
 
 def dict_to_serie(info_dict):
     info_dict['labels']['lives'] = info_dict['ale.lives']

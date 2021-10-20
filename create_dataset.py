@@ -96,7 +96,7 @@ def main():
                         # default='SpaceInvaders')
                         # default='MsPacman')
                         # default='Tennis')
-                        default='Pong')
+                        default='SpaceInvaders')
     parser.add_argument('--rootmedian', default=False, action="store_true",
                         help='instead compute the root-median of all found images')
     parser.add_argument('--noroot', default=True, action="store_false",
@@ -121,8 +121,8 @@ def main():
                         required=True,
                         help='folder to write to: train, test or validation')
     args = parser.parse_args()
-    folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data2"
+    folder_sizes = {"train": 10}  # 8192, "test": 1024, "validation": 1024}
+    data_base_folder = "aiml_atari_data_tmp"
     REQ_CONSECUTIVE_IMAGE = 80
     create_folders(args, data_base_folder)
     visualizations_flow = [
@@ -172,7 +172,7 @@ def main():
     except:
         root_median, root_mode = None, None
         if not args.noroot:
-            print("No root_median was found. Taking median of trail instead.")
+            print("No root_median (mode) was found. Taking median (mode) of trail instead.")
     if args.noroot:
         root_median, root_mode = None, None
     while True:

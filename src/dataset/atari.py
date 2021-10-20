@@ -85,7 +85,7 @@ class Atari(Dataset):
         return to_relevant(self.game, labels_moving)
 
     def filter_relevant_boxes(self, boxes_batch):
-        return filter_relevant_boxes(self.game, boxes_batch)
+        return filter_relevant_boxes(self.game, boxes_batch, boxes_gt)
 
     def process_motion(self, img, motion):
         """
