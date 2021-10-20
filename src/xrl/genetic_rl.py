@@ -19,7 +19,6 @@ from itertools import count
 from PIL import Image
 from atariari.benchmark.wrapper import AtariARIWrapper
 from captum.attr import IntegratedGradients
-from torchinfo import summary
 
 from rtpt import RTPT
 
@@ -83,12 +82,6 @@ def return_random_agents(n_inputs, num_agents, n_actions, cfg):
 
 
 # function to select action by given features
-# 0: "NOOP",
-# 1: "FIRE",
-# 2: "UP",
-# 3: "RIGHT",
-# 4: "LEFT",
-# 5: "DOWN",
 def select_action(features, policy, random_tr = -1):
     sample = random.random()
     if sample > random_tr:
@@ -315,7 +308,7 @@ def train(cfg):
 
 
 # function to eval best agent of last generation
-def play_agent(cfg):
+def eval_load(cfg):
     print('Experiment name:', cfg.exp_name)
     print('Evaluating Mode')
     # disable gradients as we will not use them
@@ -330,7 +323,7 @@ def play_agent(cfg):
     print('Number of agents:', num_agents)
     agents = return_random_agents(len(features), num_agents, n_actions, cfg)
     generation = 0
-    elite_index = 7 # SET FOR ELITE INDEX FROM LOADED GENERATION
+    elite_index = 7 # will be overwritten when agents are loaded
 
     # load if exists
     model_path = model_name(cfg.exp_name)
@@ -342,42 +335,8 @@ def play_agent(cfg):
     elite_agent = agents[elite_index]
     # print nn structure
     dummy = policy_net(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
-    summary(dummy, input_size=(1, len(features)))
     # because old trained runs does not have make_hidden param
     dummy.load_state_dict(elite_agent.state_dict())
     elite_agent = dummy
-
-    # play with elite agent
-    logger = vlogger.VideoLogger(size=(480,480))
-    ig = IntegratedGradients(elite_agent)
-    ig_sum = []
-    feature_titles = xutils.features_names
-    elite_agent.eval()
-    r = 0
-    for t in range(5000):
-        action = select_action(features, elite_agent)
-        raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
-        if cfg.liveplot or cfg.make_video:
-            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
-            logger.fill_video_buffer(img)
-        else:
-            #TODO: REMOVE!!
-            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
-        #if abs(reward) > 0:
-        #    env.seed(random.randint(0,1000))
-        #    env.reset()
-        #    raw_features, features, _, _ = xutils.do_step(env)
-        print('Generation {}\tReward: {:.2f}\t Step: {:.2f}'.format(
-                generation, r, t), end="\r")
-        r = r + reward
-        if(done):
-            break
-    if cfg.liveplot or cfg.make_video:
-        logger.save_video(cfg.exp_name)
-        print("Elite agent with index {} - final reward: {}".format(elite_index, r))
-    else:
-        ig_sum = np.asarray(ig_sum)
-        print("Elite agent with index {} - final reward: {} - IG-Mean: {}".format(
-            elite_index, r, np.mean(ig_sum, axis=0)))
-        #xutils.plot_igs(ig_sum)
+    return elite_agent
 

@@ -213,14 +213,12 @@ def train(cfg):
         rtpt.step()
 
 
-# eval function 
-def eval(cfg):
+# eval function, returns trained model
+def eval_load(cfg):
     print('Experiment name:', cfg.exp_name)
     print('Evaluating Mode')
     # disable gradients as we will not use them
     torch.set_grad_enabled(False)
-    # init video logger
-    logger = vlogger.VideoLogger(size=(480,480))
     # init env 
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
@@ -229,44 +227,10 @@ def eval(cfg):
     raw_features, features, _, _ = xutils.do_step(env)
     print("Make hidden layer in nn:", cfg.train.make_hidden)
     policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)
-    i_episode = 1
     # load if exists
     model_path = model_name(cfg.exp_name)
     if os.path.isfile(model_path):
-        policy, _, i_episode = load_model(model_path, policy)
+        policy, _, _ = load_model(model_path, policy)
     policy.eval()
-    # init intgrad
-    ig = IntegratedGradients(policy)
-    ig_sum = []
-    ig_action_sum = []
-    feature_titles = xutils.get_feature_titles(int(len(raw_features)/2))
-    # env loop
-    t = 0
-    while t  < cfg.train.max_steps:  # Don't infinite loop while playing
-        action, _ = select_action(features, policy)
-        if cfg.liveplot or cfg.make_video:
-            img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
-            logger.fill_video_buffer(img)
-            print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
-                i_episode, ep_reward, t), end="\r")
-        else:
-            ig_sum.append(xutils.get_integrated_gradients(ig, features, action))
-            ig_action_sum.append(np.append(xutils.get_integrated_gradients(ig, features, action), [action]))
-            print('Episode {}\tReward: {:.2f}\t Step: {:.2f}'.format(
-                i_episode, ep_reward, t), end="\r")
-        raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
-        ep_reward += reward
-        t += 1
-        if done:
-            break
-    if cfg.liveplot or cfg.make_video:
-        logger.save_video(cfg.exp_name)
-        print('Episode {}\tReward: {:.2f}'.format(
-        i_episode, ep_reward))
-    else:
-        ig_sum = np.asarray(ig_sum)
-        ig_action_sum = np.asarray(ig_action_sum)
-        print('Episode {}\tReward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
-        i_episode, ep_reward, t, np.mean(ig_sum, axis=0)))
-    #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())
-    #xutils.plot_igs(ig_action_sum, feature_titles, env.unwrapped.get_action_meanings())
+    # return policy as agent and select_action function
+    return policy

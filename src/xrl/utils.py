@@ -212,7 +212,7 @@ def plot_igs(ig_sum, plot_titles, action_meanings):
     # watch out, n_cols is -1 from col count 
     n_cols = len(ig_sum[1,:]) - 1
     ig_df = pd.DataFrame(data=ig_sum).replace({n_cols: mapping}).rename(columns={n_cols: "action"})
-    # pca for ig values
+    # remove action col
     cut_ig_df = ig_df.iloc[:,:n_cols]
     for i, col in enumerate(cut_ig_df):
         igs = cut_ig_df[col]
@@ -248,6 +248,60 @@ def plot_corr(features):
     plt.savefig("untrained-meaningful-features-corr-m.pdf", dpi=300)
     plt.show()
     return None
+
+
+# plot function for violin plotsw
+# helper function to plot igs of each feature over whole episode
+def plot_igs_violin(ig_sum, feature_titles, action_meanings):
+    # process ig df with actions
+    mapping = {i: action_meanings[i] for i in range(len(action_meanings))}
+    # watch out, n_cols is -1 from col count 
+    n_cols = len(ig_sum[1,:]) - 1
+    ig_df = pd.DataFrame(data=ig_sum).replace({n_cols: mapping}).rename(columns={n_cols: "action"})
+    # rename cols to feature names
+    ig_df = ig_df.rename(columns={i : feature_titles[i] for i in range(len(feature_titles))})
+    #print(ig_df)
+    # set action col as index
+    ig_df = ig_df.set_index("action")
+    #print(ig_df)
+    # convert to action | feature | ig-value
+    df = ig_df.stack()
+    df = df.reset_index()
+    df.columns = ["Action", "Feature", "IG-Value"]
+    print(df)
+    # remove rows with action used less than 1%
+    count = df["Action"].value_counts()
+    print(count)
+    df = df[df.isin(count.index[count >= len(df.index) * 0.01]).values]
+    count2 = df["Action"].value_counts()
+    print(count2)
+    # plot violin
+    plt.figure(figsize=(12,5))
+    sns.set(font_scale=0.7)
+    sns.set_style("whitegrid")
+    plot = sns.violinplot(x="Feature", y="IG-Value", hue="Action", data=df, palette="deep", linewidth=0.5)
+    plot.set_title("Integrated gradient values for each feature")
+    plt.tight_layout()
+    plt.show()
+
+
+
+# plot weight of lin model
+def plot_lin_weights(model, feature_titles, actions):
+    weights = model.out.weight
+    weights_df = pd.DataFrame(weights.numpy(), columns=feature_titles, index=actions)
+    weights_df2 = weights_df.stack()
+    weights_df2 = weights_df2.reset_index()
+    weights_df2.columns = ["Action", "Feature", "Weight"]
+    plt.figure(figsize=(10,7))
+    sns.set(font_scale=0.7)
+    sns.set_style("whitegrid")
+    ax = sns.boxplot(data=weights_df2, x='Action',y='Weight', color="white")
+    ax = sns.stripplot(data=weights_df2, x='Action',y='Weight',hue='Feature', palette="deep", jitter=0, size=6)
+    ax.set_title("Weights mapped to features")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
 
 ###############################
 ##### PROCESSING FEATURES #####
