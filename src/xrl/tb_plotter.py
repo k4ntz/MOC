@@ -100,7 +100,7 @@ def plot_exp1():
     df_r["s-value"] = smooth2(df_r["value"], 121)
     # create both plots, one unsmoothed with alpha, one smoothed
     p = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="red", ax=axs[0])
-    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[0])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[0]).set_title("Reward for REINFORCE")
     p.set(ylabel='Reward', xlabel='Episode')
     ####### GENETIC #######
     run = "gen-pong-v1"
@@ -111,14 +111,14 @@ def plot_exp1():
     # smooth
     df_r["s-value"] = smooth2(df_r["value"], 121)
     p2 = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="green", ax=axs[1])
-    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[1])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="green", ax=axs[1]).set_title("Mean reward of top 5 in Deep GA")
     p2.set(ylabel='Reward', xlabel='Generation')
     # reward for genetic generation
     df_r = pd.DataFrame(x.Scalars('Train/Mean rewards'))
     # smooth
     df_r["s-value"] = smooth2(df_r["value"], 121)
     p3= sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="green", ax=axs[2])
-    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[2])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="green", ax=axs[2]).set_title("Mean reward of whole generation in Deep GA")
     p3.set(ylabel='Reward', xlabel='Generation')
     # finalize plots
     sns.despine(offset=1, trim=True)
