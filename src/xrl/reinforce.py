@@ -120,7 +120,7 @@ def train(cfg):
     env = AtariARIWrapper(gym.make(cfg.env_name))
     n_actions = env.action_space.n
     _ = env.reset()
-    _, features, _, _ = xutils.do_step(env)
+    raw_features, features, _, _ = xutils.do_step(env)
     # init policy net
     print("Make hidden layer in nn:", cfg.train.make_hidden)
     policy = Policy(len(features), cfg.train.hidden_layer_size, n_actions, cfg.train.make_hidden)

@@ -269,18 +269,24 @@ def plot_igs_violin(ig_sum, feature_titles, action_meanings):
     df = df.reset_index()
     df.columns = ["Action", "Feature", "IG-Value"]
     print(df)
-    # remove rows with action used less than 1%
+    # norm ig values to -1 | 1
+    #df["IG-Value-n"] = (df["IG-Value"] - df["IG-Value"].mean()) / (df["IG-Value"].max() - df["IG-Value"].min())
+    # z score normalisation
+    #df["IG-Value-n"] = (df["IG-Value"] - df["IG-Value"].mean()) / df["IG-Value"].std()
+    print(df)
+    # remove rows with action used less than x%
     count = df["Action"].value_counts()
     print(count)
-    df = df[df.isin(count.index[count >= len(df.index) * 0.01]).values]
+    df = df[df.isin(count.index[count >= len(df.index) * 0.05]).values]
     count2 = df["Action"].value_counts()
     print(count2)
     # plot violin
-    plt.figure(figsize=(12,5))
+    plt.figure(figsize=(10,5))
     sns.set(font_scale=0.7)
     sns.set_style("whitegrid")
     plot = sns.violinplot(x="Feature", y="IG-Value", hue="Action", data=df, palette="deep", linewidth=0.5)
     plot.set_title("Integrated gradient values for each feature")
+    plot.set(ylabel='IG')
     plt.tight_layout()
     plt.show()
 

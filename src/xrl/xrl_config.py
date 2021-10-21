@@ -44,6 +44,8 @@ cfg = CfgNode({
         'eps_decay': 100000,
         'learning_rate': 0.00025,
 
+        'use_raw_features': False,
+
         # None or ig-pr or threshold-pr
         'init_corr_pruning': False,
         'pruning_method': "None",

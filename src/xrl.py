@@ -22,7 +22,8 @@ import xrl.utils as xutils
 import xrl.video_logger as vlogger
 
 
-# helper function to select action
+# helper function to select action from loaded agent
+# has random probability parameter to test stability of agents
 def select_action(features, policy, random_tr = -1):
     sample = random.random()
     if sample > random_tr:
@@ -37,7 +38,7 @@ def select_action(features, policy, random_tr = -1):
     return action
 
 
-# function to test loaded agent
+# function to test agent loaded via main switch
 def play_agent(agent, cfg):
     # init env
     env = AtariARIWrapper(gym.make(cfg.env_name))
@@ -54,7 +55,7 @@ def play_agent(agent, cfg):
     feature_titles = xutils.get_feature_titles(int(len(raw_features)/2))
     # env loop
     t = 0
-    while t  < cfg.train.max_steps:  # Don't infinite loop while playing
+    while t  < 3000:  # Don't infinite loop while playing
         action = select_action(features, agent)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
@@ -81,11 +82,11 @@ def play_agent(agent, cfg):
         ep_reward, t, np.mean(ig_sum, axis=0)))
 
     ################## PLOT STUFF ##################
+    #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())
     #xutils.plot_igs_violin(ig_action_sum, feature_titles, env.unwrapped.get_action_meanings())
     #if not cfg.train.make_hidden:
     #    # plot some weight stuff due of linear model 
-    #    xutils.plot_lin_weights(policy, feature_titles, env.unwrapped.get_action_meanings())
-    #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())
+    #    xutils.plot_lin_weights(agent, feature_titles, env.unwrapped.get_action_meanings())
     #xutils.plot_igs(ig_action_sum, feature_titles, env.unwrapped.get_action_meanings())
 
 
@@ -127,7 +128,8 @@ def use_minidreamer(cfg):
         print("Not implemented ...")
 
 
-# main
+# main function
+# switch for each algo
 if __name__ == '__main__':
     cfg = utils.get_config()
     # algo selection 
