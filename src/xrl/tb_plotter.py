@@ -42,8 +42,8 @@ def plot_q_learning():
     # smooth
     df_r["s-value"] = smooth2(df_r["value"], 121)
     # create both plots, one unsmoothed with alpha, one smoothed
-    p = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False)
-    sns.lineplot(data=df_r, x="step", y="s-value")
+    p = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="red")
+    sns.lineplot(data=df_r, x="step", y="s-value", color="red")
     sns.despine(offset=1, trim=True)
     plt.tight_layout()
     #plt.savefig("dummy.pdf")
@@ -85,6 +85,48 @@ def plot_space_exp():
     plt.show()
 
 
+# function to plot exp1
+def plot_exp1():
+    sns.set(font_scale=1.3)
+    sns.set_style("ticks")
+    fig, axs = plt.subplots(ncols=3, figsize=(18,3))
+    ####### REINFORCE #######
+    run = "re-pong-v2"
+    x = EventAccumulator(path=os.getcwd() + "/xrl/relogs/" + run + "/")
+    x.Reload()
+    # reward for reinforce
+    df_r = pd.DataFrame(x.Scalars('Train/Avg reward'))
+    # smooth
+    df_r["s-value"] = smooth2(df_r["value"], 121)
+    # create both plots, one unsmoothed with alpha, one smoothed
+    p = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="red", ax=axs[0])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[0])
+    p.set(ylabel='Reward', xlabel='Episode')
+    ####### GENETIC #######
+    run = "gen-pong-v1"
+    x = EventAccumulator(path=os.getcwd() + "/xrl/genlogs/" + run + "/")
+    x.Reload()
+    # reward for genetic top5
+    df_r = pd.DataFrame(x.Scalars('Train/Mean of top 5'))
+    # smooth
+    df_r["s-value"] = smooth2(df_r["value"], 121)
+    p2 = sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="green", ax=axs[1])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[1])
+    p2.set(ylabel='Reward', xlabel='Generation')
+    # reward for genetic generation
+    df_r = pd.DataFrame(x.Scalars('Train/Mean rewards'))
+    # smooth
+    df_r["s-value"] = smooth2(df_r["value"], 121)
+    p3= sns.lineplot(data=df_r, x="step", y="value", alpha=0.3, legend=False, color="green", ax=axs[2])
+    sns.lineplot(data=df_r, x="step", y="s-value", color="red", ax=axs[2])
+    p3.set(ylabel='Reward', xlabel='Generation')
+    # finalize plots
+    sns.despine(offset=1, trim=True)
+    plt.tight_layout()
+    #plt.savefig("dummy.pdf")
+    plt.show()
+
+
 # function to plot exp4
 def plot_exp4():
     #runs = ["exp2-re-pong-v2", "exp2-re-pong-v2-2", "exp2-re-pong-v2-3"]
@@ -106,4 +148,4 @@ def plot_exp4():
     plt.show()
 
 # call function to plot
-plot_q_learning()
+plot_exp1()

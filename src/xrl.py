@@ -46,6 +46,9 @@ def play_agent(agent, cfg):
     _, ep_reward = env.reset(), 0
     _, _, done, _ = env.step(1)
     raw_features, features, _, _ = xutils.do_step(env)
+    # only when raw features should be used
+    if cfg.train.use_raw_features:
+        features = np.array(np.array([[0,0] if x==None else x for x in raw_features]).tolist()).flatten()
     # init objects
     summary(agent, input_size=(1, len(features)))
     logger = vlogger.VideoLogger(size=(480,480))
@@ -56,6 +59,9 @@ def play_agent(agent, cfg):
     # env loop
     t = 0
     while t  < 3000:  # Don't infinite loop while playing
+        # only when raw features should be used
+        if cfg.train.use_raw_features:
+            features = np.array(np.array([[0,0] if x==None else x for x in raw_features]).tolist()).flatten()
         action = select_action(features, agent)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
