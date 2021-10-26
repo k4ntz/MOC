@@ -15,6 +15,7 @@ import seaborn as sns
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from tqdm import tqdm
 from sklearn.decomposition import PCA
+from scipy.stats import entropy
 
 from argparse import ArgumentParser
 from xrl.xrl_config import cfg
@@ -236,16 +237,24 @@ def plot_igs(ig_sum, plot_titles, action_meanings):
 # plot correlation matrix with given set of features
 def plot_corr(features):
     df = pd.DataFrame(data=features, columns=features_names)
-    sns.set(font_scale=0.7)
+    sns.set(font_scale=1.5)
+    sns.set_style("ticks")
+    plt.figure(figsize=(6,5))
     corrplot = sns.heatmap(
         df.corr(), 
         vmin=-1, vmax=1, center=0,
         cmap=sns.diverging_palette(20, 220, n=200),
         square=True
     )
-    corrplot.set_title("Meaningful Features - Correlation Map")
+    # finish
+    corrplot.set(xticklabels=[])
+    corrplot.set(xlabel="Features")
+    corrplot.set(yticklabels=[])
+    corrplot.set(ylabel="Features")
+    #corrplot.tick_params(bottom=False, left=False)  # remove the ticks
+    sns.despine(offset=10, trim=True, left=True, bottom=True)
     plt.tight_layout()
-    plt.savefig("untrained-meaningful-features-corr-m.pdf", dpi=300)
+    #plt.savefig("corr-features-rand-min.pdf", dpi=300)
     plt.show()
     return None
 
@@ -473,3 +482,18 @@ def init_corr_prune(env, it = 5, tr = 0.75):
     to_drop = [column for column in upper.columns if any(upper[column] > tr)]
     return to_drop
 
+
+# calc single entropy of one feature
+def entropy1(labels, base=None):
+  value,counts = np.unique(labels, return_counts=True)
+  return entropy(counts, base=base)
+
+
+# calc entropy of all features given
+def calc_entropies(features):
+    features = np.array(features)
+    entropies = []
+    for col in features.T:
+        entropies.append(entropy1(col))
+    print(entropies)
+    return entropies

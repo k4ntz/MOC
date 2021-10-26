@@ -1,6 +1,7 @@
 # main file for all rl algos
 
 import random
+from re import L
 import torch
 import gym
 import numpy as np
@@ -55,6 +56,7 @@ def play_agent(agent, cfg):
     ig = IntegratedGradients(agent)
     ig_sum = []
     ig_action_sum = []
+    l_features = []
     feature_titles = xutils.get_feature_titles(int(len(raw_features)/2))
     # env loop
     t = 0
@@ -62,7 +64,7 @@ def play_agent(agent, cfg):
         # only when raw features should be used
         if cfg.train.use_raw_features:
             features = np.array(np.array([[0,0] if x==None else x for x in raw_features]).tolist()).flatten()
-        action = select_action(features, agent)
+        action = select_action(features, agent, 2)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
@@ -72,6 +74,7 @@ def play_agent(agent, cfg):
         print('Reward: {:.2f}\t Step: {:.2f}'.format(
                 ep_reward, t), end="\r")
         raw_features, features, reward, done = xutils.do_step(env, action, raw_features)
+        l_features.append(features)
         ep_reward += reward
         t += 1
         if done:
@@ -86,6 +89,8 @@ def play_agent(agent, cfg):
         ig_action_sum = np.asarray(ig_action_sum)
         print('Final reward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         ep_reward, t, np.mean(ig_sum, axis=0)))
+    
+    xutils.plot_corr(l_features)
 
     ################## PLOT STUFF ##################
     #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())

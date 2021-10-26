@@ -1,4 +1,5 @@
 env_name: 'TennisDeterministic-v4'
+seed: 3
 
 rl_algo: 1
 
@@ -11,7 +12,7 @@ video_steps: 100
 
 train:
   gamma: 0.97
-  learning_rate: 0.001 #0.0005 worked with bug
+  learning_rate: 0.0001
 
   num_episodes: 18000
   max_steps: 50000
