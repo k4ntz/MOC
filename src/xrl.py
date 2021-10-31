@@ -64,7 +64,7 @@ def play_agent(agent, cfg):
         # only when raw features should be used
         if cfg.train.use_raw_features:
             features = np.array(np.array([[0,0] if x==None else x for x in raw_features]).tolist()).flatten()
-        action = select_action(features, agent, 2)
+        action = select_action(features, agent)
         if cfg.liveplot or cfg.make_video:
             img = xutils.plot_integrated_gradient_img(ig, cfg.exp_name, features, feature_titles, action, env, cfg.liveplot)
             logger.fill_video_buffer(img)
@@ -90,8 +90,6 @@ def play_agent(agent, cfg):
         print('Final reward: {:.2f}\tSteps: {}\tIG-Mean: {}'.format(
         ep_reward, t, np.mean(ig_sum, axis=0)))
     
-    xutils.plot_corr(l_features)
-
     ################## PLOT STUFF ##################
     #xutils.ig_pca(ig_action_sum, env.unwrapped.get_action_meanings())
     #xutils.plot_igs_violin(ig_action_sum, feature_titles, env.unwrapped.get_action_meanings())

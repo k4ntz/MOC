@@ -303,19 +303,24 @@ def plot_igs_violin(ig_sum, feature_titles, action_meanings):
 
 # plot weight of lin model
 def plot_lin_weights(model, feature_titles, actions):
+    sns.set(font_scale=1.5)
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(10,7))
+    # build df
     weights = model.out.weight
     weights_df = pd.DataFrame(weights.numpy(), columns=feature_titles, index=actions)
     weights_df2 = weights_df.stack()
     weights_df2 = weights_df2.reset_index()
     weights_df2.columns = ["Action", "Feature", "Weight"]
-    plt.figure(figsize=(10,7))
-    sns.set(font_scale=0.7)
-    sns.set_style("whitegrid")
+    # plot
     ax = sns.boxplot(data=weights_df2, x='Action',y='Weight', color="white")
     ax = sns.stripplot(data=weights_df2, x='Action',y='Weight',hue='Feature', palette="deep", jitter=0, size=6)
-    ax.set_title("Weights mapped to features")
-    plt.xticks(rotation=45)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    # finish plot
+    sns.despine(offset=1, trim=True, bottom=True)
+    plt.xticks(rotation=90)
     plt.tight_layout()
+    #plt.savefig("weights.pdf")
     plt.show()
 
 ###############################

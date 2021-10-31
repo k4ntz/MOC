@@ -160,11 +160,11 @@ def plot_exp_general_f():
 
 
 # function to plot exp4
-def plot_exp4():
+def plot_exp4_tr():
     sns.set(font_scale=1.5)
     sns.set_style("ticks")
     plt.figure(figsize=(10,5))
-    runs = ["exp4-re-pong-ptr12", "exp4-re-pong-ptr12-2", "exp4-re-pong-ptr12-3", "exp4-re-pong-ptr12-4"]
+    runs = ["exp4-re-pong-ptr12", "exp4-re-pong-ptr12-3", "exp4-re-pong-ptr12-4"]
     df_list = []
     for i, run in enumerate(runs):
         x = EventAccumulator(path=os.getcwd() + "/xrl/relogs/" + run + "/")
@@ -175,14 +175,14 @@ def plot_exp4():
         df_list.append(tdf)
         tdf["s-value"] = smooth2(tdf["value"], 121)
     df = pd.concat(df_list)
-    p = sns.lineplot(data=df, x="step", y="value", hue="Run", palette="deep", alpha=0.2, legend=False)
-    p = sns.lineplot(data=df, x="step", y="s-value", hue="Run", palette="deep", linewidth=2, legend=False)
+    p = sns.lineplot(data=df, x="step", y="value", hue="Run", palette="deep", legend=False)
+    #p = sns.lineplot(data=df, x="step", y="s-value", hue="Run", palette="deep", linewidth=2, legend=False)
     #p = sns.lineplot(data=df, x="step", y="value", linewidth=2, ci=2, palette="deep")
     p.set(ylabel='Reward', xlabel='Episode')
     # finish
     sns.despine(offset=10, trim=True)
     plt.tight_layout()
-    #plt.savefig("dummy.pdf")
+    #plt.savefig("exp4-trp-unsmoothed.pdf")
     plt.show()
 
 
@@ -206,4 +206,4 @@ def plot_entropy():
 
 
 # call function to plot
-plot_exp4()
+plot_exp4_tr()
