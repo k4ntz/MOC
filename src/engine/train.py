@@ -14,6 +14,7 @@ from torch.nn.utils import clip_grad_norm_
 from rtpt import RTPT
 from tqdm import tqdm
 import shutil
+from torch.utils.data import Subset, DataLoader
 
 def train(cfg, rtpt_active=True):
     print('Experiment name:', cfg.exp_name)
@@ -80,12 +81,17 @@ def train(cfg, rtpt_active=True):
     never_evaluated = True
     print(f'Start training, Global Step: {global_step}, Start Epoch: {start_epoch} Max: {cfg.train.max_steps}')
     end_flag = False
-    start_log = 2
+    start_log = global_step + 1
+    base_global_step = global_step
+
+
+
     for epoch in range(start_epoch, cfg.train.max_epochs):
         # pbar = tqdm(total=len(trainloader))
         if end_flag:
             break
         start = time.perf_counter()
+
         for (img_stacks, motion, motion_z_pres, motion_z_where) in trainloader:
             end = time.perf_counter()
             data_time = end - start
@@ -101,16 +107,6 @@ def train(cfg, rtpt_active=True):
 
             optimizer_fg.zero_grad(set_to_none=True)
             optimizer_bg.zero_grad(set_to_none=True)
-            loss.backward()
-            if cfg.train.clip_norm:
-                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
-            # print("Before Step", torch.cuda.memory_summary(device=4, abbreviated=False))
-
-            optimizer_fg.step()
-
-            # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
-            optimizer_bg.step()
-            # print("After Step", torch.cuda.memory_summary(device=4, abbreviated=False))
 
             end = time.perf_counter()
             batch_time = end - start
@@ -120,7 +116,7 @@ def train(cfg, rtpt_active=True):
             metric_logger.update(loss=loss.item())
 
             if global_step == start_log:
-                start_log = int(start_log * 1.2) + 1
+                start_log = int((start_log - base_global_step) * 1.2) + 1 + base_global_step
                 log_state(cfg, epoch, global_step, log, metric_logger)
 
             if global_step % cfg.train.print_every == 0 or never_evaluated:
@@ -143,6 +139,18 @@ def train(cfg, rtpt_active=True):
                                      checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
             # pbar.update(1)
+            loss.backward()
+            if cfg.train.clip_norm:
+                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
+            # print("Before Step", torch.cuda.memory_summary(device=4, abbreviated=False))
+
+            optimizer_fg.step()
+
+            # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
+            optimizer_bg.step()
+            # print("After Step", torch.cuda.memory_summary(device=4, abbreviated=False))
+
+
             start = time.perf_counter()
             global_step += 1
             if global_step > cfg.train.max_steps:

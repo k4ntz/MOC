@@ -13,6 +13,7 @@ import cv2 as cv
 from skimage.morphology import (disk, square)
 from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
 from torchvision import transforms
+from torchvision.utils import draw_bounding_boxes as draw_bb
 
 class Atari(Dataset):
     def __init__(self, cfg, mode):

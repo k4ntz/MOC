@@ -1,11 +1,12 @@
 seed: 1
 model: 'TcSpace'
-exp_name: mspacman
-resume: false
+exp_name: mspacman_pt
+resume: true
 load_time_consistency: true
 add_flow: true
 
-resume_ckpt: '../pretrained/atari_joint.pth'
+resume_ckpt: '../output/checkpoints/mid/pacman_pretrained.pth'
+# '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 #
 # '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
@@ -15,8 +16,8 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+device: 'cuda:0'
 
 logdir: '../output/logs/mid'
 checkpointdir: '../output/checkpoints/mid'
@@ -30,20 +31,21 @@ dataset_roots:
   ATARI: '../aiml_atari_data_mid/space_like'
 
 train:
+  log: true
   batch_size: 16
   max_epochs: 10000
-  max_steps: 5002
-  print_every: 200
-  save_every: 500
+  max_steps: 160502
+  print_every: 100
+  save_every: 100
   num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
-  eval_every: 200
+  eval_every: 100
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-5
+      lr: 1e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -53,7 +55,7 @@ arch:
   motion: true
   motion_kind: 'mode'
   G: 16
-  fg_sigma: 0.20
+  fg_sigma: 0.16
   z_pres_start_step: 1000
   z_pres_end_step: 5000
   z_pres_start_value: 0.1

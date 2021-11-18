@@ -106,13 +106,13 @@ class Checkpointer:
         assert osp.exists(path), f'Checkpoint {path} does not exist.'
         checkpoint = torch.load(path, map_location=device)
         checkpoint_model = checkpoint.pop('model')
-        if self.add_flow:
-            for key in checkpoint_model:
-                if model.state_dict()[key].shape != checkpoint_model[key].shape:
-                    print(key)
-                    B, C, H, W = checkpoint_model[key].size()
-                    flow_weights = torch.randn((B, 1, H, W)).to(checkpoint_model[key].device)
-                    checkpoint_model[key] = torch.cat((checkpoint_model[key], flow_weights), dim=1)
+        # if self.add_flow:
+        #     for key in checkpoint_model:
+        #         if model.state_dict()[key].shape != checkpoint_model[key].shape:
+        #             print(key)
+        #             B, C, H, W = checkpoint_model[key].size()
+        #             flow_weights = torch.randn((B, 1, H, W)).to(checkpoint_model[key].device)
+        #             checkpoint_model[key] = torch.cat((checkpoint_model[key], flow_weights), dim=1)
         try:
             model.load_state_dict(checkpoint_model)
         except RuntimeError as rterr:

@@ -59,7 +59,7 @@ def multi_train(cfg):
         # Seed Experiment
         {
             'seed': ('seed', range(0, 3), identity_print),
-            'aow': ('arch.area_object_weight', np.insert(np.logspace(1, 1, 1), 0, 0.0), lambda v: f'{v:.1f}'),
+            'aow': ('arch.area_object_weight', np.insert(np.logspace(0, 0, 1), 0, 0.0), lambda v: f'{v:.1f}'),
         },
     ]
     base_exp_name = cfg.exp_name

@@ -98,7 +98,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     few_shot_accuracy[f'few_shot_accuracy_cluster_nn'] = nn_class.score(test_x, test_y)
 
     train_all = torch.cat((z_what, labels.unsqueeze(1)), 1)
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'pink', 'purple', 'orange',
+    colors = ['black', 'r', 'g', 'b', 'c', 'm', 'y', 'pink', 'purple', 'orange',
               'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
     # SORT THE INDICES
     sorted = []

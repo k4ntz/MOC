@@ -48,9 +48,12 @@ class TcSpace(nn.Module):
             z_what_loss_objects, objects_detected = z_what_consistency_objects(responses)
         else:
             z_what_loss_objects, objects_detected = (self.zero, self.zero)
-        flow_loss = compute_flow_loss(responses) if arch.motion_loss_weight > 1e-3 else self.zero
-        flow_loss_z_where = compute_flow_loss_z_where(responses) if arch.motion_loss_weight_z_where > 1e-3 else self.zero
-        flow_loss_alpha_map = compute_flow_loss_alpha(responses) if arch.motion_loss_weight_alpha > 1e-3 else self.zero
+        flow_loss = compute_flow_loss(
+            responses) if arch.motion_loss_weight > 1e-3 and global_step <= arch.motion_cooling_end_step * 2 else self.zero
+        flow_loss_z_where = compute_flow_loss_z_where(
+            responses) if arch.motion_loss_weight_z_where > 1e-3 and global_step <= arch.motion_cooling_end_step * 2 else self.zero
+        flow_loss_alpha_map = compute_flow_loss_alpha(
+            responses) if arch.motion_loss_weight_alpha > 1e-3 and global_step <= arch.motion_cooling_end_step * 2 else self.zero
 
         area_object_scaling = min(1, global_step / arch.full_object_weight)
         # TODO: Cooling slower than direct influence eval

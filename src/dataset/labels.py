@@ -2,13 +2,13 @@ import torch
 import pandas as pd
 import numpy as np
 
-label_list_pacman = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost", "eyes",
-                     "white_ghost", "fruit", "save_fruit", "life1", "life2", "score", "corner_block", "no_label"]
+label_list_pacman = ["no_label", "pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost", "eyes",
+                     "white_ghost", "fruit", "save_fruit", "life1", "life2", "score", "corner_block"]
 
-label_list_pong = ["player", 'enemy', 'ball', 'enemy_score', 'player_score', "no_label"]
+label_list_pong = ["no_label", "player", 'enemy', 'ball', 'enemy_score', 'player_score']
 
-label_list_carnival = ["owl", 'rabbit', 'shooter', 'refill', 'bonus', "duck",
-                       "flying_duck", "score0", "no_label"]
+label_list_carnival = ["no_label", "owl", 'rabbit', 'shooter', 'refill', 'bonus', "duck",
+                       "flying_duck", "score0"]
 
 # Maybe enemy bullets, but how should SPACE differentiate
 label_list_space_invaders = [f"{side}_score" for side in ['left', 'right']] + [f"enemy_{idx}"
@@ -80,6 +80,7 @@ def get_labels_moving(gt_bbs, game, boxes_batch):
 def match_bbs(gt_bbs, boxes_batch, label_list):
     labels = []
     # print(gt_bbs, boxes_batch[0])
+
     for bb in boxes_batch:
         label, max_iou = max(((gt_bb[5], iou(bb, gt_bb)) for gt_bb in gt_bbs.itertuples(index=False, name=None)),
                              key=lambda tup: tup[1])
