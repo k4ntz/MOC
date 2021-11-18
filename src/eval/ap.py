@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import torch
-
+import pandas as pd
 
 def compute_counts(boxes_pred, boxes_gt):
     """
@@ -55,7 +55,6 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
     y_max = center_y + height / 2
     # (B, N, 4)
     pos = torch.cat([y_min, y_max, x_min, x_max], dim=-1)
-
     boxes = []
     for b in range(B):
         # (N, 4), (N,) -> (M, 4), where M is the number of z_pres == 1
@@ -70,34 +69,29 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
 
     return boxes
 
-def read_boxes(path, size, indices=None):
+def read_boxes(path, size=None, indices=None):
     """
     Read bounding boxes and normalize to (0, 1)
     Note BB files structure was changed to left, top coordinates + width and height
     :param path: checkpointdir to bounding box root
-    :param size: image width
+    :param size: how many indices
     :param indices: relevant indices of the dataset
     :return: A list of list [[y_min, y_max, x_min, x_max] * N] * B
     """
     boxes_all = []
     boxes_moving_all = []
 
-    for stack_idx in indices if (indices is not None) else range(240):
-        for i in range(4):
+    for stack_idx in indices if (indices is not None) else range(size):
+        for img_idx in range(4):
             boxes = []
             boxes_moving = []
-            filename = os.path.join(path, f'{stack_idx:05}_{i}.txt')
-            with open(filename, 'r') as f:
-                for line in f:
-                    if line.strip():
-                        x_min, y_min, width, height = [float(x) for x in line.strip().replace(",S", "").replace(",M", "").split(',')]
-                        y_max = y_min + height
-                        x_max = x_min + width
-                        boxes.append([y_min, y_max, x_min, x_max])
-                        if "M" in line:
-                            boxes_moving.append([y_min, y_max, x_min, x_max])
-            boxes = np.array(boxes) / size
-            boxes_moving = np.array(boxes_moving) / size
+            bbs = pd.read_csv(os.path.join(path, f"{stack_idx:05}_{img_idx}.csv"), header=None, usecols=[0, 1, 2, 3, 4])
+            for y_min, y_max, x_min, x_max, moving in bbs.itertuples(index=False, name=None):
+                boxes.append([y_min, y_max, x_min, x_max])
+                if "M" in moving:
+                    boxes_moving.append([y_min, y_max, x_min, x_max])
+            boxes = np.array(boxes)
+            boxes_moving = np.array(boxes_moving)
             boxes_all.append(boxes)
             boxes_moving_all.append(boxes_moving)
     return boxes_all, boxes_moving_all, boxes_moving_all
@@ -113,7 +107,6 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
     :param recall_values: a list of recall values to compute AP
     :return: AP at each iou threshold
     """
-
     if recall_values is None:
         recall_values = np.linspace(0.0, 1.0, 11)
 
@@ -194,7 +187,7 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         # AP.extend(precs)
 
         # print(AP)
-
+    print(AP)
     # mean over all thresholds
     return AP
 

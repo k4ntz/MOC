@@ -4,6 +4,7 @@ from torch.distributions import RelaxedBernoulli
 from torch.distributions.utils import broadcast_all
 import torch.cuda
 
+
 # @profile
 def inverse_spatial_transform(image, z_where, out_dims):
     """ spatial transformer network used to scale and shift input according to z_where in:
@@ -28,6 +29,7 @@ def inverse_spatial_transform(image, z_where, out_dims):
     # 3. sample image from grid
     return F.grid_sample(image, grid, align_corners=True)
 
+
 # @profile
 def spatial_transform(image, z_where, out_dims):
     """ spatial transformer network used to scale and shift input according to z_where in:
@@ -50,6 +52,7 @@ def spatial_transform(image, z_where, out_dims):
     grid = F.affine_grid(torch.dstack((scaling, translation)), torch.Size(out_dims), align_corners=True)
     # 3. sample image from grid
     return F.grid_sample(image, grid, align_corners=True)
+
 
 def linear_annealing(device, step, start_step, end_step, start_value, end_value):
     """

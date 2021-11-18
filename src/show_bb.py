@@ -2,7 +2,7 @@ from engine.utils import get_config
 from model import get_model
 from vis import get_vislogger
 from dataset import get_dataset, get_dataloader
-from utils import Checkpointer, open_image
+from augmentation import Checkpointer, open_image
 import os
 import os.path as osp
 from torch import nn

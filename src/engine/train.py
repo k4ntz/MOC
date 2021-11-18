@@ -15,7 +15,6 @@ from rtpt import RTPT
 from tqdm import tqdm
 import shutil
 
-
 def train(cfg, rtpt_active=True):
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
@@ -83,24 +82,25 @@ def train(cfg, rtpt_active=True):
     end_flag = False
     start_log = 2
     for epoch in range(start_epoch, cfg.train.max_epochs):
-        pbar = tqdm(total=len(trainloader))
+        # pbar = tqdm(total=len(trainloader))
         if end_flag:
             break
         start = time.perf_counter()
-        for (img_stacks, motion_z_pres, motion_z_where) in trainloader:
+        for (img_stacks, motion, motion_z_pres, motion_z_where) in trainloader:
             end = time.perf_counter()
             data_time = end - start
             start = end
             model.train()
             img_stacks = img_stacks.to(cfg.device)
+            motion = motion.to(cfg.device)
             motion_z_pres = motion_z_pres.to(cfg.device)
             motion_z_where = motion_z_where.to(cfg.device)
-            loss, log = model(img_stacks, motion_z_pres, motion_z_where, global_step)
+            loss, log = model(img_stacks, motion, motion_z_pres, motion_z_where, global_step)
             # In case of using DataParallel
             loss = loss.mean()
 
-            optimizer_fg.zero_grad()
-            optimizer_bg.zero_grad()
+            optimizer_fg.zero_grad(set_to_none=True)
+            optimizer_bg.zero_grad(set_to_none=True)
             loss.backward()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
@@ -142,7 +142,7 @@ def train(cfg, rtpt_active=True):
                 evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
                                      checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
-            pbar.update(1)
+            # pbar.update(1)
             start = time.perf_counter()
             global_step += 1
             if global_step > cfg.train.max_steps:

@@ -41,36 +41,30 @@ def _bb_carnival(img_gt):
     if img_gt['bonus'].item():
         bbs.append((12 * 128 / 160.0, 29 * 128 / 210.0, 21 * 128 / 210.0, 8 * 128 / 210.0))
 
-    return pd.DataFrame.from_dict({i: [bb[0], bb[1], bb[2], bb[3]] for i, bb in enumerate(bbs)}, orient='index')
+    return _to_dataframe(bbs)
 
 
 def _bb_pong(img_gt):
-    bbs = [(img_gt['enemy_x'] * 128 / 160.0 - 2, img_gt['enemy_y'] * 128 / 210.0 - 2, 0.05 * 128, 0.10 * 128, "M"),
-           (img_gt['player_x'] * 128 / 160.0 - 2, img_gt['player_y'] * 128 / 210.0 - 2, 0.05 * 128, 0.10 * 128, "M"),
-           (
-               16, 0, 24, 13, "S"
-           ),
-           (
-               79, 0, 24, 13, "S"
-           )]
-    if 'ball_x' in img_gt:
-        bbs.append((img_gt['ball_x'] * 128 / 160.0 - 2, img_gt['ball_y'] * 128 / 210.0 - 2,
-                    0.04 * 128, 0.04 * 128, "M"))
-    return pd.DataFrame.from_dict({i: [bb[0], bb[1], bb[2], bb[3], bb[4]] for i, bb in enumerate(bbs)}, orient='index')
+    return _to_dataframe(img_gt['bbs'])
 
-#TODO: after labels are done
+
 def _bb_space_invaders(img_gt):
-    bbs = [(
-               16, 0, 24, 13, "S"
-           ),
-           (
-               79, 0, 24, 13, "S"
-           )]
-    return pd.DataFrame.from_dict({i: [bb[0], bb[1], bb[2], bb[3], bb[4]] for i, bb in enumerate(bbs)}, orient='index')
+    return _to_dataframe(img_gt['bbs'])
+
+
+def _to_dataframe(bbs):
+    """
+    y_min, y_max, x_min, x_max format
+    """
+    return pd.DataFrame.from_dict(
+        {i: [bb[0] / 210, bb[0] / 210 + bb[2] / 210, bb[1] / 160, bb[1] / 160 + bb[3] / 160, bb[4], bb[5]]
+         for i, bb in enumerate(bbs)}, orient='index'
+    )
+
 
 def save(args, frame, info, output_path, visualizations):
     if args.game == "MsPacman":
-        bb = _bb_pacman(info)
+        bb = _to_dataframe(info['bbs'])
     elif args.game == "Carnival":
         bb = _bb_carnival(info)
     elif args.game == "Pong":

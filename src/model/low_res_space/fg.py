@@ -5,28 +5,24 @@ import torch.nn.functional as F
 from torch.distributions import Normal, kl_divergence
 from .utils import NumericalRelaxedBernoulli, kl_divergence_bern_bern, get_boundary_kernel_new, get_boundary_kernel
 from .utils import spatial_transform, linear_annealing, inverse_spatial_transform
-from .arch import arch
-from eval import convert_to_boxes
+from .lr_arch import lr_arch as arch
 import time
 
 
-class SpaceFg(nn.Module):
+class LrSpaceFg(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
 
         self.img_encoder = ImgEncoderFg()
         self.z_what_net = ZWhatEnc()
         self.glimpse_dec = GlimpseDec()
-        # This is what is really used
         self.boundary_kernel = get_boundary_kernel_new(kernel_size=32, boundary_width=6)
 
         self.fg_sigma = arch.fg_sigma
-        # I register many things as buffer but this is not really necessary.
         # Temperature for gumbel-softmax
         self.register_buffer('tau', torch.tensor(arch.tau_start_value))
 
         # Priors
-        # Some are buffer and some are not. This is stupid. But for compatibility I have to do so.
         self.register_buffer('prior_z_pres_prob', torch.tensor(arch.z_pres_start_value))
         self.register_buffer('prior_what_mean', torch.zeros(1))
         self.register_buffer('prior_what_std', torch.ones(1))
@@ -36,21 +32,15 @@ class SpaceFg(nn.Module):
         self.prior_scale_std_new = torch.tensor(arch.z_scale_std_value)
         self.prior_shift_mean_new = torch.tensor(0.)
         self.prior_shift_std_new = torch.tensor(1.)
-        # self.register_buffer('prior_scale_mean_new', torch.tensor(arch.z_scale_mean_start_value))
-        # self.register_buffer('prior_scale_std_new', torch.tensor(arch.z_scale_std_value))
-        # self.register_buffer('prior_shift_mean_new', torch.tensor(0.))
-        # self.register_buffer('prior_shift_std_new', torch.tensor(1.))
-
-        # TODO: These are placeholders for loading old checkpoints. No longer used
         self.boundary_filter = get_boundary_kernel(sigma=20)
         self.register_buffer('prior_scale_mean',
-                             torch.tensor([arch.z_scale_mean_start_value] * 2).view((arch.z_where_scale_dim), 1, 1))
+                             torch.tensor([arch.z_scale_mean_start_value] * 2).view(arch.z_where_scale_dim, 1, 1))
         self.register_buffer('prior_scale_std',
-                             torch.tensor([arch.z_scale_std_value] * 2).view((arch.z_where_scale_dim), 1, 1))
+                             torch.tensor([arch.z_scale_std_value] * 2).view(arch.z_where_scale_dim, 1, 1))
         self.register_buffer('prior_shift_mean',
-                             torch.tensor([0., 0.]).view((arch.z_where_shift_dim), 1, 1))
+                             torch.tensor([0., 0.]).view(arch.z_where_shift_dim, 1, 1))
         self.register_buffer('prior_shift_std',
-                             torch.tensor([1., 1.]).view((arch.z_where_shift_dim), 1, 1))
+                             torch.tensor([1., 1.]).view(arch.z_where_shift_dim, 1, 1))
 
     @property
     def z_what_prior(self):
@@ -75,7 +65,6 @@ class SpaceFg(nn.Module):
         :param global_step: global step (training)
         :return:
         """
-
         self.prior_z_pres_prob = linear_annealing(self.prior_z_pres_prob.device, global_step,
                                                   arch.z_pres_start_step, arch.z_pres_end_step,
                                                   arch.z_pres_start_value, arch.z_pres_end_value)
@@ -112,7 +101,6 @@ class SpaceFg(nn.Module):
         z_pres, z_depth, z_scale, z_shift, z_where, z_pres_logits, z_depth_post, \
         z_scale_post, z_shift_post, z_pres_prob_pure, \
         z_where_pure = self.img_encoder(x, motion_z_pres, motion_z_where, self.tau, global_step)
-        # print(z_where[(z_pres > 0.5).squeeze()])
 
         # (B, 3, H, W) -> (B*G*G, 3, H, W). Note we must use repeat_interleave instead of repeat
         x_repeat = torch.repeat_interleave(x, arch.G ** 2, dim=0)
@@ -207,7 +195,6 @@ class SpaceFg(nn.Module):
 
         kl = kl_z_what + kl_z_where + kl_z_pres + kl_z_depth
 
-        # For visualizating
         # Dimensionality check
         assert (
                 (z_pres.size() == (B, arch.G ** 2, 1)) and
@@ -266,21 +253,18 @@ class ImgEncoderFg(nn.Module):
             nn.Conv2d(3, 16, 4, 2, 1),
             nn.CELU(),
             nn.GroupNorm(4, 16),
+            # 64, 64
             nn.Conv2d(16, 32, 4, 2, 1),
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 64, 4, 2, 1),
+            # 32, 32
+            # 16, 16
+            nn.Conv2d(32, 64, 3, second_to_last_stride, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 128, 3, second_to_last_stride, 1),
+            nn.GroupNorm(16, 64),
+            nn.Conv2d(64, arch.img_enc_dim_fg, 3, last_stride, 1),
             nn.CELU(),
-            nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 256, 3, last_stride, 1),
-            nn.CELU(),
-            nn.GroupNorm(32, 256),
-            nn.Conv2d(256, arch.img_enc_dim_fg, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg)
+            nn.GroupNorm(8, arch.img_enc_dim_fg)
         )
 
         # Residual Connection in the paper
@@ -307,7 +291,7 @@ class ImgEncoderFg(nn.Module):
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
         self.z_scale_net = nn.Conv2d(128, arch.z_where_scale_dim * 2, 1)
         self.z_shift_net = nn.Conv2d(128, arch.z_where_shift_dim * 2, 1)
-        self.z_pres_net = nn.Conv2d(128 + arch.motion_input, arch.z_pres_dim, 1)
+        self.z_pres_net = nn.Conv2d(128, arch.z_pres_dim, 1)
         self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)
 
         # (G, G). Grid center offset. (offset_x[i, j], offset_y[i, j]) is the center for cell (i, j)
@@ -338,7 +322,7 @@ class ImgEncoderFg(nn.Module):
         """
         B = x.size(0)
         # (B, C, H, W)
-        img_enc = self.enc(x[:, :3])
+        img_enc = self.enc(x)
         # (B, E, G, G)
         lateral_enc = self.enc_lat(img_enc)
         # (B, 2E, G, G) -> (B, 128, H, W) / G, G
@@ -355,11 +339,7 @@ class ImgEncoderFg(nn.Module):
             return out[0] if len(args) == 1 else out
 
         # Compute posteriors
-        grid_width = 128 // arch.G
         # (B, 1, G, G)
-        avg = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
-        if arch.motion_input:
-            cat_enc_z_pres = torch.cat((cat_enc_z_pres, avg(x[:, 3:4])), dim=1)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
         z_pres_logits_pure = torch.tanh(z_pres_original)
         motion_cooling_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step)
@@ -438,21 +418,15 @@ class ZWhatEnc(nn.Module):
             nn.Conv2d(16, 32, 4, 2, 1),
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(4, 32),
-            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.Conv2d(32, 64, 3, 1, 1),
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 128, 4, 2, 1),
+            nn.Conv2d(64, 128, 4),
             nn.CELU(),
-            nn.GroupNorm(8, 128),
-            nn.Conv2d(128, 256, 4),
-            nn.CELU(),
-            nn.GroupNorm(16, 256),
+            nn.GroupNorm(16, 128),
         )
 
-        self.enc_what = nn.Linear(256, arch.z_what_dim * 2)
+        self.enc_what = nn.Linear(128, arch.z_what_dim * 2)
 
     def forward(self, x):
         """
@@ -463,7 +437,7 @@ class ZWhatEnc(nn.Module):
             z_what: (B, D)
             z_what_post: (B, D)
         """
-        x = self.enc_cnn(x[:, :3])
+        x = self.enc_cnn(x)
 
         # (B, D), (B, D)
         z_what_mean, z_what_std = self.enc_what(x.flatten(start_dim=1)).chunk(2, -1)
@@ -480,25 +454,8 @@ class GlimpseDec(nn.Module):
     def __init__(self):
         super(GlimpseDec, self).__init__()
 
-        # I am using really deep network here. But this is overkill
         self.dec = nn.Sequential(
-            nn.Conv2d(arch.z_what_dim, 256, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, 256),
-
-            nn.Conv2d(256, 128 * 2 * 2, 1),
-            nn.PixelShuffle(2),
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-
-            nn.Conv2d(128, 128 * 2 * 2, 1),
-            nn.PixelShuffle(2),
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.Conv2d(arch.z_what_dim, 128, 1),
             nn.CELU(),
             nn.GroupNorm(16, 128),
 
@@ -512,9 +469,6 @@ class GlimpseDec(nn.Module):
 
             nn.Conv2d(64, 32 * 2 * 2, 1),
             nn.PixelShuffle(2),
-            nn.CELU(),
-            nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),
             nn.CELU(),
             nn.GroupNorm(8, 32),
 

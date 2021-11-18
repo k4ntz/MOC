@@ -7,6 +7,13 @@ from collections import Counter
 from skimage.morphology import (disk, square)
 from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
 
+PLOT_BB = False
+
+
+def set_plot_bb(plot_bb):
+    global PLOT_BB
+    PLOT_BB = plot_bb
+
 
 def augment_dict(obs, info, game):
     if game == "MsPacman":
@@ -23,27 +30,49 @@ def augment_dict(obs, info, game):
         raise ValueError
 
 
+def bbs_extend(labels, key: str, stationary=False):
+    labels['bbs'].extend([(*bb, "S" if stationary else "M", key) for bb in labels[key]])
+
+
+def bb_by_color(labels, obs, color, key):
+    labels[key] = find_objects(obs, color)
+    bbs_extend(labels, key)
+
+
 def _augment_dict_space_invaders(obs, info):
     labels = info['labels']
     objects_colors = {"player": (50, 132, 50), "space_ship": (151, 25, 122),
                       "enemy": (134, 134, 29), "block": (181, 83, 40),
-                      "left_score": (50, 132, 50), "right_score": (162, 134, 56)}
+                      "left_score": (50, 132, 50), "right_score": (162, 134, 56),
+                      "bullet": (142, 142, 142)}
+    labels['bbs'] = []
+    bb_by_color(labels, obs, objects_colors['player'], "player")
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "player" or bb[0] > 90 and bb[3] > 5]
+    bb_by_color(labels, obs, objects_colors['bullet'], "bullet")
 
-    detected = find_objects(obs, objects_colors['enemy'], min_distance=10)
-    cur_y = min((y for y, x in detected), default=0)
+    bb_by_color(labels, obs, objects_colors['space_ship'], "space_ship")
+    bb_by_color(labels, obs, objects_colors['block'], "block")
+    labels['bbs'] += [(10, 4, 10, 60, "S", "left_score"), (10, 84, 10, 60, "S", "right_score")]
+
+    detected_enemies = find_objects(obs, objects_colors['enemy'])
+    cur_y = min((bb[0] for bb in detected_enemies), default=0)
     for idx in range(6):
-        labels[f"enemies_{idx}"] = [(y, x) for y, x in detected if cur_y + 10 > y >= cur_y]
-        cur_y += 12
-    print(labels)
-    labels["player_y"] = 190
-    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 0), show=False)
-    for y, x in detected:
-        mark_point(obs, y, x, color=(255, 0, 0), show=False)
+        labels[f"enemy_{idx}"] = [bb for bb in detected_enemies if cur_y + 10 > bb[0] >= cur_y]
+        bbs_extend(labels, f"enemy_{idx}")
+        cur_y = max((bb[0] for bb in labels[f"enemy_{idx}"]), default=0) + 12
+
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
 
+def plot_bounding_boxes(obs, bbs, objects_colors):
+    if PLOT_BB:
+        for bb in bbs:
+            mark_bb(obs, bb)
+
+
 def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
-                 min_distance=None):
+                 min_distance=10):
     """
     image: image to detects objects from
     color: fixed color of the object
@@ -54,8 +83,8 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     min_distance: minimal distance between two detected objects
     """
     mask = cv2.inRange(image, np.array(color), np.array(color))
-    print(mask)
-    closed = closing(mask, square(3))
+    closed = closing(mask, disk(3))
+    closed = closing(closed, square(3))
     contours, _ = cv2.findContours(closed.copy(), 1, 1)
     detected = []
     for cnt in contours:
@@ -74,7 +103,7 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
                     break
             if too_close:
                 continue
-        detected.append((y, x))
+        detected.append((y, x, h, w))
     return detected
 
 
@@ -121,30 +150,14 @@ def _augment_dict_pong(obs, info):
     labels = info['labels']
     objects_colors = {"enemy": [213, 130, 74], "player": [92, 186, 92],
                       "ball": [236, 236, 236], "background": [144, 72, 17]}
-    scores = {"score_enemy_0": ((1, 36), (1, 40)),
-              "score_enemy_1": ((1, 24), (1, 28)),
-              "score_player_0": ((1, 116), (1, 120)),
-              "score_player_1": ((1, 104), (1, 108))}
-    for obj in ['ball', "player", "enemy"]:
-        y, x = labels[f'{obj}_y'] - 13, labels[f'{obj}_x'] - 48
-        if obj == 'ball':
-            if not tr_color_around(obs, y, x, objects_colors["background"]):
-                del labels[f"ball_x"]
-                del labels[f"ball_y"]
-                continue
-        labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
-
-    for score in scores:
-        for potential_pos in scores[score]:
-            y, x = potential_pos
-            if tr_color_around(obs, y, x, objects_colors[score.split("_")[1]]):
-                labels[f"{score}_x"] = x
-                labels[f"{score}_y"] = y
-                break
-    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 0), show=False)
-    mark_point(obs, labels["enemy_y"], labels["enemy_x"], color=(255, 255, 0), show=False)
-    if "ball_y" in labels:
-        mark_point(obs, labels["ball_y"], labels["ball_x"], color=(255, 255, 0), show=False)
+    labels['bbs'] = []
+    bb_by_color(labels, obs, objects_colors['player'], "player")
+    labels['bbs'] = [bb if bb[5] != "player" or bb[0] > 30 else (*bb[:4], "S", "player_score") for bb in labels['bbs']]
+    bb_by_color(labels, obs, objects_colors['enemy'], "enemy")
+    labels['bbs'] = [bb if bb[5] != "enemy" or bb[0] > 30 else (*bb[:4], "S", "enemy_score") for bb in labels['bbs']]
+    bb_by_color(labels, obs, objects_colors['ball'], "ball")
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "ball" or bb[3] < 20]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
 
@@ -282,36 +295,36 @@ def _augment_dict_mspacman(obs, info):
     else:
         labels = {}
         info['labels'] = labels
-    enemy_list = ['sue', 'inky', 'pinky', 'blinky']
-    base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
-                           "pinky": (198, 89, 179), "blinky": (200, 72, 72),
-                           "pacman": (210, 164, 74), "fruit": (184, 50, 50)
-                           }  #
-    vulnerable_ghost_color = (66, 114, 194)
-    wo_vulnerable_ghost_color = (214, 214, 214)
-    for enemy in enemy_list:
-        labels[f'{enemy}_x'] = labels.pop(f'enemy_{enemy}_x')  # renaming
-        labels[f'{enemy}_y'] = labels.pop(f'enemy_{enemy}_y')  # renaming
-        labels[f'{enemy}_visible'] = True
-        labels[f'{enemy}_blue'] = False
-        labels[f'{enemy}_white'] = False
-        labels[f'{enemy}_x'] -= 13
-        if not enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, base_objects_colors[enemy]):
-            if enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, vulnerable_ghost_color):  # enemy is blue
-                labels[f'{enemy}_blue'] = True
-            elif enough_color_around(obs, labels[f'{enemy}_y'] + 5, labels[f'{enemy}_x'] + 5, wo_vulnerable_ghost_color):  # enemy is white
-                labels[f'{enemy}_white'] = True
-            else:
-                labels[f'{enemy}_visible'] = False
-    labels['fruit_visible'] = False
-    labels['fruit_x'] -= 13
-    labels['player_x'] -= 13
-    if tr_color_around(obs, labels['fruit_y'], labels['fruit_x'], base_objects_colors["fruit"]):
-        labels['fruit_visible'] = True
-    mark_point(obs, labels["player_y"], labels["player_x"], color=(255, 255, 255), show=False)
-    mark_point(obs, labels["fruit_y"], labels["fruit_x"], color=(255, 255, 255) if labels['fruit_visible'] else (0, 0, 0), show=False)
-    for enemy in enemy_list:
-        mark_point(obs, labels[f"{enemy}_y"], labels[f"{enemy}_x"], color=(255, 255, 255) if labels[f'{enemy}_visible'] else (0, 0, 0), show=False)
+    objects_colors = {
+        "sue": (180, 122, 48), "inky": (84, 184, 153),
+        "pinky": (198, 89, 179), "blinky": (200, 72, 72),
+        "pacman": (210, 164, 74),
+        "white_ghost": (214, 214, 214), "blue_ghost": (66, 114, 194)
+    }
+    labels['bbs'] = []
+    for obj_name in objects_colors:
+        bb_by_color(labels, obs, objects_colors[obj_name], obj_name)
+    fruit_color = (184, 50, 50)
+    fruit_bbs = find_objects(obs, fruit_color)
+    for bb in fruit_bbs:
+        labels['bbs'] += [(*bb, "S" if bb[0] >= 171 else "M", "save_fruit" if bb[0] >= 171 else "fruit")]
+    if tr_color_around(obs, 178, 16, (187, 187, 53)):
+        labels['bbs'] += [(173, 12, 12, 8, "S", "life1")]
+    if tr_color_around(obs, 178, 32, (187, 187, 53)):
+        labels['bbs'] += [(173, 28, 12, 8, "S", "life2")]
+    labels['bbs'] += [
+        (187, 71, 7, 30, "S", "score"),
+    ]
+    if tr_color_around(obs, 18, 10, (228, 111, 111)):
+        labels['bbs'] += [(14, 8, 7, 4, "S", "corner_block")]
+    if tr_color_around(obs, 150, 10, (228, 111, 111)):
+        labels['bbs'] += [(147, 8, 7, 4, "S", "corner_block")]
+    if tr_color_around(obs, 18, 150, (228, 111, 111)):
+        labels['bbs'] += [(14, 148, 7, 4, "S", "corner_block")]
+    if tr_color_around(obs, 150, 150, (228, 111, 111)):
+        labels['bbs'] += [(147, 148, 7, 4, "S", "corner_block")]
+    labels['bbs'] = [(*bb[:5], bb[5] if bb[2] > 6 or bb[4] == "S" else "eyes") for bb in labels["bbs"]]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
 
@@ -386,6 +399,19 @@ def mark_point(image_array, y, x, color=(255, 0, 0), size=1, show=True, cross=Tr
     if show:
         plt.imshow(image_array)
         plt.show()
+
+
+def mark_bb(image_array, bb, color=(255, 0, 0)):
+    """
+    marks a bounding box on the image
+    """
+    y, x, h, w, moving, label = bb
+    bottom = min(209, y + h)
+    right = min(159, x + w)
+    image_array[y:bottom, x] = color
+    image_array[y:bottom, right] = color
+    image_array[y, x:right] = color
+    image_array[bottom, x:right] = color
 
 
 def show_image(image_array, save_path=None, save=False):

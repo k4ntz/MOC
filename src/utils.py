@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 import numpy as np
 from torch import nn
 from torch.nn import functional as F
-from model.space.utils import spatial_transform
+from model.space.utils import spatial_transform, inverse_spatial_transform
 from PIL import Image
 import torchvision.transforms.functional as TF
 from torchvision.utils import save_image as Simage

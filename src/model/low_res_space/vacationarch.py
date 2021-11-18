@@ -9,7 +9,7 @@ arch = CfgNode({
     'cosine_sim': True,
     'object_threshold': 0.5,
     'z_cos_match_weight': 5.0,
-    'full_object_weight': 3000,
+    'full_object_weight': 20000,
     'motion_input': True,
     'motion': True,
     'motion_kind': 'mode',
@@ -18,7 +18,7 @@ arch = CfgNode({
     'motion_loss_weight_z_where': 100.0,
     'motion_loss_weight_alpha': 1.0,
     'motion_sigmoid_steepen': 10000.0,  # Unused
-    'motion_cooling_end_step': 1500,
+    'motion_cooling_end_step': 5000,
     'acceptable_non_moving': 8,  # Unused
     'motion_requirement': 2.0,  # Unused
     # SPACE-config
@@ -63,6 +63,11 @@ arch = CfgNode({
     'tau_end_step': 10000,
     'tau_start_value': 2.5,
     'tau_end_value': 2.5,
+    
+    # Turn on boundary loss or not
+    'boundary_loss': True,
+    # When to turn off boundary loss
+    'bl_off_step': 100000000,
     
     # Fix alpha for the first N steps
     'fix_alpha_steps': 0,

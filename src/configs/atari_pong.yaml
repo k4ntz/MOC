@@ -1,5 +1,5 @@
 seed: 1
-model: 'SPACE'
+model: 'tcspace'
 exp_name: pong
 resume: false
 load_time_consistency: true
@@ -15,25 +15,26 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [6, 7]
-device: 'cuda:6'
+device_ids: [4, 5, 6, 7]
+device: 'cuda:4'
 
-logdir: '../output/logs/vacation'
-checkpointdir: '../output/checkpoints/vacation'
+logdir: '../output/logs/mid'
+checkpointdir: '../output/checkpoints/mid'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
+dataset_style: "_128"
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data2/space_like'
+  ATARI: '../aiml_atari_data_mid/space_like'
 
 
 train:
-  log: false
+  log: true
   batch_size: 16
   max_epochs: 1000
-  max_steps: 16000
+  max_steps: 5000
   print_every: 200
   save_every: 500
   num_workers: 4
@@ -76,7 +77,6 @@ arch:
 
   K: 2
   bg_sigma: 0.10
-  boundary_loss: false
 
 gamelist: [
     'Pong-v0',

@@ -1,5 +1,7 @@
 import cv2 as cv
 import numpy as np
+import torch
+from .motion_processing import process_motion_to_latents, save_motion
 
 
 def last_four_pairs(trail):
@@ -33,7 +35,9 @@ def save_frame(frame1, frame2, output_path, visualizations=None):
     frame2_bw = cv.cvtColor(frame2, cv.COLOR_BGR2GRAY)
     flow = cv.calcOpticalFlowFarneback(frame2_bw, frame1_bw, None, 0.6, 5, 15, 30, 5, 1.5, 0)
     flow = (flow * flow).sum(axis=2)
-    flow = flow * 255 / flow.max()
-    np.save(output_path, flow)
+    flow = flow * 255
+    flow /= flow.max()
+    save_motion(frame2, flow, output_path)
+
     for vis in visualizations:
         vis.save_vis(frame2, flow)

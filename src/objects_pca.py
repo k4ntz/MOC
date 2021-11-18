@@ -8,7 +8,7 @@ from engine.show import show
 from model import get_model
 from vis import get_vislogger
 from dataset import get_dataset, get_dataloader
-from utils import Checkpointer, open_image, show_image, save_image, \
+from augmentation import Checkpointer, open_image, show_image, save_image, \
     corners_to_wh, colors, image_pca
 import os
 import os.path as osp

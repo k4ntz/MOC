@@ -10,6 +10,66 @@ from PIL import Image
 import cv2 as cv
 from scipy import ndimage
 
+color_hist = None
+
+
+def set_color_hist(img):
+    global color_hist
+    color_codes = np.apply_along_axis(unique_color, axis=2, arr=img)
+    unique, counts = np.unique(color_codes.ravel(), return_counts=True)
+    color_hist = dict(zip(unique, counts))
+    print(color_hist)
+
+
+def to_inverse_count(color):
+    return 1 / color_hist.get(color, 1) - 1e-4
+
+
+def exciting_color_score(img, x, y, w, h):
+    selection = img[y:y + h, x:x + w]
+    color_codes = np.apply_along_axis(unique_color, axis=2, arr=selection)
+    inverse_counts = np.vectorize(to_inverse_count)(color_codes)
+    return np.sum(inverse_counts)
+
+
+def select(img, x, y, w, h):
+    base_score = exciting_color_score(img, x, y, w, h)
+    while w > 8:
+        left_cut_score = exciting_color_score(img, x + w // 4, y, w - w // 4, h)
+        if left_cut_score > base_score:
+            x = x + w // 4
+            w -= w // 4
+            base_score = left_cut_score
+            if w > 30:
+                print(base_score, x, y, w, h)
+        else:
+            break
+    while w > 8:
+        right_cut_score = exciting_color_score(img, x, y, w - w // 4, h)
+        if right_cut_score > base_score:
+            w -= w // 4
+            base_score = right_cut_score
+            if w > 30:
+                print(base_score, x, y, w, h)
+        else:
+            break
+    while h > 9:
+        left_cut_score = exciting_color_score(img, x, y + h // 4, w, h - h // 4)
+        if left_cut_score > base_score:
+            y = y + h // 4
+            h -= h // 4
+            base_score = left_cut_score
+        else:
+            break
+    while h > 9:
+        right_cut_score = exciting_color_score(img, x, y, w, h - h // 4)
+        if right_cut_score > base_score:
+            h -= h // 4
+            base_score = right_cut_score
+        else:
+            break
+    return (-1, -1, -1, -1) if base_score < 1e-2 else (x, y, w, h)
+
 
 def ring_kernel(lst):
     start = np.array([[lst[0]]])
@@ -18,14 +78,88 @@ def ring_kernel(lst):
     return start
 
 
+def save_motion(img, motion, output_path):
+    z_pres, z_where = process_motion_to_latents(img, motion)
+    torch.save(resize(motion, size=128),
+               output_path.replace(".pt", "_128.pt"))
+    torch.save(resize(motion, size=84),
+               output_path.replace(".pt", "_84.pt"))
+    torch.save(resize(motion, size=64),
+               output_path.replace(".pt", "_64.pt"))
+    torch.save(z_pres.float(), output_path.replace(".pt", "_z_pres.pt"))
+    torch.save(z_where.float(), output_path.replace(".pt", "_z_where.pt"))
+
+
+def resize(motion, size):
+    return torch.nn.functional.interpolate(torch.from_numpy(motion).float().unsqueeze(0).unsqueeze(0), size=size).squeeze()
+
+
+def process_motion_to_latents(img, motion, G=16):
+    # Idea: Move z_pres instead of overwriting
+    # y_delta, x_delta = z_where_y - motion_z_where[y_idx, x_idx][3], z_where_x - motion_z_where[y_idx, x_idx][2]
+    # if np.abs(y_delta) > np.abs(x_delta):
+    #     y_idx += 1 if y_delta > 0 else -1
+    # else:
+    #     x_idx += 1 if x_delta > 0 else -1
+    # y_idx = max(0, min(y_idx, G - 1))
+    # x_idx = max(0, min(x_idx, G - 1))
+    #
+    """
+    Converts the motion as magnitude of flow / delta to the median or mode of the last few images into
+    z_pres and z_where, i.e. giving hints where the objects are so SPACE can one the one hand imitate it and
+    on the other concentrate on finding sensible z_what representations
+    :param motion: (H_img, W_img)
+    :param img: (3, H_img, W_img)
+    :param G: grid_size, and int
+    :return z_pres: (G * G, 1) in (-1, 1) (tanh)
+    :return z_where: (G * G, 4), where all grid cells without z_pres == 1 only contain zero
+    """
+    vis_motion = motion > motion.mean()
+    vis_motion = (closing(vis_motion, disk(4)) * 255).astype(np.uint8)
+    canny_output = cv.Canny(vis_motion, 100, 200)  # Parameters irrelevant for our binary case
+    contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    contours = contours[0] if len(contours) == 2 else contours[1]
+    motion_z_pres = torch.zeros((G, G, 1))
+    motion_z_where = torch.zeros((G, G, 4))
+    to_G_y = 210 / G
+    to_G_x = 160 / G
+    for c in contours:
+        x, y, w, h = cv.boundingRect(c)
+        # One could collect background colors and prune non-objects only consisting of those colors.
+        # But background might be of same color in other area
+        if False and color_hist:
+            x, y, w, h = select(img, x, y, w, h)
+            if x < 0:
+                continue
+        z_where_x = ((x + w / 2) / 160) * 2 - 1
+        z_where_y = ((y + h / 2) / 210) * 2 - 1
+        y_idx = int((y + h // 2) // to_G_y)
+        x_idx = int((x + w // 2) // to_G_x)
+
+        if motion_z_pres[y_idx, x_idx] == 0.0 or w / 160 * h / 210 > motion_z_where[y_idx, x_idx][:2].prod():
+            motion_z_pres[y_idx, x_idx] = 1.0
+            motion_z_where[y_idx, x_idx] = torch.tensor(
+                [w / 160, h / 210, z_where_x, z_where_y])
+    return motion_z_pres.reshape(G * G, -1), motion_z_where.reshape(G * G, -1)
+
+
+def unique_color(color):
+    """
+    Computes a unique value for uint8 array, e.g. for identifying the input color to make variance computation easy
+    :param color: nd.array<n>
+    """
+    return sum([255 ** i * c for i, c in enumerate(color)])
+
+
 class ProcessingVisualization:
-    def __init__(self, vis_path, motion_type, every_n=4, max_vis=20, saturation=4):
+    def __init__(self, vis_path, motion_type, every_n=4, max_vis=20, saturation=6, G=16):
         self.vis_counter = 0
         self.max_vis = max_vis
         self.every_n = every_n
         self.vis_path = vis_path
         self.saturation = saturation
         self.motion_type = motion_type
+        self.G = G
 
     def save_vis(self, frame, motion):
         if self.vis_counter < self.max_vis * self.every_n and not self.vis_counter % self.every_n:
@@ -36,23 +170,30 @@ class ProcessingVisualization:
         pass
 
     def apply_data(self, frame, data):
-        vis_flow = (self.saturation * data + 1) / 5
-        frame = frame * vis_flow[..., None]
-        return ndimage.zoom(frame, (3, 3, 1), order=1)
+        vis_flow = (self.saturation * data + 1) / 7
+        sat_frame = frame + 20
+        sat_frame = sat_frame * vis_flow[..., None]
+        return ndimage.zoom(sat_frame, (3, 3, 1), order=1)
 
 
 class Identity(ProcessingVisualization):
     def make_visualization(self, frame, motion):
+        cv.imwrite(f'{self.vis_path}/{self.motion_type}/MotionIdentity_{self.vis_counter:04}.png',
+                   motion)
+        vis_motion = motion > 0
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/Identity_{self.vis_counter:04}.png',
-                   self.apply_data(frame, motion))
-        grid_width = 8
-        avg_pool = nn.AvgPool2d(grid_width + 2, grid_width, padding=1, count_include_pad=False)
-        grid_flow = avg_pool(torch.tensor(motion).unsqueeze(0).unsqueeze(0))
+                   self.apply_data(frame, vis_motion))
+        to_G_x = 160 // self.G
+        to_G_y = 210 // self.G
+
+        avg_pool = nn.AvgPool2d((to_G_y + 2, to_G_x + 2), (to_G_y, to_G_x), padding=1, count_include_pad=False)
+        grid_flow = avg_pool(torch.tensor(motion).float().unsqueeze(0).unsqueeze(0))
         grid_flow = torch.squeeze(grid_flow).numpy()
         grid_flow = grid_flow > grid_flow.mean()
-        grid_flow = grid_flow.repeat(8, axis=0).repeat(8, axis=1)
+        grid_flow = grid_flow.repeat(to_G_y, axis=0).repeat(to_G_x, axis=1)
+        vis_frame = frame[:grid_flow.shape[0], :grid_flow.shape[1]]
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/IdentityGrid_{self.vis_counter:04}.png',
-                   self.apply_data(frame, grid_flow))
+                   self.apply_data(vis_frame, grid_flow))
 
 
 class ClosingMeanThreshold(ProcessingVisualization):
@@ -61,13 +202,13 @@ class ClosingMeanThreshold(ProcessingVisualization):
         self.mean_threshold = mean_threshold
 
     def make_visualization(self, frame, motion):
-        motion = ((motion > 0.1) * 255).astype(np.uint8)
-        motion = closing(motion, square(3))
+        vis_motion = ((motion > 0.1) * 255).astype(np.uint8)
+        vis_motion = closing(vis_motion, square(3))
         for i in range(4):
             cv.imwrite(f'{self.vis_path}/{self.motion_type}/ClosingMeanThresh_{self.vis_counter:04}_{i}.png',
-                       self.apply_data(frame, motion / 255))
-            motion = rank.mean(motion, disk(2))
-            motion = ((motion > self.mean_threshold) * 255).astype(np.uint8)
+                       self.apply_data(frame, vis_motion / 255))
+            vis_motion = rank.mean(vis_motion, disk(2))
+            vis_motion = ((vis_motion > self.mean_threshold) * 255).astype(np.uint8)
 
 
 class OneForEachSuperCell(ProcessingVisualization):
@@ -92,32 +233,57 @@ class OneForEachSuperCell(ProcessingVisualization):
 
 class Skeletonize(ProcessingVisualization):
     def make_visualization(self, frame, motion):
-        motion = motion > 0.1
-        motion = skeletonize(motion)
+        vis_motion = motion > 0.1
+        vis_motion = skeletonize(vis_motion)
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/Skeletonize_{self.vis_counter:04}.png',
-                   self.apply_data(frame, motion))
+                   self.apply_data(frame, vis_motion))
 
 
 class Erosion(ProcessingVisualization):
     def make_visualization(self, frame, motion):
-        motion = (motion > 0.1) * 255
-        motion = closing(motion, square(3))
+        vis_motion = (motion > 0.1) * 255
+        vis_motion = closing(vis_motion, square(3))
         for i in range(4):
             cv.imwrite(f'{self.vis_path}/{self.motion_type}/Erosion_{self.vis_counter:04}_{i}.png',
-                       self.apply_data(frame, motion / 255))
-            motion = erosion(motion, square(2))
+                       self.apply_data(frame, vis_motion / 255))
+            vis_motion = erosion(vis_motion, square(2))
 
 
 class BoundingBoxes(ProcessingVisualization):
     def make_visualization(self, frame, bb):
         image = np.array(frame)
-        bb_coor = bb.drop([4], axis=1).to_numpy()
-        objects = torch.from_numpy(bb_coor)
-        objects[:, 2:] += objects[:, :2]
+        bb_coor = bb.drop([4, 5], axis=1).to_numpy()
+        objects = torch.from_numpy(bb_coor) * 128
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
         result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
         result.save(f'{self.vis_path}/BoundingBox/{self.vis_counter:04}.png')
+
+
+class ZWhereZPres(ProcessingVisualization):
+    def make_visualization(self, frame, motion):
+        z_pres, z_where = process_motion_to_latents(frame, motion)
+        z_where = z_where[z_pres.squeeze() > 0.5]
+        image = np.array(frame)
+        z_where[:, 2:] += 1
+        z_where[:, 2:] /= 2
+        z_where[:, 0] *= 160
+        z_where[:, 2] *= 160
+        z_where[:, 1] *= 210
+        z_where[:, 3] *= 210
+        objects = torch.zeros_like(z_where)
+        objects[:, :2] = z_where[:, 2:] - z_where[:, :2] / 2
+        objects[:, 2:] = z_where[:, 2:] + z_where[:, :2] / 2
+        torch_img = torch.from_numpy(image).permute(2, 0, 1)
+        bb_img = draw_bb(torch_img, objects, colors=['green'] * len(objects))
+        result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
+        result.save(f'{self.vis_path}/{self.motion_type}/z_where_{self.vis_counter:04}.png')
+        to_G_x = 160 // self.G
+        to_G_y = 210 // self.G
+        grid_flow = z_pres.numpy().reshape((self.G, self.G)).repeat(to_G_x, axis=1).repeat(to_G_y, axis=0)
+        vis_frame = frame[:grid_flow.shape[0], :grid_flow.shape[1]]
+        cv.imwrite(f'{self.vis_path}/{self.motion_type}/z_pres_{self.vis_counter:04}.png',
+                   self.apply_data(vis_frame, grid_flow))
 
 
 def unique_color(color):
@@ -125,17 +291,19 @@ def unique_color(color):
     Computes a unique value for uint8 array, e.g. for identifying the input color to make variance computation easy
     :param color: nd.array<n>
     """
-    return sum([255**i * c for i, c in enumerate(color)])
+    return sum([255 ** i * c for i, c in enumerate(color)])
 
+
+# Deprecated. Only for 128x128
 class FlowBoundingBox(ProcessingVisualization):
 
     def make_visualization(self, frame, motion):
-        motion = motion > motion.mean()
-        motion = closing(motion, square(3))
-        motion = (motion * 255).astype(np.uint8)
+        vis_motion = motion > motion.mean()
+        vis_motion = closing(vis_motion, square(3))
+        vis_motion = (vis_motion * 255).astype(np.uint8)
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/{self.__class__.__name__}_motion_{self.vis_counter:04}.png',
-                   motion)
-        canny_output = cv.Canny(motion, 100, 200)  # Parameters irrelevant for our binary case
+                   vis_motion)
+        canny_output = cv.Canny(vis_motion, 100, 200)  # Parameters irrelevant for our binary case
         contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
         contours = contours[0] if len(contours) == 2 else contours[1]
         z_pres = np.zeros((16, 16))
@@ -153,6 +321,7 @@ class FlowBoundingBox(ProcessingVisualization):
                    data)
 
 
+# Deprecated. Only for 128x128
 class IteratedCentroidSelection(ProcessingVisualization):
     def __init__(self, vis_path, motion_type, grid_width=8,
                  kernel_params=np.linspace(0, 0.5, 8), min_object_flow_threshold=0.07, **kwargs):

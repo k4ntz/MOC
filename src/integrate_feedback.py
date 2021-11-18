@@ -1,6 +1,6 @@
 from engine.utils import get_config
 from model import get_model
-from utils import Checkpointer
+from augmentation import Checkpointer
 import os.path as osp
 import torch
 from tqdm import tqdm

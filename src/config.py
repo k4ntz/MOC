@@ -26,6 +26,7 @@ cfg = CfgNode({
 
     # Dataset to use
     'dataset': 'OBJ3D_LARGE',
+    'dataset_style': 'space_like',
 
     'dataset_roots': {
         'ATARI': '../data/ATARI',
@@ -99,8 +100,10 @@ cfg = CfgNode({
 })
 
 from model.space.arch import arch
+from model.low_res_space.lr_arch import lr_arch
 from eval.eval_cfg import eval_cfg
 
 # For these two, please go to the corresponding file
 cfg.arch = arch
+cfg.lr_arch = lr_arch
 cfg.eval_cfg = eval_cfg

@@ -22,19 +22,22 @@ import matplotlib.pyplot as plt
 
 def grid_mult_img(grid, imgs, target_shape, scaling=4):
     grid = grid.reshape(target_shape)
-    grid = grid.repeat_interleave(8, dim=2).repeat_interleave(8, dim=3)
-    grid = imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
+    to_G = imgs.shape[2] // grid.shape[2]
+    grid = grid.repeat_interleave(to_G, dim=2).repeat_interleave(to_G, dim=3)
+    vis_imgs = (imgs + 0.3) / 1.3
+    grid = vis_imgs * (scaling * grid + 1) / 4  # Intended oversaturation for visualization
     return make_grid(grid, 4, normalize=False, pad_value=1)
 
 
 def grid_z_where_vis(z_where, imgs, z_pres, scaling=4):
+    vis_imgs = (imgs + 0.3) / 1.3
     boxes_batch = convert_to_boxes(z_where, z_pres.squeeze(), z_pres.squeeze(), with_conf=False)
-    grid = torch.zeros_like(imgs)[:, 0:1]
+    grid = torch.zeros_like(vis_imgs)[:, 0:1]
     for i, boxes in enumerate(boxes_batch):
         for box in boxes:
             y_min, y_max, x_min, x_max = [int(e * 128) for e in box]
             grid[i][0][y_min:y_max, x_min:x_max] = 1
-    grid = imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
+    grid = vis_imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
     return make_grid(grid, 4, normalize=False, pad_value=1)
 
 class SpaceVis:
@@ -216,7 +219,7 @@ def draw_image_bb(model, cfg, dataset, global_step, num_batch):
     loss, log = model(data, motion_z_pres, motion_z_where, global_step)
     bb_path = f"{cfg.dataset_roots.ATARI}/{cfg.gamelist[0]}/train/bb"
     rgb_folder_src = f"{cfg.dataset_roots.ATARI.replace('space_like', 'rgb')}/{cfg.gamelist[0]}/train"
-    boxes_gt, boxes_gt_moving, _ = read_boxes(bb_path, 128, indices=indices)
+    boxes_gt, boxes_gt_moving, _ = read_boxes(bb_path, indices=indices)
     boxes_pred = []
     z_where, z_pres_prob = log['z_where'][2:num_batch * 4:4], log['z_pres_prob'][2:num_batch * 4:4]
     z_where = z_where.detach().cpu()

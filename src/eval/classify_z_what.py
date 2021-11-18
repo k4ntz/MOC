@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from sklearn.linear_model import LogisticRegression, LinearRegression, SGDClassifier
+from sklearn.linear_model import LogisticRegression, LinearRegression, SGDClassifier, RidgeClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
 import warnings
@@ -14,22 +15,10 @@ import os
 from sklearn.neighbors import KNeighborsClassifier
 from dataset import get_label_list
 from collections import Counter
+import numpy as np
 
 N_NEIGHBORS = 24
 DISPLAY_CENTROIDS = True
-
-warnings.filterwarnings("ignore", category=UserWarning)
-import argparse
-import numpy as np
-
-base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
-                       "pinky": (198, 89, 179), "blinky": (200, 72, 72),
-                       "pacman": (210, 164, 74), "fruit": (184, 50, 50),
-                       "save_fruit": (144, 10, 10),
-                       "white_ghost": (214, 214, 214),
-                       "blue_ghost": (66, 114, 194), "score0": (200, 50, 200),
-                       "life": (70, 210, 70), "life2": (20, 150, 20), "no_label": (160, 160, 160)
-                       }
 
 
 def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
@@ -74,8 +63,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     for training_objects_per_class in [1, 4, 16, 64]:
         current_train_sample = torch.cat([z_what_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         current_train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
-        clf = LogisticRegression()
-
+        clf = RidgeClassifier()
         clf.fit(current_train_sample, current_train_labels)
         acc = clf.score(test_x, test_y)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
@@ -131,18 +119,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
             if torch.numel(idx) == 0:
                 continue
             y_idx = y[idx] if torch.numel(idx) > 1 else [[y[idx]]]
-            if "pacman" in label_list:
-                colr = [np.array(base_objects_colors[label_list[relevant_labels[i]]]) / 255]
-                try:
-                    edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign
-                                   in
-                                   y_idx]
-                except:
-                    print("=======================ERROR:", idx, y[idx], y)
-
-            else:
-                colr = colors[relevant_labels[i]]
-                edge_colors = [colors[centroid_label[assign[0]]] for assign in y[idx]]
+            colr = colors[relevant_labels[i]]
+            edge_colors = [colors[centroid_label[assign[0]]] for assign in y_idx]
             ax.scatter(z_what_emb[:, 0][idx].squeeze()[:1],
                        z_what_emb[:, 1][idx].squeeze()[:1],
                        c=colr, label=label_list[relevant_labels[i]].replace("_", " "),
@@ -181,17 +159,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
             if torch.numel(idx) == 0:
                 continue
             y_idx = y[idx] if torch.numel(idx) > 1 else [[y[idx]]]
-            if "pacman" in label_list:
-                colr = [np.array(base_objects_colors[label_list[relevant_labels[i]]]) / 255]
-                try:
-                    edge_colors = [np.array(base_objects_colors[label_list[centroid_label[assign[0]]]]) / 255 for assign
-                                   in y_idx]
-                except:
-                    print("=======================ERROR:", idx, y[idx], y, y_idx)
-                    raise
-            else:
-                colr = colors[relevant_labels[i]]
-                edge_colors = [colors[centroid_label[assign[0]]] for assign in y_idx]
+            colr = colors[relevant_labels[i]]
+            edge_colors = [colors[centroid_label[assign[0]]] for assign in y_idx]
             axs[0].scatter(z_what_emb[:, 0][idx].squeeze(),
                            z_what_emb[:, 1][idx].squeeze(),
                            c=colr,
@@ -205,10 +174,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         centroid_emb = pca.transform(centroids)
 
         for c_emb, cl in zip(centroid_emb, centroid_label):
-            if "pacman" in label_list:
-                colr = [np.array(base_objects_colors[label_list[cl]]) / 255]
-            else:
-                colr = colors[cl]
+            colr = colors[cl]
             axs[0].scatter([c_emb[0]],
                            [c_emb[1]],
                            c=colr,

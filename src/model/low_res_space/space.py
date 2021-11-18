@@ -2,19 +2,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from attrdict import AttrDict
-from .arch import arch
-from .fg import SpaceFg
-from .bg import SpaceBg
+from .lr_arch import lr_arch as arch
+from .fg import LrSpaceFg
+from .bg import LrSpaceBg
 import time
 
 
-class Space(nn.Module):
+class LrSpace(nn.Module):
 
     def __init__(self):
         nn.Module.__init__(self)
 
-        self.fg_module = SpaceFg()
-        self.bg_module = SpaceBg()
+        self.fg_module = LrSpaceFg()
+        self.bg_module = LrSpaceBg()
 
     # @profile
     def forward(self, x, motion, motion_z_pres, motion_z_where, global_step):

@@ -33,7 +33,8 @@ def get_config():
         cfg.merge_from_file(args.config_file)
     if args.opts:
         cfg.merge_from_list(args.opts)
-
+    if cfg.model.lower() in ['lrspace', "lrtcspace", "tclrspace"]:
+        cfg.arch = cfg.lr_arch
     # Use config file name as the default experiment name
     if cfg.exp_name == '':
         if args.config_file:

@@ -1,6 +1,8 @@
 import numpy as np
 from PIL import Image
 import cv2 as cv
+import torch
+from .motion_processing import process_motion_to_latents, save_motion
 
 
 def save(trail, output_path, visualizations=None, median=None):
@@ -32,6 +34,6 @@ def save_frame(frame, median, output_path, visualizations=None):
     median_delta = np.max(median_delta, axis=-1)
     delta_max = median_delta.max()
     median_delta = median_delta / delta_max if delta_max > 0 else median_delta
-    np.save(output_path, median_delta)
+    save_motion(frame, median_delta, output_path)
     for vis in visualizations:
         vis.save_vis(frame, median_delta)

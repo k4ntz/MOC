@@ -11,7 +11,7 @@ from .eval_cfg import eval_cfg
 from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
-from post_eval import evaluate_z_what
+from .classify_z_what import evaluate_z_what
 import PIL
 from torchvision.utils import draw_bounding_boxes as draw_bb
 import os
@@ -65,6 +65,7 @@ class SpaceEval:
 
 
     @torch.no_grad()
+    # @profile
     def train_eval(self, model, valset, bb_path, writer, global_step, device, checkpoint, checkpointer, cfg):
         """
         Evaluation during training. This includes:
@@ -107,7 +108,7 @@ class SpaceEval:
                 checkpointer.save_best('AP0.5_relevant', APs[len(APs) // 2], checkpoint, min_is_better=True)
                 checkpointer.save_best('error_rate_relevant', results['error_rate_relevant'], checkpoint, min_is_better=True)
                 if cfg.train.log:
-                    results = {k2: v2[len(v2) // 2] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for k2, v2, in
+                    results = {k2: v2[len(v2) // 4] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for k2, v2, in
                                results.items()}
                     pp = pprint.PrettyPrinter(depth=2)
                     print("AP Result:")
@@ -128,11 +129,12 @@ class SpaceEval:
         losses = []
         logs = []
         with torch.no_grad():
-            for imgs, motion_z_pres, motion_z_where in dataloader:
+            for imgs, motion, motion_z_pres, motion_z_where in dataloader:
                 imgs = imgs.to(device)
+                motion = motion.to(device)
                 motion_z_pres = motion_z_pres.to(device)
                 motion_z_where = motion_z_where.to(device)
-                loss, log = model(imgs, motion_z_pres, motion_z_where, global_step)
+                loss, log = model(imgs, motion, motion_z_pres, motion_z_where, global_step)
                 losses.append(loss)
                 logs.append(log)
         model.train()
@@ -208,6 +210,7 @@ class SpaceEval:
                               result_dict[f'adjusted_rand_score'], global_step)
         return results
 
+    # @profile
     @torch.no_grad()
     def eval_clustering(self, logs, dataset, cfg):
         """
@@ -270,11 +273,11 @@ class SpaceEval:
             iou_thresholds = np.linspace(0.05, 0.95, 19)
         boxes_gt_types = ['all', 'moving', 'relevant']
         indices = list(range(num_samples))
-        boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, 128, indices))}
+        boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, indices=indices))}
         boxes_pred = []
         boxes_relevant = []
 
-        rgb_folder_src = f"../aiml_atari_data2/rgb/Pong-v0/validation"
+        rgb_folder_src = f"../aiml_atari_data_mid/rgb/Pong-v0/validation"
         rgb_folder = f"../aiml_atari_data2/with_bounding_boxes/Pong-v0/sample"
         num_batches = eval_cfg.train.num_samples.cluster // eval_cfg.train.batch_size
 
@@ -307,13 +310,13 @@ class SpaceEval:
         #         gt_r_tensor = torch.FloatTensor(gt_r) * 128
         #         gt_r_tensor = torch.index_select(gt_r_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
         #         bb_img = torch_img
-        #         # bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
+        #         bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
         #         # bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
         #         # bb_img = draw_bb(bb_img, gt_r_tensor, colors=["yellow"] * len(gt_r_tensor))
         #         bb_img = draw_bb(bb_img, pred_tensor, colors=["green"] * len(pred_tensor))
-        #         bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
+        #         # bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
         #         bb_img = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
-        #         bb_img.save(f'{rgb_folder}/gt_moving_{idx:05}_{i}.png')
+        #         bb_img.save(f'{rgb_folder}/gt_moving_p{idx:05}_{i}.png')
         #         print(f'{rgb_folder}/gt_moving_{idx:05}.png')
 
         result = {}

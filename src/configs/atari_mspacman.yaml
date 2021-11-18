@@ -1,6 +1,6 @@
 seed: 1
-model: 'SPACE'
-exp_name: mspacman_atari
+model: 'TcSpace'
+exp_name: mspacman
 resume: false
 load_time_consistency: true
 add_flow: true
@@ -18,23 +18,24 @@ parallel: true
 device_ids: [4, 5, 6, 7]
 device: 'cuda:4'
 
-logdir: '../output/logs/tmp'
-checkpointdir: '../output/checkpoints/tmp'
+logdir: '../output/logs/mid'
+checkpointdir: '../output/checkpoints/mid'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
+dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data/space_like'
+  ATARI: '../aiml_atari_data_mid/space_like'
 
 train:
   batch_size: 16
-  max_epochs: 100
-  max_steps: 50003
+  max_epochs: 10000
+  max_steps: 5002
   print_every: 200
   save_every: 500
-  num_workers: 4
+  num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -42,7 +43,7 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 3e-5
+      lr: 5e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -71,9 +72,8 @@ arch:
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
-  K: 3
+  K: 2
   bg_sigma: 0.10
-  boundary_loss: false
 
 gamelist: [
     # 'Atlantis-v0',
