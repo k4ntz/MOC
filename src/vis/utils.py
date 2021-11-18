@@ -118,4 +118,3 @@ def bbox_in_one(x, z_pres, z_where_scale, z_where_shift, gbox=gbox):
 # Times 10 to prevent index out of bound.
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 10
 
-

@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import RelaxedBernoulli
 from torch.distributions.utils import broadcast_all
-
+import torch.cuda
 
 def spatial_transform(image, z_where, out_dims, inverse=False):
     """ spatial transformer network used to scale and shift input according to z_where in:
@@ -33,7 +33,7 @@ def spatial_transform(image, z_where, out_dims, inverse=False):
 def linear_annealing(device, step, start_step, end_step, start_value, end_value):
     """
     Linear annealing
-    
+
     :param x: original value. Only for getting device
     :param step: current global step
     :param start_step: when to start changing value
@@ -49,7 +49,7 @@ def linear_annealing(device, step, start_step, end_step, start_value, end_value)
         x = torch.tensor(start_value + slope * (step - start_step), device=device)
     else:
         x = torch.tensor(end_value, device=device)
-    
+
     return x
 
 
@@ -57,18 +57,18 @@ class NumericalRelaxedBernoulli(RelaxedBernoulli):
     """
     This is a bit weird. In essence it is just RelaxedBernoulli with logit as input.
     """
-    
+
     def rsample(self, sample_shape=torch.Size()):
         return self.base_dist.rsample(sample_shape)
-    
+
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         logits, value = broadcast_all(self.logits, value)
         diff = logits - value.mul(self.temperature)
-        
+
         out = self.temperature.log() + diff - 2 * diff.exp().log1p()
-        
+
         return out
 
 
@@ -82,7 +82,7 @@ def kl_divergence_bern_bern(z_pres_logits, prior_pres_prob, eps=1e-15):
     z_pres_probs = torch.sigmoid(z_pres_logits)
     kl = z_pres_probs * (torch.log(z_pres_probs + eps) - torch.log(prior_pres_prob + eps)) + \
          (1 - z_pres_probs) * (torch.log(1 - z_pres_probs + eps) - torch.log(1 - prior_pres_prob + eps))
-    
+
     return kl
 
 
@@ -99,7 +99,7 @@ def get_boundary_kernel_new(kernel_size=32, boundary_width=6):
     filter[:, :] = 1.0 / (kernel_size ** 2)
     # Set center to zero
     filter[boundary_width:kernel_size - boundary_width, boundary_width:kernel_size - boundary_width] = 0.0
-    
+
     return filter
 
 
@@ -110,7 +110,7 @@ def get_boundary_kernel(kernel_size=32, sigma=20, channels=1, beta=1.0):
     # Create a x, y coordinate grid of shape (kernel_size, kernel_size, 2)
     x_coord = torch.arange(kernel_size)
     boundary_kernel = x_coord.repeat(kernel_size).view(kernel_size, kernel_size).float()
-    
+
     part_sum = 1.0
     # boundary = int((1 - math.sqrt(2) / 2) * kernel_size / 2)
     boundary = int((kernel_size - sigma) / 2)
@@ -120,14 +120,14 @@ def get_boundary_kernel(kernel_size=32, sigma=20, channels=1, beta=1.0):
     boundary_kernel.data[
     boundary: kernel_size - boundary, boundary: kernel_size - boundary
     ] = part_sum / (num_boundary + num_center)
-    
+
     # Reshape to 2d depthwise convolutional weight
     boundary_kernel = boundary_kernel.view(1, 1, kernel_size, kernel_size)
     boundary_kernel = boundary_kernel.repeat(channels, 1, 1, 1)
-    
+
     boundary_filter = torch.nn.Conv2d(in_channels=channels, out_channels=channels,
                                       kernel_size=kernel_size, groups=channels, bias=False)
-    
+
     boundary_filter.weight.data = boundary_kernel
     boundary_filter.weight.requires_grad = False
     return boundary_filter

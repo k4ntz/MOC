@@ -13,7 +13,7 @@ from torch.nn.utils import clip_grad_norm_
 import shutil
 from tqdm import tqdm
 
-def train(cfg):
+def train(cfg, rtpt_active=True):
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -79,14 +79,6 @@ def train(cfg):
             loss = loss.mean()
             optimizer_fg.zero_grad()
             optimizer_bg.zero_grad()
-            loss.backward()
-            if cfg.train.clip_norm:
-                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
-
-            optimizer_fg.step()
-
-            # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
-            optimizer_bg.step()
 
             end = time.perf_counter()
             batch_time = end - start
@@ -121,6 +113,14 @@ def train(cfg):
                                      checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
 
+            loss.backward()
+            if cfg.train.clip_norm:
+                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
+
+            optimizer_fg.step()
+
+            # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
+            optimizer_bg.step()
             start = time.perf_counter()
             global_step += 1
             pbar.update(1)

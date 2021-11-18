@@ -15,7 +15,6 @@ def identity_print(v):
 def thousand_print(v):
     return f'{v // 1000}k'
 
-
 def hundred_print(v):
     return f'{v / 1000:.1f}k'
 
@@ -26,7 +25,9 @@ def multi_train(cfg):
     #             'fi': ('arch.flow_input', [False], boolean_print),
     #             'seed': ('seed', range(3), identity_print)
     #         },
-    # Seed Experiment
+
+    # experiment_sets = [
+    #     # Seed Experiment
     #     {
     #         'seed': ('seed', range(5), identity_print),
     #     },
@@ -52,11 +53,13 @@ def multi_train(cfg):
     #         'aow': ('arch.area_object_weight', np.logspace(1, 3, 3), lambda v: f'{v:.1f}'),
     #         'fow': ('arch.full_object_weight', [1000, 5000, 20000], thousand_print),
     #     }
+    # ]
 
     experiment_sets = [
+        # Seed Experiment
         {
-            'seed': ('seed', range(5), identity_print),
-        }
+            'seed': ('seed', range(0, 3), identity_print),
+        },
     ]
     base_exp_name = cfg.exp_name
     total_experiments = sum(len(list(itertools.product(*[v[1] for v in experiment_set.values()])))
@@ -74,8 +77,8 @@ def multi_train(cfg):
             conf_str = [config_line[2](c) for c, config_line in zip(conf, experiment_set.values())]
             cfg.merge_from_list(
                 ['exp_name', base_exp_name + "_" + "_".join([f'{para}{v}' for para, v in zip(params_short, conf_str)])])
-            print("Starting experiment with the following cfg:", "==========",
+            print("Starting experiment with the following cfg:",  "==========",
                   cfg.exp_name, f"[{i}/{total_experiments}]", "==========")
-            train(cfg)
+            train(cfg, rtpt_active=False)
             i += 1
             rtpt.step()

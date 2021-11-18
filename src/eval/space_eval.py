@@ -11,7 +11,7 @@ from .eval_cfg import eval_cfg
 from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
-from post_eval import evaluate_z_what
+from .classify_z_what import evaluate_z_what
 import PIL
 from torchvision.utils import draw_bounding_boxes as draw_bb
 import os
@@ -65,6 +65,7 @@ class SpaceEval:
 
 
     @torch.no_grad()
+    # @profile
     def train_eval(self, model, valset, bb_path, writer, global_step, device, checkpoint, checkpointer, cfg):
         """
         Evaluation during training. This includes:
@@ -107,7 +108,7 @@ class SpaceEval:
                 checkpointer.save_best('AP0.5_relevant', APs[len(APs) // 2], checkpoint, min_is_better=True)
                 checkpointer.save_best('error_rate_relevant', results['error_rate_relevant'], checkpoint, min_is_better=True)
                 if cfg.train.log:
-                    results = {k2: v2[len(v2) // 2] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for k2, v2, in
+                    results = {k2: v2[len(v2) // 4] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for k2, v2, in
                                results.items()}
                     pp = pprint.PrettyPrinter(depth=2)
                     print("AP Result:")
@@ -206,6 +207,7 @@ class SpaceEval:
                               result_dict[f'adjusted_rand_score'], global_step)
         return results
 
+    # @profile
     @torch.no_grad()
     def eval_clustering(self, logs, dataset, cfg):
         """
@@ -220,7 +222,7 @@ class SpaceEval:
         z_encs = []
         all_labels = []
         all_labels_moving = []
-        batch_size = eval_cfg.train.batch_size
+        virtual_batch_size = eval_cfg.train.batch_size // 4
         for i, img in enumerate(logs):
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
             z_pres_prob = z_pres_prob.squeeze()
@@ -229,9 +231,9 @@ class SpaceEval:
             z_enc = z_what[z_pres]
             boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
             z_encs.extend(z_enc)
-            all_labels.extend(dataset.get_labels(i * batch_size // 4, (i + 1) * batch_size // 4, boxes_batch))
+            all_labels.extend(dataset.get_labels(i * virtual_batch_size, (i + 1) * virtual_batch_size, boxes_batch))
             all_labels_moving.extend(
-                dataset.get_labels_moving(i * batch_size // 4, (i + 1) * batch_size // 4, boxes_batch))
+                dataset.get_labels_moving(i * virtual_batch_size, (i + 1) * virtual_batch_size, boxes_batch))
         args = {'type': 'classify', 'method': 'kmeans', 'indices': None, 'dim': 2, 'folder': 'validation',
                 'edgecolors': False}
         if z_encs:
@@ -267,14 +269,14 @@ class SpaceEval:
         if iou_thresholds is None:
             iou_thresholds = np.linspace(0.05, 0.95, 19)
         boxes_gt_types = ['all', 'moving', 'relevant']
-        indices = list(range(num_samples // 4))
-        boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, 128, indices))}
+        indices = list(range(num_samples))
+        boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, indices=indices))}
         boxes_pred = []
         boxes_relevant = []
 
-        rgb_folder_src = f"../aiml_atari_data2/rgb/Pong-v0/validation"
+        rgb_folder_src = f"../aiml_atari_data_mid/rgb/Pong-v0/validation"
         rgb_folder = f"../aiml_atari_data2/with_bounding_boxes/Pong-v0/sample"
-        num_batches = eval_cfg.train.num_samples.ap // eval_cfg.train.batch_size
+        num_batches = eval_cfg.train.num_samples.cluster // eval_cfg.train.batch_size
 
         for img in logs[:num_batches]:
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
@@ -282,7 +284,7 @@ class SpaceEval:
             z_pres_prob = z_pres_prob.detach().cpu().squeeze()
             z_pres = z_pres_prob > 0.5
             boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
-            boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch))
+            boxes_relevant.extend(dataset.filter_relevant_boxes(boxes_batch, boxes_gts['all']))
             boxes_pred.extend(boxes_batch)
 
         # print('Drawing bounding boxes for eval...')
@@ -305,13 +307,13 @@ class SpaceEval:
         #         gt_r_tensor = torch.FloatTensor(gt_r) * 128
         #         gt_r_tensor = torch.index_select(gt_r_tensor, 1, torch.LongTensor([0, 2, 1, 3]))
         #         bb_img = torch_img
-        #         # bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
+        #         bb_img = draw_bb(torch_img, gt_tensor, colors=["red"] * len(gt_tensor))
         #         # bb_img = draw_bb(bb_img, gt_m_tensor, colors=["blue"] * len(gt_m_tensor))
         #         # bb_img = draw_bb(bb_img, gt_r_tensor, colors=["yellow"] * len(gt_r_tensor))
         #         bb_img = draw_bb(bb_img, pred_tensor, colors=["green"] * len(pred_tensor))
-        #         bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
+        #         # bb_img = draw_bb(bb_img, rel_tensor, colors=["white"] * len(rel_tensor))
         #         bb_img = Image.fromarray(bb_img.permute(2, 1, 0).numpy())
-        #         bb_img.save(f'{rgb_folder}/gt_moving_{idx:05}_{i}.png')
+        #         bb_img.save(f'{rgb_folder}/gt_moving_p{idx:05}_{i}.png')
         #         print(f'{rgb_folder}/gt_moving_{idx:05}.png')
 
         result = {}

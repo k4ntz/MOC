@@ -1,6 +1,6 @@
 seed: 1
 model: 'SPACE'
-exp_name: pong_baseline
+exp_name: mspacman_baseline
 resume: false
 
 resume_ckpt: '../pretrained/atari_joint.pth'
@@ -21,20 +21,19 @@ checkpointdir: '../output/checkpoints/mid'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
-dataset_style: "_128"
+dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
   ATARI: '../aiml_atari_data_mid/space_like'
 
-
 train:
   batch_size: 16
-  max_epochs: 1000
-  max_steps: 5000
+  max_epochs: 10000
+  max_steps: 5002
   print_every: 200
   save_every: 500
-  num_workers: 4
+  num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -50,9 +49,8 @@ train:
 arch:
   G: 16
   fg_sigma: 0.20
-
-  z_pres_start_step: 0
-  z_pres_end_step: 8000
+  z_pres_start_step: 1000
+  z_pres_end_step: 5000
   z_pres_start_value: 0.1
   z_pres_end_value: 1e-10
 
@@ -73,5 +71,14 @@ arch:
   bg_sigma: 0.10
 
 gamelist: [
-    'Pong-v0',
+    # 'Atlantis-v0',
+    # 'Asterix-v0',
+    # 'Carnival-v0',
+    # 'DoubleDunk-v0',
+    # 'Kangaroo-v0',
+    # 'MontezumaRevenge-v0',
+    'MsPacman-v0',
+    # 'Pooyan-v0',
+    # 'Qbert-v0',
+    # 'SpaceInvaders-v0',
     ]

@@ -23,7 +23,8 @@ cfg = CfgNode({
     
     # Dataset to use
     'dataset': 'OBJ3D_LARGE',
-    
+    'dataset_style': '_128',
+
     'dataset_roots': {
         'ATARI': '../data/ATARI',
         'OBJ3D_LARGE': '../data/OBJ3D_LARGE',
