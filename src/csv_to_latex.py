@@ -21,6 +21,8 @@ metric_name_translator = {
     'baseline': "Baseline",
     'relevant_': "Relevant ",
     'space_invaders': "Space Invaders",
+    'pong': "Pong",
+    'mspacman': "Ms Pacman",
 }
 
 
