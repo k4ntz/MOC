@@ -6,11 +6,11 @@ from collections import defaultdict
 import matplotlib.colors as mcolors
 import re
 
-RESULT_TEX = os.path.join("D:", "results", "e", "mid", "result.tex")
+RESULT_TEX = os.path.join("D:", "results", "e", "pt", "result.tex")
 
 sns.set_theme()
-data_path = os.path.join("D:", "logs", "e", "mid")
-result_path = os.path.join("D:", "results", "e", "mid")
+data_path = os.path.join("D:", "logs", "e", "pt")
+result_path = os.path.join("D:", "results", "e", "pt")
 
 metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI',
@@ -18,7 +18,7 @@ metric_name_translator = {
     'ap_avg': "Avg AP",
     'aow0.0': "Motion",
     'aow10.0': "Motion + OC",
-    'baseline': "Baseline",
+    'baseline': "Baseline",t
     'relevant_': "Relevant ",
     'space_invaders': "Space Invaders",
     'pong': "Pong",
@@ -161,7 +161,7 @@ def table_by_metric(experiment_groups, columns, joined_df, at=None, caption=None
             content.append(" & ".join(
                 [bf(translate(game))] + [
                     f'{joined_df.loc[joined_df["global_step"] == idx][game + "_" + expi + "_" + metric + "_mean"].item():.3f} '
-                    f'\\pm {joined_df.loc[joined_df["global_step"] == idx][game + "_" + expi + "_" + metric + "_std"].item():.3f}'
+                    f'$\\pm$ {joined_df.loc[joined_df["global_step"] == idx][game + "_" + expi + "_" + metric + "_std"].item():.3f}'
                     for expi in experiment_groups[game] for idx in at]))
         with open(RESULT_TEX, "a") as tex:
             tex.write(table_metric_tex.format(header, " \\\\ \n".join(content), caption, ";".join([metric]),
@@ -194,11 +194,11 @@ def main():
                                                                                                           1][2:])
     joined_df = prepare_mean_std(experiments)
     experiment_groups = sub_group_by(experiments, select_game)
-    mutual_info_columns = ["relevant_adjusted_mutual_info_score", "relevant_few_shot_accuracy_cluster_nn",
-                           "relevant_ap_avg"]
+    mutual_info_columns = ["relevant_adjusted_rand_score", "relevant_accuracy",
+                           "relevant_ap_avg", "relevant_few_shot_accuracy_with_4"]
     table_by_metric(experiment_groups, mutual_info_columns, joined_df)
-    line_plot(experiments, "all_perfect", joined_df)
-    line_plot(experiments, "relevant_perfect", joined_df)
+    line_plot(experiments, "relevant_ap_avg", joined_df)
+    line_plot(experiments, "relevant_accuracy", joined_df)
 
 
 if __name__ == '__main__':

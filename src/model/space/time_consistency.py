@@ -13,6 +13,7 @@ import time
 # TODO: Investigate Time, i.e. saving preprocessing steps when training
 # Low IOU might be enough, eval metric
 # alpha map allows more precise influence of motion in pixel space
+# z_pres by motion signal, squared/exp with low might?
 class TcSpace(nn.Module):
 
     def __init__(self):
