@@ -13,7 +13,7 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [0, 1]
+device_ids: [0, 1, 2, 3]
 device: 'cuda:0'
 
 logdir: '../output/logs/mid'
@@ -71,7 +71,7 @@ arch:
   fix_alpha_value: 0.2
   boundary_loss: false
 
-  K: 3
+  K: 1
   bg_sigma: 0.10
 
 gamelist: [
