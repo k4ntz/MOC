@@ -1,11 +1,11 @@
 seed: 1
-model: 'TcSpace'
-exp_name: mspacman_pt
-resume: true
+model: 'LrTcSpace'
+exp_name: mspacman_winter_lr
+resume: false
 load_time_consistency: true
 add_flow: true
-
-resume_ckpt: '../output/checkpoints/mid/pacman_pretrained.pth'
+save_relevant_objects: false
+resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
 # '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 #
@@ -16,36 +16,36 @@ resume_ckpt: '../output/checkpoints/mid/pacman_pretrained.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
-device: 'cuda:0'
+device_ids: [2, 3]
+device: 'cuda:2'
 
-logdir: '../output/logs/mid'
-checkpointdir: '../output/checkpoints/mid'
+logdir: '../output/logs/winter'
+checkpointdir: '../output/checkpoints/winter'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
-dataset_style: '_128'
+dataset_style: '_64'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_mid/space_like'
+  ATARI: '../aiml_atari_data_winter/space_like'
 
 train:
   log: true
-  batch_size: 16
+  batch_size: 8
   max_epochs: 10000
-  max_steps: 160502
-  print_every: 100
-  save_every: 100
+  max_steps: 3000
+  print_every: 200
+  save_every: 200
   num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
-  eval_every: 100
+  eval_every: 200
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 1e-5
+      lr: 2e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -55,7 +55,7 @@ arch:
   motion: true
   motion_kind: 'mode'
   G: 16
-  fg_sigma: 0.16
+  fg_sigma: 0.20
   z_pres_start_step: 1000
   z_pres_end_step: 5000
   z_pres_start_value: 0.1
@@ -74,7 +74,7 @@ arch:
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
-  K: 2
+  K: 3
   bg_sigma: 0.10
 
 gamelist: [

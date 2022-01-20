@@ -1,7 +1,7 @@
 seed: 1
-model: 'SPACE'
-exp_name: carnival_atari_aow1_cosTrue
-resume: true
+model: 'TcSpace'
+exp_name: carnival
+resume: false
 load_time_consistency: false
 add_flow: false
 
@@ -13,28 +13,28 @@ resume_ckpt: '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 # 'result_checkpoints/base_z_what_model_000078001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 parallel: true
-device_ids: [0, 1]
+device_ids: [0, 1, 2, 3]
 device: 'cuda:0'
 
-logdir: '../output/logs/hyper'
-checkpointdir: '../output/checkpoints/hyper'
+logdir: '../output/logs/mid'
+checkpointdir: '../output/checkpoints/mid'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
+dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  #ATARI: '../data/ATARI'
-  ATARI: '../aiml_atari_data/space_like'
+  ATARI: '../aiml_atari_data_mid/space_like'
 
 
 train:
   batch_size: 16
   max_epochs: 100
-  max_steps: 180003
+  max_steps: 5000
   print_every: 200
   save_every: 500
-  num_workers: 4
+  num_workers: 16
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -42,17 +42,19 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-5
+      lr: 1e-5
     bg:
       optim: 'Adam'
-      lr: 5e-3
+      lr: 1e-3
 
 arch:
-  flow: false
+  motion_input: false
+  motion: true
+  motion_kind: 'mode'
   G: 16
   fg_sigma: 0.20
-  z_pres_start_step: 10000
-  z_pres_end_step: 15000
+  z_pres_start_step: 0
+  z_pres_end_step: 8000
   z_pres_start_value: 0.1
   z_pres_end_value: 1e-10
 
@@ -66,12 +68,11 @@ arch:
   tau_start_value: 2.5
   tau_end_value: 2.5
 
-  fix_alpha_steps: 4000
+  fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
   K: 3
   bg_sigma: 0.10
-  boundary_loss: false
 
 gamelist: [
     # 'Atlantis-v0',

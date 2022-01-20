@@ -23,7 +23,7 @@ cfg = CfgNode({
     'checkpointdir': '../output/checkpoints/',
     'evaldir': '../output/eval/',
     'demodir': '../output/demo/',
-
+    'save_relevant_objects': False,
     # Dataset to use
     'dataset': 'OBJ3D_LARGE',
     'dataset_style': 'space_like',

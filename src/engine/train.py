@@ -87,7 +87,7 @@ def train(cfg, rtpt_active=True):
 
 
     for epoch in range(start_epoch, cfg.train.max_epochs):
-        # pbar = tqdm(total=len(trainloader))
+        pbar = tqdm(total=len(trainloader))
         if end_flag:
             break
         start = time.perf_counter()
@@ -104,7 +104,6 @@ def train(cfg, rtpt_active=True):
             loss, log = model(img_stacks, motion, motion_z_pres, motion_z_where, global_step)
             # In case of using DataParallel
             loss = loss.mean()
-
             optimizer_fg.zero_grad(set_to_none=True)
             optimizer_bg.zero_grad(set_to_none=True)
 
@@ -114,7 +113,6 @@ def train(cfg, rtpt_active=True):
             metric_logger.update(data_time=data_time)
             metric_logger.update(batch_time=batch_time)
             metric_logger.update(loss=loss.item())
-
             if global_step == start_log:
                 start_log = int((start_log - base_global_step) * 1.2) + 1 + base_global_step
                 log_state(cfg, epoch, global_step, log, metric_logger)
@@ -138,7 +136,7 @@ def train(cfg, rtpt_active=True):
                 evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
                                      checkpointer, cfg)
                 print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
-            # pbar.update(1)
+            pbar.update(1)
             loss.backward()
             if cfg.train.clip_norm:
                 clip_grad_norm_(model.parameters(), cfg.train.clip_norm)

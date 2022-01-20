@@ -463,8 +463,7 @@ class ZWhatEnc(nn.Module):
             z_what: (B, D)
             z_what_post: (B, D)
         """
-        x = self.enc_cnn(x[:, :3])
-
+        x = self.enc_cnn(x)
         # (B, D), (B, D)
         z_what_mean, z_what_std = self.enc_what(x.flatten(start_dim=1)).chunk(2, -1)
         z_what_std = F.softplus(z_what_std)

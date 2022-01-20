@@ -11,7 +11,7 @@ import cv2 as cv
 from scipy import ndimage
 
 color_hist = None
-
+use_color_hist = False
 
 def set_color_hist(img):
     global color_hist
@@ -26,6 +26,8 @@ def to_inverse_count(color):
 
 
 def exciting_color_score(img, x, y, w, h):
+    if w <= 1 or h <= 1:
+        return 0
     selection = img[y:y + h, x:x + w]
     color_codes = np.apply_along_axis(unique_color, axis=2, arr=selection)
     inverse_counts = np.vectorize(to_inverse_count)(color_codes)
@@ -34,37 +36,35 @@ def exciting_color_score(img, x, y, w, h):
 
 def select(img, x, y, w, h):
     base_score = exciting_color_score(img, x, y, w, h)
+    w_ = w // 5 + 1
+    h_ = h // 5 + 1
     while w > 8:
-        left_cut_score = exciting_color_score(img, x + w // 4, y, w - w // 4, h)
+        left_cut_score = exciting_color_score(img, x + w_, y, w - w_, h)
         if left_cut_score > base_score:
-            x = x + w // 4
-            w -= w // 4
+            x = x + w_
+            w -= w_
             base_score = left_cut_score
-            if w > 30:
-                print(base_score, x, y, w, h)
         else:
             break
     while w > 8:
-        right_cut_score = exciting_color_score(img, x, y, w - w // 4, h)
+        right_cut_score = exciting_color_score(img, x, y, w - w_, h)
         if right_cut_score > base_score:
-            w -= w // 4
+            w -= w_
             base_score = right_cut_score
-            if w > 30:
-                print(base_score, x, y, w, h)
         else:
             break
     while h > 9:
-        left_cut_score = exciting_color_score(img, x, y + h // 4, w, h - h // 4)
+        left_cut_score = exciting_color_score(img, x, y + h_, w, h - h_)
         if left_cut_score > base_score:
-            y = y + h // 4
-            h -= h // 4
+            y = y + h_
+            h -= h_
             base_score = left_cut_score
         else:
             break
     while h > 9:
-        right_cut_score = exciting_color_score(img, x, y, w, h - h // 4)
+        right_cut_score = exciting_color_score(img, x, y, w, h - h_)
         if right_cut_score > base_score:
-            h -= h // 4
+            h -= h_
             base_score = right_cut_score
         else:
             break
@@ -79,7 +79,7 @@ def ring_kernel(lst):
 
 
 def save_motion(img, motion, output_path):
-    z_pres, z_where = process_motion_to_latents(img, motion)
+    _, _, z_pres, z_where = process_motion_to_latents(img, motion)
     torch.save(resize(motion, size=128),
                output_path.replace(".pt", "_128.pt"))
     torch.save(resize(motion, size=84),
@@ -91,7 +91,60 @@ def save_motion(img, motion, output_path):
 
 
 def resize(motion, size):
-    return torch.nn.functional.interpolate(torch.from_numpy(motion).float().unsqueeze(0).unsqueeze(0), size=size).squeeze()
+    return torch.nn.functional.interpolate(torch.from_numpy(motion).float().unsqueeze(0).unsqueeze(0),
+                                           size=size).squeeze()
+
+
+class RectBB():
+    def __init__(self, x, y, w, h):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.is_used = False
+
+    def touches(self, other):
+        return (self.x - 1 <= other.x <= self.x_max + 1 or other.x - 1 <= self.x <= other.x_max + 1) \
+               and \
+               (self.y - 1 <= other.y <= self.y_max + 1 or other.y - 1 <= self.y <= other.y_max + 1)
+
+    def merge(self, other):
+        return RectBB(min(self.x, other.x), min(self.y, other.y),
+                      max(self.x_max, other.x_max) - min(self.x, other.x),
+                      max(self.y_max, other.y_max) - min(self.y, other.y))
+
+    @property
+    def x_max(self):
+        return self.x + self.w
+
+    @property
+    def y_max(self):
+        return self.y + self.h
+
+    def __iter__(self):
+        return iter((self.x, self.y, self.w, self.h))
+
+    def __repr__(self):
+        return f"RectBB{self.x, self.y, self.w, self.h}"
+
+
+def merge_bbs(bbs):
+    bbs_len = len(bbs) + 1
+    next_bbs = []
+    while len(bbs) != bbs_len:
+        next_bbs = []
+        for bb in bbs:
+            if bb.is_used:
+                continue
+            cur_bb = bb
+            for other_bb in bbs:
+                if bb is not other_bb and cur_bb.touches(other_bb):
+                    cur_bb = cur_bb.merge(other_bb)
+                    other_bb.is_used = True
+            next_bbs.append(cur_bb)
+        bbs_len = len(bbs)
+        bbs = next_bbs[:]
+    return next_bbs
 
 
 def process_motion_to_latents(img, motion, G=16):
@@ -115,32 +168,34 @@ def process_motion_to_latents(img, motion, G=16):
     :return z_where: (G * G, 4), where all grid cells without z_pres == 1 only contain zero
     """
     vis_motion = motion > motion.mean()
-    vis_motion = (closing(vis_motion, disk(4)) * 255).astype(np.uint8)
+    vis_motion = (closing(vis_motion, square(3)) * 255).astype(np.uint8)
     canny_output = cv.Canny(vis_motion, 100, 200)  # Parameters irrelevant for our binary case
     contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
+    bbs = [RectBB(x, y, w, h) for x, y, w, h in [cv.boundingRect(c) for c in contours]]
+    bbs = merge_bbs(bbs)
     motion_z_pres = torch.zeros((G, G, 1))
     motion_z_where = torch.zeros((G, G, 4))
     to_G_y = 210 / G
     to_G_x = 160 / G
-    for c in contours:
-        x, y, w, h = cv.boundingRect(c)
+    for x, y, w, h in bbs:
         # One could collect background colors and prune non-objects only consisting of those colors.
         # But background might be of same color in other area
-        if False and color_hist:
+        if color_hist:
             x, y, w, h = select(img, x, y, w, h)
             if x < 0:
                 continue
+        w = min(160 - x, w)
+        h = min(210 - y, h)
         z_where_x = ((x + w / 2) / 160) * 2 - 1
         z_where_y = ((y + h / 2) / 210) * 2 - 1
         y_idx = int((y + h // 2) // to_G_y)
         x_idx = int((x + w // 2) // to_G_x)
-
         if motion_z_pres[y_idx, x_idx] == 0.0 or w / 160 * h / 210 > motion_z_where[y_idx, x_idx][:2].prod():
             motion_z_pres[y_idx, x_idx] = 1.0
             motion_z_where[y_idx, x_idx] = torch.tensor(
                 [w / 160, h / 210, z_where_x, z_where_y])
-    return motion_z_pres.reshape(G * G, -1), motion_z_where.reshape(G * G, -1)
+    return vis_motion, contours, motion_z_pres.reshape(G * G, -1), motion_z_where.reshape(G * G, -1)
 
 
 def unique_color(color):
@@ -262,7 +317,7 @@ class BoundingBoxes(ProcessingVisualization):
 
 class ZWhereZPres(ProcessingVisualization):
     def make_visualization(self, frame, motion):
-        z_pres, z_where = process_motion_to_latents(frame, motion)
+        vis_motion, contours, z_pres, z_where = process_motion_to_latents(frame, motion)
         z_where = z_where[z_pres.squeeze() > 0.5]
         image = np.array(frame)
         z_where[:, 2:] += 1
@@ -272,16 +327,24 @@ class ZWhereZPres(ProcessingVisualization):
         z_where[:, 1] *= 210
         z_where[:, 3] *= 210
         objects = torch.zeros_like(z_where)
+        cc_bb = torch.tensor([[x, y, x + w, y + h] for x, y, w, h in [cv.boundingRect(c) for c in contours]])
         objects[:, :2] = z_where[:, 2:] - z_where[:, :2] / 2
         objects[:, 2:] = z_where[:, 2:] + z_where[:, :2] / 2
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         bb_img = draw_bb(torch_img, objects, colors=['green'] * len(objects))
         result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
         result.save(f'{self.vis_path}/{self.motion_type}/z_where_{self.vis_counter:04}.png')
+        cc_bb_img = draw_bb(torch_img, cc_bb, colors=['green'] * len(contours))
+        result_cc = Image.fromarray(cc_bb_img.permute(1, 2, 0).numpy())
+        result_cc.save(f'{self.vis_path}/{self.motion_type}/cc_bb_{self.vis_counter:04}.png')
         to_G_x = 160 // self.G
         to_G_y = 210 // self.G
         grid_flow = z_pres.numpy().reshape((self.G, self.G)).repeat(to_G_x, axis=1).repeat(to_G_y, axis=0)
         vis_frame = frame[:grid_flow.shape[0], :grid_flow.shape[1]]
+        cv.imwrite(f'{self.vis_path}/{self.motion_type}/vis_motion_{self.vis_counter:04}.png',
+                   vis_motion)
+        cv.imwrite(f'{self.vis_path}/{self.motion_type}/vis_motion_{self.vis_counter:04}.png',
+                   vis_motion)
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/z_pres_{self.vis_counter:04}.png',
                    self.apply_data(vis_frame, grid_flow))
 

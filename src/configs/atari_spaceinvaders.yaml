@@ -37,7 +37,7 @@ train:
   max_steps: 5000
   print_every: 200
   save_every: 500
-  num_workers: 4
+  num_workers: 16
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -75,7 +75,7 @@ arch:
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
-  K: 1
+  K: 3
   bg_sigma: 0.10
 
 gamelist: [

@@ -3,6 +3,8 @@ from PIL import Image
 import cv2 as cv
 import torch
 from .motion_processing import process_motion_to_latents, save_motion
+from .mode_util import vector_mode
+
 
 
 def save(trail, output_path, visualizations=None, mode=None):
@@ -11,10 +13,12 @@ def save(trail, output_path, visualizations=None, mode=None):
     :param trail: [>=10, H, W, 3] array
     :param output_path: a path to the numpy data file to write
     :param visualizations: List[ProcessingVisualization] for visualizations
-    :param mode: Optional[nd.array<128, 128>] if the mode is known from other sources than the trail
+    :param mode: Optional[nd.array<H, W>] if the mode is known from other sources than the trail
     """
     if mode is None:
-        mode = np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=trail[:-4])
+        mode = np.apply_along_axis(lambda x: vector_mode(x), axis=0,
+                                   arr=np.moveaxis(trail[:-4], 3, 1).reshape(-1, *trail.shape[1:3]))
+        mode = np.moveaxis(mode, 0, 2)
     for i, frame in enumerate(trail[-4:]):
         save_frame(frame, mode, output_path.format(i), visualizations=visualizations, i=i)
 

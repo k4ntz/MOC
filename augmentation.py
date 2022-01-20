@@ -6,8 +6,16 @@ import cv2
 from collections import Counter
 from skimage.morphology import (disk, square)
 from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
+from mushroom_rl.algorithms.agent import Agent
+from glob import glob
 
 PLOT_BB = False
+IMAGE_OFFSET = None
+
+
+def image_offset(path):
+    global IMAGE_OFFSET
+    IMAGE_OFFSET = (np.array(Image.open(path).convert('RGB')) > 0.5).astype(np.uint8)
 
 
 def set_plot_bb(plot_bb):
@@ -26,17 +34,35 @@ def augment_dict(obs, info, game):
         return _augment_dict_space_invaders(obs, info)
     elif game == "Pong":
         return _augment_dict_pong(obs, info)
+    elif game == "Boxing":
+        return _augment_dict_boxing(obs, info)
     else:
-        raise ValueError
+        raise ValueError(f"Game {game} not found for augmentation!")
 
 
 def bbs_extend(labels, key: str, stationary=False):
     labels['bbs'].extend([(*bb, "S" if stationary else "M", key) for bb in labels[key]])
 
 
-def bb_by_color(labels, obs, color, key):
-    labels[key] = find_objects(obs, color)
+def bb_by_color(labels, obs, color, key, closing_active=True):
+    labels[key] = find_objects(obs, color, closing_active)
     bbs_extend(labels, key)
+
+
+def _augment_dict_boxing(obs, info):
+    labels = info['labels'] = {}
+    objects_colors = {"black": (0, 0, 0), "white": (214, 214, 214)}
+    labels['bbs'] = [
+        (17, 63, 7, 31, "S", "clock"),
+        (4, 110, 8, 6, "S", "black_score"),
+        (4, 47, 8, 6, "S", "white_score"),
+        (189, 62, 7, 32, "S", "logo")
+    ]
+    bb_by_color(labels, obs, objects_colors['white'], "white")
+    bb_by_color(labels, obs, objects_colors['black'], "black")
+    labels['bbs'] = [bb for bb in labels['bbs'] if (bb[5] not in ["white", "black"]) or (bb[0] > 25 and bb[3] > 5)]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
 
 
 def _augment_dict_space_invaders(obs, info):
@@ -68,10 +94,14 @@ def _augment_dict_space_invaders(obs, info):
 def plot_bounding_boxes(obs, bbs, objects_colors):
     if PLOT_BB:
         for bb in bbs:
-            mark_bb(obs, bb)
+            try:
+                mark_bb(obs, bb, np.array([255 - cv for cv in objects_colors[bb[5]]]))
+            except KeyError as err:
+                print(err)
+                mark_bb(obs, bb, np.array([255, 255, 255]))
 
 
-def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
+def find_objects(image, color, closing_active=True, size=None, tol_s=10, position=None, tol_p=2,
                  min_distance=10):
     """
     image: image to detects objects from
@@ -83,8 +113,11 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     min_distance: minimal distance between two detected objects
     """
     mask = cv2.inRange(image, np.array(color), np.array(color))
-    closed = closing(mask, disk(3))
-    closed = closing(closed, square(3))
+    if closing_active:
+        closed = closing(mask, disk(3))
+        closed = closing(closed, square(3))
+    else:
+        closed = closing(mask, disk(2))
     contours, _ = cv2.findContours(closed.copy(), 1, 1)
     detected = []
     for cnt in contours:
@@ -98,7 +131,7 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
         if min_distance is not None:
             too_close = False
             for det in detected:
-                if abs(det[0] - y) + abs(det[1] - x) < min_distance:
+                if iou(det, (y, x, h, w)) > 0.05:
                     too_close = True
                     break
             if too_close:
@@ -107,42 +140,42 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     return detected
 
 
+def iou(bb, gt_bb):
+    inner_width = min(bb[1] + bb[3], gt_bb[1] + gt_bb[3]) - max(bb[1], gt_bb[1])
+    inner_height = min(bb[0] + bb[2], gt_bb[0] + gt_bb[2]) - max(bb[0], gt_bb[0])
+    if inner_width < 0 or inner_height < 0:
+        return 0
+    # bb_height, bb_width = bb[1] - bb[0], bb[3] - bb[2]
+    intersection = inner_height * inner_width
+    return intersection / ((bb[3] * bb[2]) + (gt_bb[3] * gt_bb[2]) - intersection)
+
+
 def _augment_dict_tennis(obs, info):
     labels = info['labels']
     labels.clear()
-    objects_colors = {"enemy": [117, 231, 194], "player": [240, 128, 128],
-                      "ball": [236, 236, 236], "ball_shadow": [74, 74, 74]}
-    objects_sizes = {"enemy": [23, 14], "player": [23, 14],
-                     "ball": [2, 2], "ball_shadow": [2, 2]}
-    objects_sizes_tol = {"enemy": 2, "player": 2, "ball": 0, "ball_shadow": 0}
-    for obj in ['ball', 'player', 'enemy', 'ball_shadow']:
-        detected = find_objects(obs, objects_colors[obj],
-                                size=objects_sizes[obj], tol_s=5)
-        if len(detected) == 0:
-            if obj not in ['ball', 'ball_shadow']:
-                # print(f"no {obj} detected")
-                return False
-        elif len(detected) == 1:
-            x, y = detected[0][0], detected[0][1]
-            labels[f"{obj}_x"] = x
-            labels[f"{obj}_y"] = y
-            # mark_point(obs, x, y, objects_colors[obj], show=False)
-        else:
-            print("problem")
-            return False
-    for obj in ['player', 'enemy']:  # scores
-        detected = find_objects(obs, objects_colors[obj],
-                                position=(80, 31), tol_p=(50, 3),
-                                min_distance=5)
-        if not (len(detected) == 1 or len(detected) == 2):
-            # print("DEUCE")
-            pass
-        for i, det in enumerate(detected):
-            x, y = det
-            labels[f"{obj}_score_{i}_x"] = x
-            labels[f"{obj}_score_{i}_y"] = y
-    #         mark_point(obs, x, y, (255,0,0), show=False)
-    # show_image(obs)
+    labels['bbs'] = []
+    objects_colors = {
+        "enemy": [117, 128, 240], "player": [240, 128, 128],
+        "ball": [236, 236, 236], "ball_shadow": [74, 74, 74],
+        "logo": [120, 120, 120], "enemy_score": [90, 100, 200],
+        "player_score": [200, 100, 100]
+    }
+    labels['bbs'] = [
+        (4, 39, 8, 16, "S", "enemy_score"),
+        (4, 104, 8, 16, "S", "player_score"),
+        (193, 39, 7, 33, "S", "logo")
+    ]
+    if IMAGE_OFFSET is not None:
+        obs -= IMAGE_OFFSET * 20
+    bb_by_color(labels, obs, objects_colors['enemy'], "enemy", closing_active=False)
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "enemy" or 5 < bb[0] < 189 and bb[3] > 10 and bb[2] < 28]
+    bb_by_color(labels, obs, objects_colors['player'], "player", closing_active=False)
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "player" or 5 < bb[0] < 189 and bb[3] > 10 and bb[2] < 28]
+    bb_by_color(labels, obs, objects_colors['ball'], "ball")
+    bb_by_color(labels, obs, objects_colors['ball_shadow'], "ball_shadow")
+    if IMAGE_OFFSET is not None:
+        obs += IMAGE_OFFSET
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
 
@@ -171,86 +204,29 @@ cou = 0
 
 
 def _augment_dict_carnival(obs, info):
-    global cou
-    if 'labels' in info:
-        labels = info['labels']
-    else:
-        labels = {}
-        info['labels'] = labels
-    base_objects_colors = {"duck": np.array([187, 187, 53]), "flying_duck": np.array([135, 135, 35]),
-                           "rabbit": np.array([192, 192, 192]),
-                           "refill": np.array([0, 0, 0]), "shooter": np.array([66, 158, 130]),
-                           "owl": np.array([214, 92, 92]), "pipes": np.array([0, 160, 0]),
-                           "bonus": np.array([190, 75, 75])
-                           }
-    for label in ['ducks', 'flying_ducks', 'owls', 'rabbits', 'refills', 'shooters']:
-        labels[label] = []
-    H, W, C = obs.shape
-
-    prior_main_color = (0, 0, 0)
-    prior_amount = 0
-    brig = np.max(obs, axis=2)
-    for y in [54, 75, 96, 192]:
-        x = 0
-        while x < W:
-            colors_around = get_colors_around(obs, x, y)
-            if len(colors_around) > 1:
-                main_color = list(colors_around.keys())[0] if list(colors_around.keys())[0] != (0, 0, 0) else \
-                    list(colors_around.keys())[1]
-                current_amount = colors_around[main_color]
-                if prior_main_color == main_color and current_amount < prior_amount:
-                    obj = [k for k, v in base_objects_colors.items() if tuple(v) == main_color]
-                    if not obj:
-                        x += 1
-                        continue
-                    else:
-                        obj = obj[0]
-                    if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x,
-                                                                                                  main_color, size=2):
-                        obj = 'refill'
-                    wings, fly_y, fly_x = found_wings(obs, x - 1, y)
-                    if main_color == tuple(base_objects_colors['duck']) and wings:
-                        obj = 'flying_duck'
-                        labels[f'{obj}s'].append((fly_x, fly_y))
-                    else:
-                        labels[f'{obj}s'].append((x - 1, y))
-                    x += 10
-                    prior_main_color = (0, 0, 0)
-                    prior_amount = 0
-                else:
-                    x += 1
-                    prior_main_color = main_color
-                    prior_amount = current_amount
-            else:
-                x += 1
-        if prior_amount > 10:
-            obj = [k for k, v in base_objects_colors.items() if tuple(v) == main_color][0]
-            if main_color == tuple(base_objects_colors['rabbit']) and not tr_color_around(obs, y - 4, x, main_color,
-                                                                                          size=2):
-                obj = 'refill'
-            wings, fly_y, fly_x = found_wings(obs, x - 1, y)
-            if main_color == tuple(base_objects_colors['duck']) and wings:
-                obj = 'flying_duck'
-                labels[f'{obj}s'].append((fly_x, fly_y))
-            else:
-                labels[f'{obj}s'].append((x - 1, y))
-    for y in range(104, 185, 6):
-        for x in range(0, 160, 4):
-            if tr_color_around(obs, y, x, np.array([187, 187, 53])):
-                wings, fly_y, fly_x = found_wings(obs, x, y)
-                if wings:
-                    if not labels['flying_ducks'] or min(
-                            [(fly_y - e[1]) ** 2 + (fly_x - e[0]) ** 2 for e in labels['flying_ducks']]) > 60:
-                        labels['flying_ducks'].append((fly_x, fly_y))
-    # for obj, positions in labels.items():
-    #     for x, y in positions:
-    #         obs[y-1:y+1, x-1:x+1] = (base_objects_colors[obj[:-1]] * 1.15).astype(int)
-
-    bullets_xs = (brig[203:207] == 157).nonzero()[1]
-    labels['bullets_x'] = bullets_xs[-1] if bullets_xs.size else 0
-    labels['bonus'] = (brig[29:35] == 214).any()
-
-    return True
+    labels = info['labels'] = {}
+    labels['bbs'] = []
+    objects_colors = {
+        "duck": (187, 187, 53),
+        "rabbit": (192, 192, 192),
+        "refill": (255, 255, 0),
+        "shooter": (66, 158, 130),
+        "owl": (214, 92, 92),
+        "bonus": (204, 0, 0),
+        "bullet": (183, 194, 95),
+        # "munition": (24, 59, 157),
+        "score": (160, 171, 79),
+    }
+    for obj_name in objects_colors:
+        bb_by_color(labels, obs, objects_colors[obj_name], obj_name)
+    labels['bbs'] = [bb if bb[5] != "duck" or bb[3] < 10 else (*bb[:4], "M", "flying_duck") for bb in labels['bbs']]
+    labels['bbs'] = [bb if bb[5] != "rabbit" or bb[2] > 11 else (*bb[:4], "M", "refill") for bb in labels['bbs']]
+    labels['bbs'] = [bb if bb[5] != "score" or bb[0] < 190 else (*bb[:4], "M", "eating_duck") for bb in labels['bbs']]
+    labels['bbs'] = [bb if bb[5] not in ["score", "bonus"] else (*bb[:4], "S", bb[5]) for bb in labels['bbs']]
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "bullet" or bb[3] < 5]
+    labels['bbs'] += [(14, 69, 13, 29, "S", "pipes")]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
 
 
 def print_obj(brig, y, x, size=(10, 8)):
@@ -264,29 +240,6 @@ def print_brig(brig):
             for j in range(4):
                 print(brig[i * 21:i * 21 + 21, j * 16:j * 16 + 16])
             print()
-
-
-def found_wings(obs, base_x, base_y):
-    for y in range(base_y - 6, base_y + 7):
-        row = obs[y, max(0, base_x - 8):min(160, base_x + 8)]
-        if all(tuple(e) != (187, 187, 53) for e in row):
-            continue
-        former = (0, 0, 0)
-        switches = []
-        count = 0
-        for e in row:
-            if tuple(e) == former:
-                count += 1
-            else:
-                switches.append(count)
-                count = 1
-                former = tuple(e)
-        switches.append(count)
-        if len([s for s in switches if s > 1]) >= 5:
-            for x in range(base_x - 3, base_x + 4):
-                if all(tuple(e) == (187, 187, 53) for e in obs[y, x - 1:x + 2]):
-                    return True, y + 5, x
-    return False, -1, -1
 
 
 def _augment_dict_mspacman(obs, info):
@@ -455,13 +408,29 @@ def points_around(image_array, y, x, color, size):
             for j in range(max(0, x - size), min(x + size + 1, 160))]
 
 
-def load_agent(path):
+class RandomAgent(Agent):
+    def __init__(self, env):
+        self.env = env
+        print(self.env.action_space)
+
+    def draw_action(self, state):
+        return self.env.action_space.sample()
+
+
+def load_agent(args, env):
     from mushroom_rl.utils.parameters import Parameter
-    from mushroom_rl.algorithms.agent import Agent
-    agent = Agent.load(path)
-    epsilon_test = Parameter(value=0.05)
-    agent.policy.set_epsilon(epsilon_test)
-    agent.policy._predict_params = {}  # mushroom_rl compatibility
+    try:
+        agent_path = glob(f'agents/*{args.game}*')[0]
+        agent = Agent.load(agent_path)
+        epsilon_test = Parameter(value=0.05)
+        agent.policy.set_epsilon(epsilon_test)
+        agent.policy._predict_params = {}  # mushroom_rl compatibility
+    except Exception as e:
+        print(e)
+        print("\n================================\nWARNING: Random Agent was selected, as no suitable a"
+              "gent with the name of the game was found in folder 'agents'"
+              " or the agent could not be loaded.\n===========================\n")
+        agent = RandomAgent(env)
     return agent
 
 

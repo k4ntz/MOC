@@ -64,25 +64,28 @@ class Atari(Dataset):
         assert osp.exists(path), f'Bounding box path {path} does not exist.'
         return path
 
-    def get_labels(self, batch_start, batch_end, boxes_batch):
+    def get_labels_impl(self, batch_start, batch_end, boxes_batch, extractor):
         labels = []
         bbs = []
         for stack_idx in range(batch_start, batch_end):
             for img_idx in range(4):
                 bbs.append(pd.read_csv(os.path.join(self.bb_path, f"{stack_idx:05}_{img_idx}.csv"), header=None))
+        idx = 0
+        sub_labels = []
         for gt_bbs, boxes in zip(bbs, boxes_batch):
-            labels.append(get_labels(gt_bbs, self.game, boxes))
+            sub_labels.append(extractor(gt_bbs, self.game, boxes))
+            idx += 1
+            if idx == 4:
+                labels.append(sub_labels)
+                sub_labels = []
+                idx = 0
         return labels
 
+    def get_labels(self, batch_start, batch_end, boxes_batch):
+        return self.get_labels_impl(batch_start, batch_end, boxes_batch, get_labels)
+
     def get_labels_moving(self, batch_start, batch_end, boxes_batch):
-        labels = []
-        bbs = []
-        for stack_idx in range(batch_start, batch_end):
-            for img_idx in range(4):
-                bbs.append(pd.read_csv(os.path.join(self.bb_path, f"{stack_idx:05}_{img_idx}.csv"), header=None))
-        for gt_bbs, boxes in zip(bbs, boxes_batch):
-            labels.append(get_labels_moving(gt_bbs, self.game, boxes))
-        return labels
+        return self.get_labels_impl(batch_start, batch_end, boxes_batch, get_labels_moving)
 
     def to_relevant(self, labels_moving):
         return to_relevant(self.game, labels_moving)

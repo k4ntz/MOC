@@ -1,4 +1,4 @@
-from torch.optim import Adam, RMSprop
+from torch.optim import Adam, RMSprop, AdamW
 
 __all__ = ['get_optimizers']
 
@@ -10,6 +10,7 @@ def get_optimizers(cfg, model):
 def get_optimizer(name, lr, param):
     optim_class = {
         'Adam': Adam,
+        'AdamW': AdamW,
         'RMSprop': RMSprop
     }[name]
     

@@ -22,7 +22,6 @@ def get_dataloader(cfg, mode):
     batch_size = getattr(cfg, mode).batch_size
     shuffle = True if mode == 'train' else False
     num_workers = getattr(cfg, mode).num_workers
-
     dataset = get_dataset(cfg, mode)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
 

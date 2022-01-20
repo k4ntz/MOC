@@ -5,7 +5,7 @@ import argparse
 import os
 from pprint import pprint
 from augmentation import augment_dict, draw_names, show_image, load_agent, \
-    dict_to_serie, put_lives, set_plot_bb
+    dict_to_serie, put_lives, set_plot_bb, image_offset
 from glob import glob
 from mushroom_rl.environments import Atari
 import json
@@ -40,9 +40,8 @@ def some_steps(agent, state):
     env.reset()
     action = None
     for _ in range(10):
-        action = agent.draw_action(state)
-        state, reward, done, info, obs = env.step(action)
-    return env.step(action)
+        state, reward, done, info, obs = draw_action(agent, state)
+    return draw_action(agent, state)
 
 
 def draw_images(obs, image_n):
@@ -55,12 +54,10 @@ def draw_images(obs, image_n):
     img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
 
 
-def draw_action(args, agent, state):
+def draw_action(agent, state):
     action = agent.draw_action(state)
-    if args.render:
-        env.render()
-        sleep(0.001)
-    return env.step(action)
+    state, reward, done, info, obs = env.step(action)
+    return state, reward, done, info, obs[:210, :160, :3]
 
 
 bgr_folder = None
@@ -77,6 +74,7 @@ env = None
 
 def compute_root_median(args, data_base_folder):
     imgs = [np.array(Image.open(f), dtype=np.uint8) for f in glob(f"{rgb_folder}/*") if ".png" in f]
+    print(len(imgs))
     img_arr = np.stack(imgs)
     # Ensures median exists in any image at least, even images lead to averaging
     if len(img_arr) % 2:
@@ -101,6 +99,8 @@ def main():
                         help='instead compute the root-median of all found images')
     parser.add_argument('--root', default=False, action="store_true",
                         help='use the root-median instead of the trail')
+    parser.add_argument('--no_color_hist', default=False, action="store_true",
+                        help='use the color_hist to filter')
     parser.add_argument('--render', default=False, action="store_true",
                         help='renders the environment')
     parser.add_argument('-s', '--stacks', default=True, action="store_false",
@@ -126,13 +126,14 @@ def main():
     print("=============" * 5)
     print("Settings:", args)
     print("=============" * 5)
-    folder_sizes = {"train": 20, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data_mid"
-    REQ_CONSECUTIVE_IMAGE = 20
+    folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
+    data_base_folder = "aiml_atari_data_winter"
+    mode_base_folder = "aiml_atari_data_winter"
+    REQ_CONSECUTIVE_IMAGE = 50
     create_folders(args, data_base_folder)
     visualizations_flow = [
-        Identity(vis_folder, "Flow", every_n=1, max_vis=100000),
-        ZWhereZPres(vis_folder, "Flow", every_n=1, max_vis=100000),
+        Identity(vis_folder, "Flow"),
+        ZWhereZPres(vis_folder, "Flow"),
         Skeletonize(vis_folder, "Flow"),
     ]
     visualizations_median = [
@@ -148,6 +149,8 @@ def main():
         compute_root_median(args, data_base_folder)
         exit(0)
     set_plot_bb(args.plot_bb)
+    if "Tennis" in args.game:
+        image_offset(f"offsets/tennis.png")
     agent, augmented, state = configure(args)
     limit = folder_sizes[args.folder]
     if args.random:
@@ -158,20 +161,20 @@ def main():
 
     series = []
     for _ in range(200):
-        action = agent.draw_action(state)
-        if augmented:
-            state, reward, done, info, obs = env.step(action)
-        else:
-            state, reward, done, info = env.step(action)
+        state, reward, done, info, obs = draw_action(agent, state)
 
     pbar = tqdm(total=limit)
 
     try:
-        root_median = np.array(Image.open(f"{data_base_folder}/vis/{args.game}-v0/median.png"))
-        root_mode = np.array(Image.open(f"{data_base_folder}/vis/{args.game}-v0/mode.png"))
+        print(f"{mode_base_folder}/vis/{args.game}-v0/mode.png")
+        root_median = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/median.png"))
+        root_mode = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/mode.png"))
+        print(root_mode.shape)
         print("Ensuring that global median (mode) is used.")
-        set_color_hist(root_mode)
-    except:
+        if not args.no_color_hist:
+            set_color_hist(root_mode)
+    except Exception as e:
+        print(e)
         root_median, root_mode = None, None
         if args.root:
             print("No root_median (mode) was found. Taking median (mode) of trail instead.")
@@ -179,9 +182,9 @@ def main():
         print("Ensuring that trail median (mode) is used.")
         root_median, root_mode = None, None
     while True:
-        state, reward, done, info, obs = draw_action(args, agent, state)
+        state, reward, done, info, obs = draw_action(agent, state)
         if (not args.random) or np.random.rand() < 0.01:
-            augment_dict(obs if augmented else state, info, args.game)
+            augment_dict(obs, info, args.game)
             if args.stacks:
                 consecutive_images += [obs]
                 consecutive_images_info.append(put_lives(info))
@@ -205,14 +208,14 @@ def main():
                     # for i, fr in enumerate(space_stack):
                     #     Image.fromarray(fr, 'RGB').save(f'{vis_folder}/Mode/Stack_{image_count:05}_{i:03}.png')
                     space_stack = np.stack(space_stack)
+                    if args.mode:
+                        mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
+                                    mode=root_mode)
                     if args.flow:
                         flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.pt', visualizations_flow)
                     if args.median:
                         median.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.pt', visualizations_median,
                                     median=root_median)
-                    if args.mode:
-                        mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
-                                    mode=root_mode)
                     while done:
                         state, reward, done, info, obs = some_steps(agent, state)
                     consecutive_images, consecutive_images_info = [], []
@@ -266,10 +269,10 @@ def configure(args):
     print(f"Playing {config.game_name}...")
     env = Atari(config.game_name, config.width, config.height, ends_at_life=True,
                 history_length=config.history_length, max_no_op_actions=30)
+    env.augmented = True
     state = env.reset()
     make_deterministic(0, env)
-    agent_path = glob(f'agents/*{args.game}*')[0]
-    agent = load_agent(agent_path)
+    agent = load_agent(args, env)
     return agent, augmented, state
 
 

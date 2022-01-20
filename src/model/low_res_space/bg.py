@@ -447,7 +447,7 @@ class CompDecoder(nn.Module):
         """
         h, w = arch.img_shape
         # (B, L) -> (B, L+2, H, W)
-        z_comp = self.spatial_broadcast(z_comp, h + 8, w + 8)
+        z_comp = self.spatial_broadcast(z_comp, h + 6, w + 6)
         # -> (B, 3, H, W)
         comp = self.decoder(z_comp)
         comp = torch.sigmoid(comp)

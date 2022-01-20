@@ -6,6 +6,7 @@ from .arch import arch
 from .fg import SpaceFg
 from .bg import SpaceBg
 import time
+from collections import defaultdict
 
 
 class Space(nn.Module):
@@ -17,7 +18,7 @@ class Space(nn.Module):
         self.bg_module = SpaceBg()
 
     # @profile
-    def forward(self, x, motion, motion_z_pres, motion_z_where, global_step):
+    def forward(self, x, motion=None, motion_z_pres=None, motion_z_where=None, global_step=100000000):
         """
         Inference.
         With time-dimension for consistency
@@ -75,3 +76,25 @@ class Space(nn.Module):
         log.update(log_bg)
 
         return loss, log
+
+    def scene_description(self, x, z_classifier, **kwargs):
+        """
+        Computes a dictionary where each entity is located
+        :param x: (B, 3, H, W)
+        :param z_classifier: a classifier mapping encodings (z_where, z_depth and z_what concatenated)
+            to labels. Has to be able to do z_classifier.predict(list of z_encodings) to return a list of labels
+        :return: dict[label, list of (int, int)], all positions of the object in question
+        """
+        _, log = self.forward(x)
+        z_where, z_pres_prob, z_what, z_depth = log['z_where'], log['z_pres_prob'], log['z_what'], log['z_depth']
+        z_where, z_what, z_depth = z_where.detach().cpu(), z_what.detach().cpu(), z_depth.detach().cpu()
+        z_pres_prob = z_pres_prob.squeeze().detach().cpu()
+        z_pres = z_pres_prob > 0.5
+        z_where = z_where[z_pres]
+        z_encs = torch.concat((z_where, z_depth[z_pres], z_what[z_pres]), dim=1)
+        labels = z_classifier.predict(z_encs, **kwargs)
+        pos = z_where[2:]
+        result = defaultdict(list)
+        for label, p in zip(labels, pos):
+            result[label].append(tuple(coordinate.item() for coordinate in p))
+        return result
