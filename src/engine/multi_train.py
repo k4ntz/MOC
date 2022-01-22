@@ -73,24 +73,31 @@ def multi_train(cfg):
         #     'seed': ('seed', range(1), identity_print),
         #     'steps': ('train.max_steps', [20000], thousand_print),
         # },
-        # Agree Scheduling
+        # # Agree Scheduling
+        # {
+        #     'seed': ('seed', range(3), identity_print),
+        #     'agr': ('arch.agree_sim', [True, False], boolean_print),
+        # },
+        # # Steepness
+        # {
+        #     'seed': ('seed', range(3), identity_print),
+        #     'ds': ('arch.dynamic_steepness', np.linspace(1.1, 3, 5), lambda v: f'{v:.1f}'),
+        # },
+        # # Direct vs Loss
+        # {
+        #     'seed': ('seed', range(1), identity_print),
+        #     'mces': ('arch.motion_cooling_end_step', np.array([1, 1500]), identity_print),
+        #     'mw': ('arch.motion_weight', np.array([0, 1]), identity_print),
+        # },
+        # # Cosine sim
+        # {
+        #     'seed': ('seed', range(1), identity_print),
+        #     'cos': ('arch.cosine_sim', [False], boolean_print)
+        # },
+        # Some seeds
         {
-            'seed': ('seed', range(1), identity_print),
-            'agr': ('arch.agree_sim', [True, False], boolean_print),
-            'ds': ('arch.dynamic_steepness', np.linspace(1.1, 3, 5), lambda v: f'{v:.1f}'),
+            'seed': ('seed', range(5), identity_print)
         },
-        # Direct vs Loss
-        {
-            'seed': ('seed', range(1), identity_print),
-            'mces': ('arch.motion_cooling_end_step', np.array([1, 1500]), identity_print),
-            'mw': ('arch.motion_weight', np.array([0, 1]), identity_print),
-        },
-        # Cosine sim
-        {
-            'seed': ('seed', range(1), identity_print),
-            'cos': ('arch.cosine_sim', [False], boolean_print)
-        },
-
     ]
 
     base_exp_name = cfg.exp_name

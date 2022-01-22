@@ -1,7 +1,8 @@
 from .atari import Atari
 from .obj3d import Obj3D
 from torch.utils.data import DataLoader
-from .labels import label_list_pacman, label_list_carnival, label_list_pong, label_list_space_invaders
+from .labels import label_list_pacman, label_list_carnival, label_list_pong, label_list_space_invaders,\
+    label_list_tennis, label_list_boxing
 
 __all__ = ['get_dataset', 'get_dataloader', 'get_label_list']
 
@@ -38,5 +39,9 @@ def get_label_list(cfg):
         return label_list_space_invaders
     elif "Pong" in game:
         return label_list_pong
+    elif "Boxing" in game:
+        return label_list_boxing
+    elif "Tennis" in game:
+        return label_list_tennis
     else:
         raise ValueError(f"get_label_list failed for game {game}")

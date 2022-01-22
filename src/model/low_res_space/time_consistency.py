@@ -73,6 +73,8 @@ class LrTcSpace(nn.Module):
             'flow_loss_alpha_map': flow_loss_alpha_map,
             'objects_detected': objects_detected
         }
+        print(f'{flow_scaling=}')
+
         responses.update(tc_log)
         motion_loss = flow_loss * arch.motion_loss_weight_z_pres * flow_scaling \
                       + flow_loss_alpha_map * arch.motion_loss_weight_alpha * flow_scaling \

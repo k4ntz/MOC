@@ -98,10 +98,8 @@ class SpaceEval:
                     for res in results:
                         print("Cluster Result:")
                         pp.pprint(results[res])
-                checkpointer.save_best('mutual_information_all', results['all'][0]['adjusted_mutual_info_score'],
-                                       checkpoint, min_is_better=False)
-                checkpointer.save_best('mutual_information_relevant',
-                                       results['relevant'][0]['adjusted_mutual_info_score'],
+                checkpointer.save_best('rand_score_relevant',
+                                       results['relevant'][0]['adjusted_rand_score'],
                                        checkpoint, min_is_better=False)
                 checkpointer.save_best('nn_cluster_accuracy',
                                        results['relevant'][2]['few_shot_accuracy_cluster_nn'],

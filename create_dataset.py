@@ -126,10 +126,10 @@ def main():
     print("=============" * 5)
     print("Settings:", args)
     print("=============" * 5)
-    folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
+    folder_sizes = {"train": 8194, "test": 1024, "validation": 1024}
     data_base_folder = "aiml_atari_data_winter"
     mode_base_folder = "aiml_atari_data_winter"
-    REQ_CONSECUTIVE_IMAGE = 50
+    REQ_CONSECUTIVE_IMAGE = 100
     create_folders(args, data_base_folder)
     visualizations_flow = [
         Identity(vis_folder, "Flow"),

@@ -19,6 +19,8 @@ def set_color_hist(img):
     unique, counts = np.unique(color_codes.ravel(), return_counts=True)
     color_hist = dict(zip(unique, counts))
     print(color_hist)
+    for c in color_hist:
+        print(c, to_inverse_count(c))
 
 
 def to_inverse_count(color):
@@ -169,11 +171,12 @@ def process_motion_to_latents(img, motion, G=16):
     """
     vis_motion = motion > motion.mean()
     vis_motion = (closing(vis_motion, square(3)) * 255).astype(np.uint8)
-    canny_output = cv.Canny(vis_motion, 100, 200)  # Parameters irrelevant for our binary case
-    contours = cv.findContours(canny_output, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    # TODO: Investigate Canny function
+    # canny_output = cv.Canny(vis_motion, 100, 200)  # Parameters irrelevant for our binary case
+    contours = cv.findContours(vis_motion, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
     bbs = [RectBB(x, y, w, h) for x, y, w, h in [cv.boundingRect(c) for c in contours]]
-    bbs = merge_bbs(bbs)
+    # bbs = merge_bbs(bbs)
     motion_z_pres = torch.zeros((G, G, 1))
     motion_z_where = torch.zeros((G, G, 4))
     to_G_y = 210 / G
@@ -331,10 +334,10 @@ class ZWhereZPres(ProcessingVisualization):
         objects[:, :2] = z_where[:, 2:] - z_where[:, :2] / 2
         objects[:, 2:] = z_where[:, 2:] + z_where[:, :2] / 2
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
-        bb_img = draw_bb(torch_img, objects, colors=['green'] * len(objects))
+        bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
         result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
         result.save(f'{self.vis_path}/{self.motion_type}/z_where_{self.vis_counter:04}.png')
-        cc_bb_img = draw_bb(torch_img, cc_bb, colors=['green'] * len(contours))
+        cc_bb_img = draw_bb(torch_img, cc_bb, colors=['orange'] * len(contours))
         result_cc = Image.fromarray(cc_bb_img.permute(1, 2, 0).numpy())
         result_cc.save(f'{self.vis_path}/{self.motion_type}/cc_bb_{self.vis_counter:04}.png')
         to_G_x = 160 // self.G

@@ -32,11 +32,12 @@ def filter_relevant_boxes(game, boxes_batch, boxes_gt):
                 box_bat, box_gt in zip(boxes_batch, boxes_gt)]
     elif "Pong" in game:
         return [box_bat[box_bat[:, 1] > 19 / 128] for box_bat in boxes_batch]
-    #TODO: actual numbers
     elif "Boxing" in game:
-        return [box_bat[box_bat[:, 1] > 19 / 128 & box_bat[:, 1 < 103 / 128]] for box_bat in boxes_batch]
+        return [box_bat[(box_bat[:, 1] > 19 / 128) * (box_bat[:, 1] < 110 / 128)] for box_bat in boxes_batch]
     elif "Tennis" in game:
-        return [box_bat[box_bat[:, 1] > 19 / 128 & box_bat[:, 1 < 103 / 128] | box_bat[:, 1] > 19 / 128 & box_bat[:, 1 < 103 / 128]] for box_bat in boxes_batch]
+        return [box_bat[np.logical_or((box_bat[:, 1] > 15 / 128) * (box_bat[:, 1] > 56 / 128),
+                                         (box_bat[:, 1] > 56 / 128) * (box_bat[:, 1] < 115 / 128))]
+                for box_bat in boxes_batch]
     else:
         raise ValueError(f"Game {game} could not be found in labels")
 
@@ -61,6 +62,10 @@ def label_list_for(game):
         return label_list_carnival
     elif "Pong" in game:
         return label_list_pong
+    elif "Boxing" in game:
+        return label_list_boxing
+    elif "Tennis" in game:
+        return label_list_tennis
     elif "SpaceInvaders" in game:
         return label_list_space_invaders
     else:
