@@ -5,7 +5,7 @@ resume: true
 load_time_consistency: true
 add_flow: true
 save_relevant_objects: false
-resume_ckpt: '../output/checkpoints/winter/tennis_seed0/model_000161001.pth'
+resume_ckpt: '../pretrained/atari_joint.pth'
 # '../output/checkpoints/boxingPre1000.pth'
 # '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
@@ -17,8 +17,8 @@ resume_ckpt: '../output/checkpoints/winter/tennis_seed0/model_000161001.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [0, 1]
-device: 'cuda:0'
+device_ids: [2, 3, 4, 5, 10, 11, 12, 13]
+device: 'cuda:2'
 
 logdir: '../output/logs/winter'
 checkpointdir: '../output/checkpoints/winter'
@@ -33,7 +33,7 @@ dataset_roots:
 
 train:
   log: true
-  batch_size: 8
+  batch_size: 16
   max_epochs: 10000
   max_steps: 165000
   print_every: 200
@@ -65,7 +65,7 @@ arch:
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
   z_scale_mean_start_value: -2.5
-  z_scale_mean_end_value: -3.0
+  z_scale_mean_end_value: -3.5
 
   tau_start_step: 0
   tau_end_step: 10000
@@ -74,6 +74,8 @@ arch:
 
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
+
+  motion_cooling_end_step: 162000
 
   K: 3
   bg_sigma: 0.10

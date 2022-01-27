@@ -59,9 +59,8 @@ class TcSpace(nn.Module):
 
         if arch.dynamic_scheduling:
             object_count_accurate = self.object_count_accurate_scaling(responses)
-            print(f'{object_count_accurate=}')
             area_object_scaling = arch.dynamic_steepness ** (-object_count_accurate)
-            flow_scaling = 1 - area_object_scaling
+            flow_scaling = 1
         else:
             flow_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step / 2)
             area_object_scaling = 1 - flow_scaling
@@ -75,7 +74,6 @@ class TcSpace(nn.Module):
             'flow_loss_alpha_map': flow_loss_alpha_map,
             'objects_detected': objects_detected
         }
-        print(f'{flow_scaling=}')
         responses.update(tc_log)
         motion_loss = flow_loss * arch.motion_loss_weight_z_pres * flow_scaling \
                       + flow_loss_alpha_map * arch.motion_loss_weight_alpha * flow_scaling \
@@ -89,8 +87,6 @@ class TcSpace(nn.Module):
         return loss, responses
 
     def object_count_accurate_scaling(self, responses):
-        print(f'{responses["motion_z_pres"].shape=}')
-        print(f'{responses["motion_z_pres"].sum()=}')
         motion_z_pres = responses['motion_z_pres'].mean().detach().item()
         pred_z_pres = responses['z_pres_prob_pure'].mean().detach().item()
         zero = 0

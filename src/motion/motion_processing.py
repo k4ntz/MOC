@@ -219,12 +219,12 @@ class ProcessingVisualization:
         self.motion_type = motion_type
         self.G = G
 
-    def save_vis(self, frame, motion):
+    def save_vis(self, frame, motion, space_frame=None):
         if self.vis_counter < self.max_vis * self.every_n and not self.vis_counter % self.every_n:
-            self.make_visualization(frame, motion)
+            self.make_visualization(frame, motion, space_frame=space_frame)
         self.vis_counter += 1
 
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         pass
 
     def apply_data(self, frame, data):
@@ -235,7 +235,7 @@ class ProcessingVisualization:
 
 
 class Identity(ProcessingVisualization):
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/MotionIdentity_{self.vis_counter:04}.png',
                    motion)
         vis_motion = motion > 0
@@ -259,7 +259,7 @@ class ClosingMeanThreshold(ProcessingVisualization):
         super().__init__(vis_path, motion_type, **kwargs)
         self.mean_threshold = mean_threshold
 
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         vis_motion = ((motion > 0.1) * 255).astype(np.uint8)
         vis_motion = closing(vis_motion, square(3))
         for i in range(4):
@@ -274,7 +274,7 @@ class OneForEachSuperCell(ProcessingVisualization):
         super().__init__(vis_path, motion_type, **kwargs)
         self.grid_width = grid_width
 
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         avg_pool = nn.AvgPool2d(self.grid_width + 2, self.grid_width, padding=1, count_include_pad=False)
         grid_flow = avg_pool(torch.tensor(motion).unsqueeze(0).unsqueeze(0))
         grid_flow = torch.squeeze(grid_flow).numpy()
@@ -290,7 +290,7 @@ class OneForEachSuperCell(ProcessingVisualization):
 
 
 class Skeletonize(ProcessingVisualization):
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         vis_motion = motion > 0.1
         vis_motion = skeletonize(vis_motion)
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/Skeletonize_{self.vis_counter:04}.png',
@@ -298,7 +298,7 @@ class Skeletonize(ProcessingVisualization):
 
 
 class Erosion(ProcessingVisualization):
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         vis_motion = (motion > 0.1) * 255
         vis_motion = closing(vis_motion, square(3))
         for i in range(4):
@@ -308,9 +308,9 @@ class Erosion(ProcessingVisualization):
 
 
 class BoundingBoxes(ProcessingVisualization):
-    def make_visualization(self, frame, bb):
+    def make_visualization(self, frame, motion, space_frame=None):
         image = np.array(frame)
-        bb_coor = bb.drop([4, 5], axis=1).to_numpy()
+        bb_coor = motion.drop([4, 5], axis=1).to_numpy()
         objects = torch.from_numpy(bb_coor) * 128
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
@@ -319,24 +319,41 @@ class BoundingBoxes(ProcessingVisualization):
 
 
 class ZWhereZPres(ProcessingVisualization):
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         vis_motion, contours, z_pres, z_where = process_motion_to_latents(frame, motion)
         z_where = z_where[z_pres.squeeze() > 0.5]
         image = np.array(frame)
+        z_where_space = torch.clone(z_where)
         z_where[:, 2:] += 1
         z_where[:, 2:] /= 2
         z_where[:, 0] *= 160
         z_where[:, 2] *= 160
         z_where[:, 1] *= 210
         z_where[:, 3] *= 210
+
+        z_where_space[:, 2:] += 1
+        z_where_space[:, 2:] /= 2
+        z_where_space *= 128
+
         objects = torch.zeros_like(z_where)
+        objects_space = torch.zeros_like(z_where)
         cc_bb = torch.tensor([[x, y, x + w, y + h] for x, y, w, h in [cv.boundingRect(c) for c in contours]])
         objects[:, :2] = z_where[:, 2:] - z_where[:, :2] / 2
         objects[:, 2:] = z_where[:, 2:] + z_where[:, :2] / 2
+
+        objects_space[:, :2] = z_where_space[:, 2:] - z_where_space[:, :2] / 2
+        objects_space[:, 2:] = z_where_space[:, 2:] + z_where_space[:, :2] / 2
+
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
         result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
         result.save(f'{self.vis_path}/{self.motion_type}/z_where_{self.vis_counter:04}.png')
+
+        torch_img = torch.from_numpy(np.array(space_frame)).permute(2, 0, 1)
+        bb_img = draw_bb(torch_img, objects_space, colors=['red'] * len(objects))
+        result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
+        result.save(f'{self.vis_path}/{self.motion_type}/space_z_where_{self.vis_counter:04}.png')
+
         cc_bb_img = draw_bb(torch_img, cc_bb, colors=['orange'] * len(contours))
         result_cc = Image.fromarray(cc_bb_img.permute(1, 2, 0).numpy())
         result_cc.save(f'{self.vis_path}/{self.motion_type}/cc_bb_{self.vis_counter:04}.png')
@@ -363,7 +380,7 @@ def unique_color(color):
 # Deprecated. Only for 128x128
 class FlowBoundingBox(ProcessingVisualization):
 
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         vis_motion = motion > motion.mean()
         vis_motion = closing(vis_motion, square(3))
         vis_motion = (vis_motion * 255).astype(np.uint8)
@@ -396,7 +413,7 @@ class IteratedCentroidSelection(ProcessingVisualization):
         self.kernel_params = kernel_params
         self.min_object_flow_threshold = min_object_flow_threshold
 
-    def make_visualization(self, frame, motion):
+    def make_visualization(self, frame, motion, space_frame=None):
         avg_pool = nn.AvgPool2d(self.grid_width, 1, padding=0, count_include_pad=False)
         grid_flow = avg_pool(torch.tensor(motion).unsqueeze(0).unsqueeze(0))
         grid_flow = torch.squeeze(grid_flow).numpy()

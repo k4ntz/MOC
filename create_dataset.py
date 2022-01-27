@@ -126,22 +126,18 @@ def main():
     print("=============" * 5)
     print("Settings:", args)
     print("=============" * 5)
-    folder_sizes = {"train": 8194, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data_winter"
+    folder_sizes = {"train": 50, "test": 1024, "validation": 1024}
+    data_base_folder = "aiml_atari_data_tmp"
     mode_base_folder = "aiml_atari_data_winter"
-    REQ_CONSECUTIVE_IMAGE = 100
+    REQ_CONSECUTIVE_IMAGE = 20
     create_folders(args, data_base_folder)
     visualizations_flow = [
-        Identity(vis_folder, "Flow"),
-        ZWhereZPres(vis_folder, "Flow"),
-        Skeletonize(vis_folder, "Flow"),
     ]
     visualizations_median = [
-        Identity(vis_folder, "Median"),
     ]
     visualizations_mode = [
         Identity(vis_folder, "Mode"),
-        ZWhereZPres(vis_folder, "Mode"),
+        ZWhereZPres(vis_folder, "Mode", max_vis=50, every_n=2),
     ]
     visualizations_bb = [BoundingBoxes(vis_folder, '')]
 
@@ -193,9 +189,11 @@ def main():
                     space_stack = []
                     for frame in consecutive_images[:-4]:
                         space_stack.append(frame)
+                    resize_stack = []
                     for i, (frame, img_info) in enumerate(zip(consecutive_images[-4:], consecutive_images_info[-4:])):
                         space_stack.append(frame)
                         frame_space = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
+                        resize_stack.append(np.array(frame_space))
                         frame_space84 = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((84, 84), Image.ANTIALIAS)
                         frame_space64 = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((64, 64), Image.ANTIALIAS)
                         frame_space.save(f'{bgr_folder}/{image_count:05}_{i}.png')
@@ -207,10 +205,11 @@ def main():
                                 visualizations_bb)
                     # for i, fr in enumerate(space_stack):
                     #     Image.fromarray(fr, 'RGB').save(f'{vis_folder}/Mode/Stack_{image_count:05}_{i:03}.png')
+                    resize_stack = np.stack(resize_stack)
                     space_stack = np.stack(space_stack)
                     if args.mode:
                         mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
-                                    mode=root_mode)
+                                    mode=root_mode, space_frame=resize_stack)
                     if args.flow:
                         flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.pt', visualizations_flow)
                     if args.median:

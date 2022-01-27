@@ -13,7 +13,7 @@ label_list_carnival = ["no_label", "owl", 'rabbit', 'shooter', 'refill', 'bonus'
 label_list_boxing = ["no_label", "black", 'black_score', 'clock', 'white', 'white_score', 'logo']
 
 label_list_tennis = ["no_label", "player", 'enemy', 'ball', 'ball_shadow', 'net', 'logo',
-                     'player_score', 'blue_score']
+                     'player_score', 'enemy_score']
 
 # Maybe enemy bullets, but how should SPACE differentiate
 label_list_space_invaders = ["no_label"] + [f"{side}_score" for side in ['left', 'right']] + [f"enemy_{idx}"
