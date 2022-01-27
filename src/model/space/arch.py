@@ -20,6 +20,7 @@ arch = CfgNode({
     'motion_weight': 1000.0,
     'motion_sigmoid_steepen': 10000.0,  # Unused
     'motion_cooling_end_step': 1500,
+    'motion_cooling_start_step': 0,
     'dynamic_scheduling': True,
     'agree_sim': True,
     'dynamic_steepness': 2.0,

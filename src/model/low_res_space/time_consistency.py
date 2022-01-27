@@ -61,7 +61,7 @@ class LrTcSpace(nn.Module):
             area_object_scaling = arch.dynamic_steepness ** (-object_count_accurate)
             flow_scaling = 1 - area_object_scaling
         else:
-            flow_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step / 2)
+            flow_scaling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step / 2)
             area_object_scaling = 1 - flow_scaling
         tc_log = {
             'z_what_loss': z_what_loss,

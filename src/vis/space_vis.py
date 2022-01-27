@@ -30,14 +30,14 @@ def grid_mult_img(grid, imgs, target_shape, scaling=4):
 
 
 def grid_z_where_vis(z_where, imgs, z_pres, scaling=4):
-    vis_imgs = (imgs + 0.5) / 1.5
+    vis_imgs = (imgs + 0.3) / 1.3
     boxes_batch = convert_to_boxes(z_where, z_pres.squeeze(), z_pres.squeeze(), with_conf=False)
     grid = torch.zeros_like(vis_imgs)[:, 0:1]
     for i, boxes in enumerate(boxes_batch):
         for box in boxes:
             y_min, y_max, x_min, x_max = [min(127, int(round(e * 128))) for e in box]
             grid[i][0][y_min:y_max, x_min:x_max] = 1
-    grid = vis_imgs * (scaling * grid + 1) / 4  # Indented oversaturation for visualization
+    grid = imgs * (scaling * grid + 4) / 9
     return make_grid(grid, 4, normalize=False, pad_value=1)
 
 class SpaceVis:

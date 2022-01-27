@@ -24,6 +24,8 @@ class TcSpace(nn.Module):
 
     # @profile
     def forward(self, x, motion, motion_z_pres, motion_z_where, global_step):
+        if arch.motion_cooling_start_step > global_step:
+            raise ValueError("Illegal Motion_Cooling_Start_Step")
         """
         Inference.
         With time-dimension for consistency
@@ -62,7 +64,7 @@ class TcSpace(nn.Module):
             area_object_scaling = arch.dynamic_steepness ** (-object_count_accurate)
             flow_scaling = 1
         else:
-            flow_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step / 2)
+            flow_scaling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step / 2)
             area_object_scaling = 1 - flow_scaling
         tc_log = {
             'z_what_loss': z_what_loss,
@@ -155,6 +157,7 @@ def compute_flow_loss_z_where(responses):
            nn.functional.mse_loss(z_where[pred_z_pres > 0.5], motion_z_where[pred_z_pres > 0.5], reduction='sum')
 
 
+# Align over many pairs of objects -> Push apart only if different color, shape/size
 def z_what_consistency_objects(responses):
     cos = nn.CosineSimilarity(dim=1)
     z_whats = responses['z_what']

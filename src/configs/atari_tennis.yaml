@@ -17,7 +17,7 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [2, 3, 4, 5, 10, 11, 12, 13]
+device_ids: [2, 4, 5, 7]
 device: 'cuda:2'
 
 logdir: '../output/logs/winter'
@@ -46,10 +46,10 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 2e-5
+      lr: 3e-5
     bg:
       optim: 'Adam'
-      lr: 1e-3
+      lr: 2e-3
 
 arch:
   motion_input: false
@@ -65,7 +65,8 @@ arch:
   z_scale_mean_start_step: 0
   z_scale_mean_end_step: 20000
   z_scale_mean_start_value: -2.5
-  z_scale_mean_end_value: -3.5
+  z_scale_mean_end_value: -3.0
+  z_scale_std_value: 0.2
 
   tau_start_step: 0
   tau_end_step: 10000
@@ -75,7 +76,8 @@ arch:
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
-  motion_cooling_end_step: 162000
+  motion_cooling_end_step: 2000 # Relative Steps
+  motion_cooling_start_step: 160000
 
   K: 3
   bg_sigma: 0.10

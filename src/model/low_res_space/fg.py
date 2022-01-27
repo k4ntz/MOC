@@ -149,7 +149,7 @@ class LrSpaceFg(nn.Module):
                                                                                                *arch.img_shape)
         # Weighted sum, (B, 1, H, W)
         alpha_map_pure = (alpha_map_pure * importance_map_full_res_norm).sum(dim=1)
-        motion_cooling = max(0, 1 - global_step / arch.motion_cooling_end_step)
+        motion_cooling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step)
         # (B, 1, H, W)
         alpha_map = (1 - motion_cooling) * alpha_map_pure + motion_cooling * motion
 
@@ -342,7 +342,7 @@ class ImgEncoderFg(nn.Module):
         # (B, 1, G, G)
         z_pres_original = self.z_pres_net(cat_enc_z_pres)
         z_pres_logits_pure = torch.tanh(z_pres_original)
-        motion_cooling_scaling = max(0, 1 - global_step / arch.motion_cooling_end_step)
+        motion_cooling_scaling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step)
         transformed_motion_z_pres = motion_z_pres * 2 - 1
         # (B, 1, G, G) - > (B, G*G, 1)
         z_pres_logits = (1 - motion_cooling_scaling) * reshape(
