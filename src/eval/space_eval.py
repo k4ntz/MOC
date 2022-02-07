@@ -56,13 +56,15 @@ class SpaceEval:
             columns.append('mse')
         if 'ap' in eval_cfg.train.metrics:
             for class_name in ['all', 'moving', 'relevant']:
-                for iou_t in np.linspace(0.05, 0.95, 19):
+                for iou_t in np.linspace(0.1, 0.9, 9):
                     columns.append(f'{class_name}_ap_{iou_t:.2f}')
                 columns.append(f'{class_name}_accuracy')
                 columns.append(f'{class_name}_perfect')
                 columns.append(f'{class_name}_overcount')
                 columns.append(f'{class_name}_undercount')
                 columns.append(f'{class_name}_error_rate')
+                columns.append(f'{class_name}_precision')
+                columns.append(f'{class_name}_recall')
 
         with open(self.eval_file_path, "w") as file:
             file.write(";".join(columns))
@@ -101,18 +103,12 @@ class SpaceEval:
                 checkpointer.save_best('rand_score_relevant',
                                        results['relevant'][0]['adjusted_rand_score'],
                                        checkpoint, min_is_better=False)
-                checkpointer.save_best('nn_cluster_accuracy',
-                                       results['relevant'][2]['few_shot_accuracy_cluster_nn'],
-                                       checkpoint, min_is_better=False)
             if 'mse' in eval_cfg.train.metrics:
                 mse = self.train_eval_mse(logs, losses, writer, global_step)
                 print("MSE result: ", mse)
             if 'ap' in eval_cfg.train.metrics:
                 results = self.train_eval_ap_and_acc(logs, valset, bb_path, writer, global_step)
-                APs = results['APs_relevant']
-                checkpointer.save_best('AP0.5_relevant', APs[len(APs) // 2], checkpoint, min_is_better=True)
-                checkpointer.save_best('error_rate_relevant', results['error_rate_relevant'], checkpoint,
-                                       min_is_better=True)
+                checkpointer.save_best('accuracy', results['accuracy_relevant'], checkpoint, min_is_better=False)
                 if cfg.train.log:
                     results = {k2: v2[len(v2) // 4] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for
                                k2, v2, in
@@ -125,6 +121,7 @@ class SpaceEval:
     @torch.no_grad()
     def apply_model(self, dataset, device, model, global_step, use_global_step=False):
         print('Applying the model for evaluation...')
+        model.eval()
         if eval_cfg.train.num_samples:
             num_samples = max(eval_cfg.train.num_samples.values())
         else:
@@ -143,6 +140,11 @@ class SpaceEval:
                 motion_z_where = motion_z_where.to(device)
                 loss, log = model(imgs, motion, motion_z_pres, motion_z_where,
                                   global_step if use_global_step else 1000000000)
+                for key in ['imgs', 'y', 'log_like', 'loss', 'fg', 'z_pres_prob_pure',
+                            'prior_z_pres_prob', 'o_att', 'alpha_att_hat', 'alpha_att', 'alpha_map', 'alpha_map_pure',
+                            'importance_map_full_res_norm', 'kl_z_what', 'kl_z_pres', 'kl_z_scale', 'kl_z_shift',
+                            'kl_z_depth', 'kl_z_where', 'comps', 'masks', 'bg', 'kl_bg']:
+                    del log[key]
                 losses.append(loss)
                 logs.append(log)
         model.train()
@@ -163,6 +165,8 @@ class SpaceEval:
             overcount = result_dict[f'overcount_{class_name}']
             undercount = result_dict[f'undercount_{class_name}']
             error_rate = result_dict[f'error_rate_{class_name}']
+            precision = result_dict[f'precision_{class_name}']
+            recall = result_dict[f'recall_{class_name}']
 
             for ap in APs:
                 self.write_metric(None, 'ignored', ap, global_step, use_writer=False)
@@ -175,7 +179,9 @@ class SpaceEval:
             self.write_metric(writer, f'{class_name}/perfect', perfect, global_step)
             self.write_metric(writer, f'{class_name}/overcount', overcount, global_step)
             self.write_metric(writer, f'{class_name}/undercount', undercount, global_step)
-            self.write_metric(writer, f'{class_name}/error_rate', error_rate, global_step,
+            self.write_metric(writer, f'{class_name}/error_rate', error_rate, global_step)
+            self.write_metric(writer, f'{class_name}/precision', precision, global_step)
+            self.write_metric(writer, f'{class_name}/recall', recall, global_step,
                               make_sep=class_name != 'relevant')
         return result_dict
 
@@ -326,7 +332,7 @@ class SpaceEval:
         num_samples = eval_cfg.train.num_samples.ap
         print('Computing error rates, counts and APs...')
         if iou_thresholds is None:
-            iou_thresholds = np.linspace(0.05, 0.95, 19)
+            iou_thresholds = np.linspace(0.1, 0.9, 9)
         boxes_gt_types = ['all', 'moving', 'relevant']
         indices = list(range(num_samples))
         boxes_gts = {k: v for k, v in zip(boxes_gt_types, read_boxes(bb_path, indices=indices))}
@@ -387,8 +393,11 @@ class SpaceEval:
             result[f'overcount_{gt_name}'] = overcount
             result[f'undercount_{gt_name}'] = undercount
             result[f'iou_thresholds_{gt_name}'] = iou_thresholds
-            # A list of length 19
-            result[f'APs_{gt_name}'] = compute_ap(boxes, gt, iou_thresholds)
+            # A list of length 9 and P/R from low IOU level = 0.1
+            aps, precision, recall = compute_ap(boxes, gt, iou_thresholds)
+            result[f'APs_{gt_name}'] = aps
+            result[f'precision_{gt_name}'] = precision
+            result[f'recall_{gt_name}'] = recall
         return result
 
     def save_to_json(self, result_dict, json_path, info):

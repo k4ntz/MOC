@@ -84,8 +84,6 @@ def train(cfg, rtpt_active=True):
     start_log = global_step + 1
     base_global_step = global_step
 
-
-
     for epoch in range(start_epoch, cfg.train.max_epochs):
         pbar = tqdm(total=len(trainloader))
         if end_flag:
@@ -95,7 +93,15 @@ def train(cfg, rtpt_active=True):
         for (img_stacks, motion, motion_z_pres, motion_z_where) in trainloader:
             end = time.perf_counter()
             data_time = end - start
-            start = end
+            if (global_step % cfg.train.eval_every == 0 or never_evaluated) and cfg.train.eval_on:
+                never_evaluated = False
+                print('Validating...')
+                start = time.perf_counter()
+                eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
+                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
+                                     checkpointer, cfg)
+                print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
+            start = time.perf_counter()
             model.train()
             img_stacks = img_stacks.to(cfg.device)
             motion = motion.to(cfg.device)
@@ -113,6 +119,12 @@ def train(cfg, rtpt_active=True):
             metric_logger.update(data_time=data_time)
             metric_logger.update(batch_time=batch_time)
             metric_logger.update(loss=loss.item())
+            loss.backward()
+            if cfg.train.clip_norm:
+                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
+            optimizer_fg.step()
+            optimizer_bg.step()
+
             if global_step == start_log:
                 start_log = int((start_log - base_global_step) * 1.2) + 1 + base_global_step
                 log_state(cfg, epoch, global_step, log, metric_logger)
@@ -128,27 +140,7 @@ def train(cfg, rtpt_active=True):
                 checkpointer.save_last(model, optimizer_fg, optimizer_bg, epoch, global_step)
                 print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
 
-            if (global_step % cfg.train.eval_every == 0 or never_evaluated) and cfg.train.eval_on:
-                never_evaluated = False
-                print('Validating...')
-                start = time.perf_counter()
-                eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
-                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
-                                     checkpointer, cfg)
-                print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
             pbar.update(1)
-            loss.backward()
-            if cfg.train.clip_norm:
-                clip_grad_norm_(model.parameters(), cfg.train.clip_norm)
-            # print("Before Step", torch.cuda.memory_summary(device=4, abbreviated=False))
-
-            optimizer_fg.step()
-
-            # if cfg.train.stop_bg == -1 or global_step < cfg.train.stop_bg:
-            optimizer_bg.step()
-            # print("After Step", torch.cuda.memory_summary(device=4, abbreviated=False))
-
-
             start = time.perf_counter()
             global_step += 1
             if global_step > cfg.train.max_steps:

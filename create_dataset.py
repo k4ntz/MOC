@@ -20,7 +20,7 @@ from src.motion import median
 from src.motion import flow
 from src.motion import mode
 from src.motion.motion_processing import ProcessingVisualization, BoundingBoxes, \
-    ClosingMeanThreshold, IteratedCentroidSelection, Skeletonize, Identity, FlowBoundingBox, ZWhereZPres, set_color_hist
+    ClosingMeanThreshold, IteratedCentroidSelection, Skeletonize, Identity, FlowBoundingBox, ZWhereZPres, set_color_hist, set_special_color_weight
 import contextlib
 
 """
@@ -126,8 +126,8 @@ def main():
     print("=============" * 5)
     print("Settings:", args)
     print("=============" * 5)
-    folder_sizes = {"train": 50, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data_tmp"
+    folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
+    data_base_folder = "aiml_atari_data_winter"
     mode_base_folder = "aiml_atari_data_winter"
     REQ_CONSECUTIVE_IMAGE = 20
     create_folders(args, data_base_folder)
@@ -163,12 +163,14 @@ def main():
 
     try:
         print(f"{mode_base_folder}/vis/{args.game}-v0/mode.png")
-        root_median = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/median.png"))
-        root_mode = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/mode.png"))
+        root_median = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/median.png"))[:, :, :3]
+        root_mode = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/mode.png"))[:, :, :3]
         print(root_mode.shape)
         print("Ensuring that global median (mode) is used.")
         if not args.no_color_hist:
             set_color_hist(root_mode)
+            if "Pong" in args.game:
+                set_special_color_weight(15406316, 8)
     except Exception as e:
         print(e)
         root_median, root_mode = None, None
@@ -270,7 +272,7 @@ def configure(args):
                 history_length=config.history_length, max_no_op_actions=30)
     env.augmented = True
     state = env.reset()
-    make_deterministic(0, env)
+    make_deterministic(0 if args.folder == "train" else 1 if args.folder == "validation" else 2, env)
     agent = load_agent(args, env)
     return agent, augmented, state
 

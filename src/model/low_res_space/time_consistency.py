@@ -94,6 +94,7 @@ class LrTcSpace(nn.Module):
         value = (max(zero, motion_z_pres - pred_z_pres) +
                  max(zero, pred_z_pres - motion_z_pres * arch.motion_underestimating))
         self.count_difference_variance += pred_z_pres - motion_z_pres
+        print(f'{value=} , {arch.use_variance=} , {self.count_difference_variance.value()=}')
         return (value + self.count_difference_variance.value() * arch.use_variance) * responses['motion_z_pres'][
             0].nelement()
 

@@ -236,9 +236,9 @@ def main():
                            "relevant_ap_avg", "relevant_few_shot_accuracy_with_4"]
     desired_experiment_order = ['pong', 'space_invaders', 'mspacman', 'carnival']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
-    bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    table_by_metric(experiment_groups, mutual_info_columns, joined_df)
-    line_plot(experiments, "relevant_ap_avg", joined_df)
+    # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
+    # table_by_metric(experiment_groups, mutual_info_columns, joined_df)
+    # line_plot(experiments, "relevant_ap_avg", joined_df)
     line_plot(experiments, "relevant_accuracy", joined_df)
     print("Plotting completed")
 

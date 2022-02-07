@@ -13,12 +13,20 @@ from scipy import ndimage
 color_hist = None
 use_color_hist = False
 
+
 def set_color_hist(img):
     global color_hist
     color_codes = np.apply_along_axis(unique_color, axis=2, arr=img)
     unique, counts = np.unique(color_codes.ravel(), return_counts=True)
     color_hist = dict(zip(unique, counts))
     print(color_hist)
+    for c in color_hist:
+        print(c, to_inverse_count(c))
+
+
+def set_special_color_weight(color, count):
+    global color_hist
+    color_hist[color] = count
     for c in color_hist:
         print(c, to_inverse_count(c))
 
@@ -206,7 +214,7 @@ def unique_color(color):
     Computes a unique value for uint8 array, e.g. for identifying the input color to make variance computation easy
     :param color: nd.array<n>
     """
-    return sum([255 ** i * c for i, c in enumerate(color)])
+    return sum([256 ** i * c for i, c in enumerate(color)])
 
 
 class ProcessingVisualization:

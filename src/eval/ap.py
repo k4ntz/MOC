@@ -114,6 +114,8 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         iou_thresholds = np.linspace(0.1, 0.9, 9)
 
     AP = []
+    precision_low_iou = -1
+    recall_low_iou = -1
     for threshold in iou_thresholds:
         # Compute AP for this threshold
         # Number of total ground truths
@@ -174,7 +176,9 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         num_cum = np.arange(len(hit)) + 1.0
         precision = hit_cum / num_cum
         recall = hit_cum / count_gt
-
+        if threshold == 0.2:
+            precision_low_iou = precision[-1]
+            recall_low_iou = recall[-1]
         # Compute AP at selected recall values
         # print(precision)
         precs = []
@@ -189,7 +193,7 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         # print(AP)
     print(AP)
     # mean over all thresholds
-    return AP
+    return AP, precision_low_iou, recall_low_iou
 
 
 def compute_iou(pred, gt):

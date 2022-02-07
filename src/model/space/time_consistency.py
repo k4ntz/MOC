@@ -45,6 +45,8 @@ class TcSpace(nn.Module):
         motion_z_where = motion_z_where.reshape(T * B, arch.G * arch.G, 4)
         loss, responses = self.space(x, motion, motion_z_pres, motion_z_where, global_step)
         # Further losses
+        if not self.training:
+            return loss, responses
         z_what_loss = z_what_loss_grid_cell(responses) if arch.adjacent_consistency_weight > 1e-3 else self.zero
         z_pres_loss = z_pres_loss_grid_cell(responses) if arch.pres_inconsistency_weight > 1e-3 else self.zero
         z_what_loss_pool = z_what_consistency_pool(responses) if arch.area_pool_weight > 1e-3 else self.zero
@@ -62,7 +64,7 @@ class TcSpace(nn.Module):
         if arch.dynamic_scheduling:
             object_count_accurate = self.object_count_accurate_scaling(responses)
             area_object_scaling = arch.dynamic_steepness ** (-object_count_accurate)
-            flow_scaling = 1
+            flow_scaling = 1 - area_object_scaling
         else:
             flow_scaling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step / 2)
             area_object_scaling = 1 - flow_scaling
@@ -159,7 +161,7 @@ def compute_flow_loss_z_where(responses):
 
 # Align over many pairs of objects -> Push apart only if different color, shape/size
 def z_what_consistency_objects(responses):
-    cos = nn.CosineSimilarity(dim=1)
+    cos = nn.CosineSimilarity(dim=2)
     z_whats = responses['z_what']
     _, GG, D = z_whats.shape
     # (B, T, G*G, 1)
@@ -168,61 +170,42 @@ def z_what_consistency_objects(responses):
 
     # (T, B, G, G)
     z_pres = responses['z_pres_prob'].reshape(B, T, GG, 1).reshape(B, T, arch.G, arch.G).transpose(0, 1)
-    z_pres_idx = (z_pres[:-1] > arch.object_threshold).nonzero(as_tuple=False)
     # (T, B, G, G, D)
     z_whats = z_whats.reshape(B, T, arch.G, arch.G, D).transpose(0, 1)
     # (T, B, G, G, 4)
     z_where = responses['z_where'].reshape(B, T, arch.G, arch.G, -1).transpose(0, 1)
-    # (T, B, G+2, G+2)
-    z_pres_same_padding = torch.nn.functional.pad(z_pres, (1, 1, 1, 1), mode='circular')
-    # (T, B, G+2, G+2, D)
-    z_what_same_padding = torch.nn.functional.pad(z_whats, (0, 0, 1, 1, 1, 1), mode='circular')
-    # (T, B, G+2, G+2, 4)
-    z_where_same_padding = torch.nn.functional.pad(z_where, (0, 0, 1, 1, 1, 1), mode='circular')
-    # idx: (4,)
-    object_consistency_loss = torch.tensor(0.0).to(z_whats.device)
-    for idx in z_pres_idx:
-        # (3, 3)
-        z_pres_area = z_pres_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
-        # (3, 3, D)
-        z_what_area = z_what_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
-        # (3, 3, 4)
-        z_where_area = z_where_same_padding[idx[0] + 1, idx[1], idx[2]:idx[2] + 3, idx[3]:idx[3] + 3]
-        # Tuple((#hits,) (#hits,))
-        z_what_idx = (z_pres_area > arch.object_threshold).nonzero(as_tuple=True)
-        # (1, D)
-        z_what_prior = z_whats[idx.tensor_split(4)]
-        # (1, 4)
-        z_where_prior = z_where[idx.tensor_split(4)]
-        # (#hits, D)
-        z_whats_now = z_what_area[z_what_idx]
-        # (#hits, 4)
-        z_where_now = z_where_area[z_what_idx]
-        if z_whats_now.nelement() == 0:
-            continue
-        # (#hits,)
-        if arch.cosine_sim:
-            z_sim = cos(z_what_prior, z_whats_now)
-        else:
-            z_means = nn.functional.mse_loss(z_what_prior, z_whats_now, reduction='none')
-            # (#hits,) in (0,1]
-            z_sim = 1 / (torch.mean(z_means, dim=1) + 1)
-        if z_whats_now.shape[0] > 1:
-            similarity_max_idx = z_sim.argmax()
-            if arch.agree_sim:
-                pos_dif_min = nn.functional.mse_loss(z_where_prior.expand_as(z_where_now), z_where_now, reduction='none').sum(dim=-1).argmin()
-                # color_dif_min = color_match(
-                #     responses['imgs'][idx[1] * B + idx[0]],
-                #     responses['imgs'][idx[1] * B + idx[0] + 1],
-                #     z_where_prior,
-                #     z_where_now
-                # )
-                if pos_dif_min != similarity_max_idx:
-                    continue
-            object_consistency_loss += -arch.z_cos_match_weight * z_sim[similarity_max_idx] + torch.sum(z_sim)
-        else:
-            object_consistency_loss += -arch.z_cos_match_weight * torch.max(z_sim) + torch.sum(z_sim)
-    return object_consistency_loss, torch.tensor(len(z_pres_idx)).to(z_whats.device)
+    # (T, B, G, G, 5)
+    z_where_pad = torch.nn.functional.pad(z_where, (0, 1, 0, 0, 0, 0), mode='constant', value=0)
+    for i in range(T):
+        for j in range(B):
+            z_where_pad[i, j, :, :, 0] = (i * B + j) * 10
+
+    # (#hits, 5)
+    objects = z_where_pad[z_pres > arch.object_threshold]
+    if objects.nelement() == 0:
+        return torch.tensor(objects.nelement()).to(z_whats.device), torch.tensor(objects.nelement()).to(z_whats.device)
+
+    # (#hits, #hits)
+    dist = torch.cdist(objects, objects, p=1)
+    for i in range(T):
+        for j in range(B):
+            dist[objects[:, 0] == (i * B + j) * 10, objects[:, 0] == (i * B + j) * 10] = 1_000_000_000
+
+    # (#hits, 1)
+    _, idx_match = torch.topk(dist, 1, largest=False)
+    hits = torch.tensor(len(idx_match)).to(z_whats.device)
+    # (#hits, 32)
+    encodings = z_whats[z_pres > arch.object_threshold]
+    # (#hits, 1, 32)
+    encodings_match = encodings[idx_match]
+    # (#hits, #5, 32)
+    encodings_anti = encodings[torch.randint(0, hits, size=(hits, 5))]
+    encodings = encodings[:, None]
+    z_sim = cos(encodings, encodings_match)
+    z_sim_anti = cos(encodings, encodings_anti)
+    # TODO: Weighting by distance
+    return -arch.z_cos_match_weight * z_sim.mean() + z_sim_anti.mean(), hits
+
 
 
 def unique_color(color):
