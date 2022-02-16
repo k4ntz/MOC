@@ -36,7 +36,7 @@ def to_inverse_count(color):
 
 
 def exciting_color_score(img, x, y, w, h):
-    if w <= 1 or h <= 1:
+    if w < 1 or h < 1:
         return 0
     selection = img[y:y + h, x:x + w]
     color_codes = np.apply_along_axis(unique_color, axis=2, arr=selection)
@@ -321,6 +321,7 @@ class BoundingBoxes(ProcessingVisualization):
         bb_coor = motion.drop([4, 5], axis=1).to_numpy()
         objects = torch.from_numpy(bb_coor) * 128
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
+        objects = objects[:, [2, 0, 3, 1]]
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
         result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
         result.save(f'{self.vis_path}/BoundingBox/{self.vis_counter:04}.png')

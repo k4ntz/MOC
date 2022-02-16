@@ -96,26 +96,30 @@ def multi_train(base_cfg):
 
         # },
         # Some seeds
-        {
-            'seed': ('seed', range(3), identity_print),
-            'steps': ('train.max_steps', [3000], thousand_print),
-            'mvar': ('arch.use_variance', [True, False], boolean_print),
-        },
-        {
-            'seed': ('seed', range(3), identity_print),
-            'steps': ('train.max_steps', [3000], thousand_print),
-            'dyn': ('arch.dynamic_scheduling', [True, False], boolean_print),
-        },
+        # {
+        #     'seed': ('seed', range(3), identity_print),
+        #     'steps': ('train.max_steps', [3000], thousand_print),
+        #     'mvar': ('arch.use_variance', [True, False], boolean_print),
+        # },
+        # {
+        #     'seed': ('seed', range(3), identity_print),
+        #     'steps': ('train.max_steps', [3000], thousand_print),
+        #     'dyn': ('arch.dynamic_scheduling', [True, False], boolean_print),
+        # },
         {
             'seed': ('seed', range(5), identity_print),
             'aow': ('arch.area_object_weight', np.insert(np.logspace(1, 1, 1), 0, 0.0), lambda v: f'{v:.1f}'),
         },
+        # {
+        #     'seed': ('seed', range(8, 9), identity_print),
+        #     'aow': ('arch.area_object_weight', np.logspace(1, 1, 1), lambda v: f'{v:.1f}'),
+        # },
     ]
     base_exp_name = base_cfg.exp_name
     total_experiments = sum(len(list(itertools.product(*[v[1] for v in experiment_set.values()])))
                             for experiment_set in experiment_sets)
     i = 0
-    rtpt = RTPT(name_initials='TRo', experiment_name='SPACE-Time', max_iterations=total_experiments)
+    rtpt = RTPT(name_initials='TR', experiment_name='SPACE-Time', max_iterations=total_experiments)
     rtpt.start()
     for experiment_set in experiment_sets:
         configs = itertools.product(*[v[1] for v in experiment_set.values()])
@@ -128,8 +132,11 @@ def multi_train(base_cfg):
             conf_str = [config_line[2](c) for c, config_line in zip(conf, experiment_set.values())]
             cfg.merge_from_list(
                 ['exp_name', base_exp_name + "_" + "_".join([f'{para}{v}' for para, v in zip(params_short, conf_str)])])
-            print("Starting experiment with the following cfg:", "==========",
+            print("=========" * 10)
+            print("==========", "Starting experiment with the following cfg:", "==========",
                   cfg.exp_name, f"[{i}/{total_experiments}]", "==========")
+            print(cfg)
+            print("=========" * 10)
             train(cfg, rtpt_active=False)
             i += 1
             rtpt.step()

@@ -15,29 +15,29 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+device_ids: [0, 1, 2, 3]
+device: 'cuda:0'
 
-logdir: '../output/logs/winter'
-checkpointdir: '../output/checkpoints/winter'
-evaldir: '../output/eval/winter'
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
+evaldir: '../output/eval/final'
 
 dataset: 'ATARI'
 dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_winter/space_like'
+  ATARI: '../aiml_atari_data_final/space_like'
 
 
 train:
   log: false
   batch_size: 16
-  max_epochs: 3000
+  max_epochs: 10000
   max_steps: 5000
   print_every: 200
   save_every: 500
-  num_workers: 16
+  num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -45,7 +45,7 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-5
+      lr: 3e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -58,12 +58,12 @@ arch:
   fg_sigma: 0.20
 
   z_pres_start_step: 0
-  z_pres_end_step: 8000
+  z_pres_end_step: 5000
   z_pres_start_value: 0.1
   z_pres_end_value: 1e-10
 
   z_scale_mean_start_step: 0
-  z_scale_mean_end_step: 20000
+  z_scale_mean_end_step: 5000
   z_scale_mean_start_value: -2.0
   z_scale_mean_end_value: -2.5
 
@@ -74,6 +74,9 @@ arch:
 
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
+
+  motion_underestimating: 1.25
+  motion_object_found_lambda: 0.025
 
   K: 3
   bg_sigma: 0.10

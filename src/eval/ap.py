@@ -3,6 +3,7 @@ import os
 import torch
 import pandas as pd
 
+
 def compute_counts(boxes_pred, boxes_gt):
     """
     Compute error rates, perfect number, overcount number, undercount number
@@ -69,6 +70,7 @@ def convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=False):
 
     return boxes
 
+
 def read_boxes(path, size=None, indices=None):
     """
     Read bounding boxes and normalize to (0, 1)
@@ -114,8 +116,6 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         iou_thresholds = np.linspace(0.1, 0.9, 9)
 
     AP = []
-    precision_low_iou = -1
-    recall_low_iou = -1
     for threshold in iou_thresholds:
         # Compute AP for this threshold
         # Number of total ground truths
@@ -176,9 +176,6 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         num_cum = np.arange(len(hit)) + 1.0
         precision = hit_cum / num_cum
         recall = hit_cum / count_gt
-        if threshold == 0.2:
-            precision_low_iou = precision[-1]
-            recall_low_iou = recall[-1]
         # Compute AP at selected recall values
         # print(precision)
         precs = []
@@ -193,7 +190,69 @@ def compute_ap(pred_boxes, gt_boxes, iou_thresholds=None, recall_values=None):
         # print(AP)
     print(AP)
     # mean over all thresholds
-    return AP, precision_low_iou, recall_low_iou
+    return AP
+
+
+def compute_prec_rec(pred_boxes, gt_boxes):
+    """
+    Compute average precision over different iou thresholds.
+
+    :param pred_boxes: [[y_min, y_max, x_min, x_max, conf] * N] * B
+    :param gt_boxes: [[y_min, y_max, x_min, x_max] * N] * B
+    :return: p/r
+    """
+    threshold = 0.5
+    count_gt = 0
+    hit = []
+    # For each image, determine each prediction is a hit of not
+    for pred, gt in zip(pred_boxes, gt_boxes):
+        count_gt += len(gt)
+        # Sort predictions within an image by decreasing confidence
+        pred = sorted(pred, key=lambda x: -x[-1])
+
+        if len(gt) == 0:
+            hit.extend((False, conf) for *_, conf in pred)
+            continue
+        if len(pred) == 0:
+            continue
+
+        M, N = len(pred), len(gt)
+
+        # (M, 4), (M) (N, 4)
+        pred = np.array(pred)
+        pred, conf = pred[:, :4], pred[:, -1]
+        gt = np.array(gt)
+
+        # (M, N)
+        mis_align = compute_misalignment(pred, gt)
+        # (M,)
+        best_indices = np.argmax(mis_align, axis=1)
+        # (M,)
+        best_mis_align = mis_align[np.arange(M), best_indices]
+        # (N,), thresholding results
+        valid = best_mis_align > threshold
+        used = [False] * N
+
+        for i in range(M):
+            # Only count first hit
+            if valid[i] and not used[best_indices[i]]:
+                hit.append((True, conf[i]))
+                used[best_indices[i]] = True
+            else:
+                hit.append((False, conf[i]))
+
+    hit = sorted(hit, key=lambda x: -x[-1])
+    hit = [x[0] for x in hit]
+    hit_cum = np.cumsum(hit)
+    num_cum = np.arange(len(hit)) + 1.0
+    precision = hit_cum / num_cum
+    recall = hit_cum / count_gt
+    if len(precision) == 0 or len(recall) == 0:
+        return 0.0, 0.0
+    precision_low_iou = precision[-1]
+    recall_low_iou = recall[-1]
+    print(f'{precision_low_iou=}, {recall_low_iou=}')
+    return precision_low_iou, recall_low_iou
 
 
 def compute_iou(pred, gt):
@@ -225,3 +284,20 @@ def compute_iou(pred, gt):
     iou = area_inter / (area_pred + area_gt - area_inter)
 
     return iou
+
+
+def compute_diagonal(bbs):
+    return np.sqrt((bbs[:, 1] - bbs[:, 0]) ** 2 + (bbs[:, 3] - bbs[:, 2]) ** 2)
+
+
+def compute_misalignment(pred, gt):
+    diagonal_gt = compute_diagonal(gt)
+    center_pred = np.column_stack([(pred[:, 0] + pred[:, 1]) / 2, (pred[:, 2] + pred[:, 3]) / 2])[:, None, :]
+    center_gt = np.column_stack([(gt[:, 0] + gt[:, 1]) / 2, (gt[:, 2] + gt[:, 3]) / 2])[None, :, :]
+    delta_bbs = np.concatenate([
+        np.repeat(center_pred, len(gt), axis=1),
+        np.repeat(center_gt, len(pred), axis=0)
+    ], axis=2)
+    delta_bbs[:, :, [1, 2]] = delta_bbs[:, :, [2, 1]]
+    diagonal_pair = compute_diagonal(delta_bbs.reshape((-1, 4))).reshape((len(pred), len(gt)))
+    return np.maximum(0, 1 - diagonal_pair / diagonal_gt)

@@ -127,9 +127,9 @@ def main():
     print("Settings:", args)
     print("=============" * 5)
     folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data_winter"
-    mode_base_folder = "aiml_atari_data_winter"
-    REQ_CONSECUTIVE_IMAGE = 20
+    data_base_folder = "aiml_atari_data_final"
+    mode_base_folder = "aiml_atari_data_final"
+    REQ_CONSECUTIVE_IMAGE = 20 if args.root else 30
     create_folders(args, data_base_folder)
     visualizations_flow = [
     ]
@@ -137,7 +137,7 @@ def main():
     ]
     visualizations_mode = [
         Identity(vis_folder, "Mode"),
-        ZWhereZPres(vis_folder, "Mode", max_vis=50, every_n=2),
+        ZWhereZPres(vis_folder, "Mode", max_vis=20, every_n=2),
     ]
     visualizations_bb = [BoundingBoxes(vis_folder, '')]
 

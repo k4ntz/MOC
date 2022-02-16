@@ -8,7 +8,7 @@ from torch.utils.data import Subset, DataLoader
 import os.path as osp
 from tqdm import tqdm
 from .eval_cfg import eval_cfg
-from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts
+from .ap import read_boxes, convert_to_boxes, compute_ap, compute_counts, compute_prec_rec
 from .kalman_filter import classify_encodings
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
@@ -393,8 +393,9 @@ class SpaceEval:
             result[f'overcount_{gt_name}'] = overcount
             result[f'undercount_{gt_name}'] = undercount
             result[f'iou_thresholds_{gt_name}'] = iou_thresholds
-            # A list of length 9 and P/R from low IOU level = 0.1
-            aps, precision, recall = compute_ap(boxes, gt, iou_thresholds)
+            # A list of length 9 and P/R from low IOU level = 0.2
+            aps = compute_ap(boxes, gt, iou_thresholds)
+            precision, recall = compute_prec_rec(boxes, gt)
             result[f'APs_{gt_name}'] = aps
             result[f'precision_{gt_name}'] = precision
             result[f'recall_{gt_name}'] = recall

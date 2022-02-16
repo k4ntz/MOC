@@ -23,20 +23,21 @@ label_list_space_invaders = ["no_label"] + [f"{side}_score" for side in ['left',
 
 
 def filter_relevant_boxes(game, boxes_batch, boxes_gt):
+    print(boxes_batch[0])
     if "MsPacman" in game:
-        return [box_bat[box_bat[:, 1] < 103 / 128] for box_bat in boxes_batch]
+        return [box_bat[box_bat[:, 1] < 104 / 128] for box_bat in boxes_batch]
     elif "Carnival" in game:
-        return [box_bat[box_bat[:, 1] > 19 / 128] for box_bat in boxes_batch]
+        return [box_bat[box_bat[:, 0] > 15 / 128] for box_bat in boxes_batch]
     elif "SpaceInvaders" in game:
-        return [box_bat[box_bat[:, 1] > 19 / 128] if len(box_gt[box_gt[:, 1] < 19 / 128]) <= 1 else box_bat for
+        return [box_bat[box_bat[:, 1] > 16 / 128] if len(box_gt[box_gt[:, 1] < 16 / 128]) <= 1 else box_bat for
                 box_bat, box_gt in zip(boxes_batch, boxes_gt)]
     elif "Pong" in game:
-        return [box_bat[box_bat[:, 1] > 19 / 128] for box_bat in boxes_batch]
+        return [box_bat[box_bat[:, 1] > 21 / 128] for box_bat in boxes_batch]
     elif "Boxing" in game:
-        return [box_bat[(box_bat[:, 1] > 19 / 128) * (box_bat[:, 1] < 110 / 128)] for box_bat in boxes_batch]
+        return [box_bat[(box_bat[:, 0] > 19 / 128) * (box_bat[:, 1] < 110 / 128)] for box_bat in boxes_batch]
     elif "Tennis" in game:
-        return [box_bat[np.logical_or((box_bat[:, 1] > 15 / 128) * (box_bat[:, 1] > 56 / 128),
-                                         (box_bat[:, 1] > 56 / 128) * (box_bat[:, 1] < 115 / 128))]
+        return [box_bat[np.logical_or((box_bat[:, 0] > 8 / 128) * (box_bat[:, 1] < 60 / 128),
+                                         (box_bat[:, 0] > 68 / 128) * (box_bat[:, 1] < 116 / 128))]
                 for box_bat in boxes_batch]
     else:
         raise ValueError(f"Game {game} could not be found in labels")
@@ -91,7 +92,7 @@ def match_bbs(gt_bbs, boxes_batch, label_list):
     for bb in boxes_batch:
         label, max_iou = max(((gt_bb[5], iou(bb, gt_bb)) for gt_bb in gt_bbs.itertuples(index=False, name=None)),
                              key=lambda tup: tup[1])
-        if max_iou < 0.2:
+        if max_iou < 0.5:
             label = "no_label"
         labels.append(label)
     return torch.LongTensor([label_list.index(label) for label in labels])

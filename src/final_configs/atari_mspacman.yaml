@@ -16,7 +16,7 @@ resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [1, 2, 3, 4]
+device_ids: [1, 4]
 device: 'cuda:1'
 
 logdir: '../output/logs/final'
@@ -32,9 +32,9 @@ dataset_roots:
 
 train:
   log: true
-  batch_size: 16
+  batch_size: 8
   max_epochs: 10000
-  max_steps: 5000
+  max_steps: 6000
   print_every: 200
   save_every: 200
   num_workers: 8
@@ -45,7 +45,7 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 3e-5
+      lr: 5e-5
     bg:
       optim: 'Adam'
       lr: 1e-3

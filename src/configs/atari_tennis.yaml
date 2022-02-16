@@ -1,13 +1,11 @@
 seed: 1
 model: 'TcSpace'
 exp_name: tennis
-resume: true
+resume: false
 load_time_consistency: true
 add_flow: true
-save_relevant_objects: false
+
 resume_ckpt: '../pretrained/atari_joint.pth'
-# '../output/checkpoints/boxingPre1000.pth'
-# '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 #
 # '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
@@ -17,28 +15,29 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [2, 4, 5, 7]
-device: 'cuda:2'
+device_ids: [0, 1, 2, 3]
+device: 'cuda:0'
 
-logdir: '../output/logs/winter'
-checkpointdir: '../output/checkpoints/winter'
-evaldir: '../output/eval'
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
+evaldir: '../output/eval/final'
 
 dataset: 'ATARI'
 dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_winter/space_like'
+  ATARI: '../aiml_atari_data_final/space_like'
+
 
 train:
-  log: true
+  log: false
   batch_size: 16
   max_epochs: 10000
-  max_steps: 165000
+  max_steps: 5000
   print_every: 200
-  save_every: 200
-  num_workers: 8
+  save_every: 500
+  num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
@@ -49,7 +48,7 @@ train:
       lr: 3e-5
     bg:
       optim: 'Adam'
-      lr: 2e-3
+      lr: 1e-3
 
 arch:
   motion_input: false
@@ -57,16 +56,16 @@ arch:
   motion_kind: 'mode'
   G: 16
   fg_sigma: 0.20
-  z_pres_start_step: 1000
+
+  z_pres_start_step: 0
   z_pres_end_step: 5000
   z_pres_start_value: 0.1
   z_pres_end_value: 1e-10
 
   z_scale_mean_start_step: 0
-  z_scale_mean_end_step: 20000
+  z_scale_mean_end_step: 5000
   z_scale_mean_start_value: -2.5
   z_scale_mean_end_value: -3.0
-  z_scale_std_value: 0.2
 
   tau_start_step: 0
   tau_end_step: 10000
@@ -76,21 +75,12 @@ arch:
   fix_alpha_steps: -1
   fix_alpha_value: 0.1
 
-  motion_cooling_end_step: 2000 # Relative Steps
-  motion_cooling_start_step: 160000
+  motion_underestimating: 0.75
+  motion_object_found_lambda: 0.01
 
   K: 3
   bg_sigma: 0.10
 
 gamelist: [
-    # 'Atlantis-v0',
-    # 'Asterix-v0',
-    # 'Carnival-v0',
-    # 'DoubleDunk-v0',
-    # 'Kangaroo-v0',
-    # 'MontezumaRevenge-v0',
     'Tennis-v0',
-    # 'Pooyan-v0',
-    # 'Qbert-v0',
-    # 'SpaceInvaders-v0',
     ]

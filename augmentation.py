@@ -78,7 +78,9 @@ def _augment_dict_space_invaders(obs, info):
 
     bb_by_color(labels, obs, objects_colors['space_ship'], "space_ship")
     bb_by_color(labels, obs, objects_colors['block'], "block")
-    labels['bbs'] += [(10, 4, 10, 60, "S", "left_score"), (10, 84, 10, 60, "S", "right_score")]
+
+    if len([bb for bb in labels['bbs'] if bb[5] == "space_ship"]) == 0:
+        labels['bbs'] += [(10, 4, 10, 60, "S", "left_score"), (10, 84, 10, 60, "S", "right_score")]
 
     detected_enemies = find_objects(obs, objects_colors['enemy'])
     cur_y = min((bb[0] for bb in detected_enemies), default=0)
