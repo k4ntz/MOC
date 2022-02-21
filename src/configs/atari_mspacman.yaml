@@ -1,9 +1,9 @@
 seed: 1
 model: 'SPACE'
-exp_name: mspacman_baseline
+exp_name: mspacman
 resume: false
-
-resume_ckpt: '../pretrained/atari_joint.pth'
+resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
+# '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 #
 # '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
@@ -13,26 +13,26 @@ resume_ckpt: '../pretrained/atari_joint.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+device_ids: [1, 2, 14, 15]
+device: 'cuda:1'
 
-logdir: '../output/logs/mid'
-checkpointdir: '../output/checkpoints/mid'
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
-dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_mid/space_like'
+  ATARI: '../aiml_atari_data_final/space_like'
 
 train:
+  log: true
   batch_size: 16
   max_epochs: 10000
-  max_steps: 5002
+  max_steps: 5000
   print_every: 200
-  save_every: 500
+  save_every: 200
   num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
@@ -41,7 +41,7 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-5
+      lr: 3e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -55,7 +55,7 @@ arch:
   z_pres_end_value: 1e-10
 
   z_scale_mean_start_step: 0
-  z_scale_mean_end_step: 20000
+  z_scale_mean_end_step: 5000
   z_scale_mean_start_value: -2.0
   z_scale_mean_end_value: -2.5
 
@@ -64,10 +64,11 @@ arch:
   tau_start_value: 2.5
   tau_end_value: 2.5
 
-  fix_alpha_steps: -1
-  fix_alpha_value: 0.1
+  fix_alpha_steps: 2000
+  fix_alpha_value: 0.2
+  boundary_loss: false
 
-  K: 2
+  K: 3
   bg_sigma: 0.10
 
 gamelist: [

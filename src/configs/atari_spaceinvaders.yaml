@@ -1,6 +1,6 @@
 seed: 1
 model: 'SPACE'
-exp_name: space_invaders_baseline
+exp_name: space_invaders
 resume: false
 
 resume_ckpt: '../pretrained/atari_joint.pth'
@@ -16,21 +16,21 @@ parallel: true
 device_ids: [0, 1, 2, 3]
 device: 'cuda:0'
 
-logdir: '../output/logs/mid'
-checkpointdir: '../output/checkpoints/mid'
-evaldir: '../output/eval/mid'
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
+evaldir: '../output/eval/final'
 
 dataset: 'ATARI'
-dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_mid/space_like'
+  ATARI: '../aiml_atari_data_final/space_like'
 
 
 train:
+  log: false
   batch_size: 16
-  max_epochs: 3000
+  max_epochs: 10000
   max_steps: 5000
   print_every: 200
   save_every: 500
@@ -42,7 +42,7 @@ train:
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 5e-5
+      lr: 3e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
@@ -51,29 +51,29 @@ arch:
   G: 16
   fg_sigma: 0.20
 
-  z_pres_start_step: 4000
-  z_pres_end_step: 10000
+  z_pres_start_step: 0
+  z_pres_end_step: 5000
   z_pres_start_value: 0.1
-  z_pres_end_value: 0.01
+  z_pres_end_value: 1e-10
 
   z_scale_mean_start_step: 0
-  z_scale_mean_end_step: 20000
-  z_scale_mean_start_value: -2.2
+  z_scale_mean_end_step: 5000
+  z_scale_mean_start_value: -2.0
   z_scale_mean_end_value: -2.5
-  z_scale_std_value: 0.2
 
   tau_start_step: 0
-  tau_end_step: 20000
+  tau_end_step: 10000
   tau_start_value: 2.5
-  tau_end_value: 0.1
+  tau_end_value: 2.5
 
   fix_alpha_steps: 2000
   fix_alpha_value: 0.2
   boundary_loss: false
 
-  K: 1
+  K: 3
   bg_sigma: 0.10
 
 gamelist: [
     'SpaceInvaders-v0',
     ]
+

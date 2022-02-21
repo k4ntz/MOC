@@ -56,7 +56,7 @@ def train(cfg, rtpt_active=True):
     writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
     metric_logger = MetricLogger()
-
+    never_evaluated = True
     print('Start training')
     end_flag = False
     for epoch in range(start_epoch, cfg.train.max_epochs):
@@ -69,7 +69,15 @@ def train(cfg, rtpt_active=True):
 
             end = time.perf_counter()
             data_time = end - start
-            start = end
+            if (global_step % cfg.train.eval_every == 0 or never_evaluated) and cfg.train.eval_on:
+                never_evaluated = False
+                print('Validating...')
+                start = time.perf_counter()
+                eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
+                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, eval_checkpoint,
+                                     checkpointer, cfg)
+                print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
+            start = time.perf_counter()
 
             model.train()
             imgs = data
@@ -104,14 +112,6 @@ def train(cfg, rtpt_active=True):
                 start = time.perf_counter()
                 checkpointer.save_last(model, optimizer_fg, optimizer_bg, epoch, global_step)
                 print('Saving checkpoint takes {:.4f}s.'.format(time.perf_counter() - start))
-
-            if (global_step) % cfg.train.eval_every == 0 and cfg.train.eval_on:
-                print('Validating...')
-                start = time.perf_counter()
-                checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
-                evaluator.train_eval(model, valset, valset.bb_path, writer, global_step, cfg.device, checkpoint,
-                                     checkpointer, cfg)
-                print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
 
             loss.backward()
             if cfg.train.clip_norm:
