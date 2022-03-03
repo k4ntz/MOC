@@ -20,8 +20,10 @@ from src.motion import median
 from src.motion import flow
 from src.motion import mode
 from src.motion.motion_processing import ProcessingVisualization, BoundingBoxes, \
-    ClosingMeanThreshold, IteratedCentroidSelection, Skeletonize, Identity, FlowBoundingBox, ZWhereZPres, set_color_hist, set_special_color_weight
+    ClosingMeanThreshold, IteratedCentroidSelection, Skeletonize, Identity, FlowBoundingBox, ZWhereZPres, \
+    set_color_hist, set_special_color_weight
 import contextlib
+from procgen import ProcgenGym3Env, ProcgenEnv
 
 """
 If you look at the atari_env source code, essentially:
@@ -56,6 +58,12 @@ def draw_images(obs, image_n):
 
 def draw_action(agent, state):
     action = agent.draw_action(state)
+    if agent.game == "coinrun":
+        action = np.array([action])
+        observation, reward, done, info = env.step(action)
+        image = np.array(Image.fromarray(observation['rgb'][0], 'RGB').resize((160, 210), Image.ANTIALIAS))
+
+        return observation, reward, done, {}, observation['rgb'][0][-210:, :500, :3]
     state, reward, done, info, obs = env.step(action)
     return state, reward, done, info, obs[:210, :160, :3]
 
@@ -86,6 +94,7 @@ def compute_root_median(args, data_base_folder):
     frame.save(f"{data_base_folder}/vis/{args.game}-v0/median.png")
     frame = Image.fromarray(mode)
     frame.save(f"{data_base_folder}/vis/{args.game}-v0/mode.png")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -132,14 +141,15 @@ def main():
     REQ_CONSECUTIVE_IMAGE = 20 if args.root else 30
     create_folders(args, data_base_folder)
     visualizations_flow = [
+        Identity(vis_folder, "Flow", max_vis=50, every_n=1),
     ]
     visualizations_median = [
     ]
     visualizations_mode = [
-        Identity(vis_folder, "Mode"),
+        Identity(vis_folder, "Mode", max_vis=50, every_n=1),
         ZWhereZPres(vis_folder, "Mode", max_vis=20, every_n=2),
     ]
-    visualizations_bb = [BoundingBoxes(vis_folder, '')]
+    visualizations_bb = [BoundingBoxes(vis_folder, '', max_vis=50, every_n=1)]
 
     if args.rootmedian:
         compute_root_median(args, data_base_folder)
@@ -147,7 +157,10 @@ def main():
     set_plot_bb(args.plot_bb)
     if "Tennis" in args.game:
         image_offset(f"offsets/tennis.png")
+    if "Riverraid" in args.game:
+        image_offset(f"offsets/riverraid.png")
     agent, augmented, state = configure(args)
+    print("configuration done")
     limit = folder_sizes[args.folder]
     if args.random:
         np.random.shuffle(index)
@@ -157,6 +170,7 @@ def main():
 
     series = []
     for _ in range(200):
+        print("Init step...")
         state, reward, done, info, obs = draw_action(agent, state)
 
     pbar = tqdm(total=limit)
@@ -171,6 +185,10 @@ def main():
             set_color_hist(root_mode)
             if "Pong" in args.game:
                 set_special_color_weight(15406316, 8)
+            if "AirRaid" in args.game:
+                set_special_color_weight(0, 20000)
+            if "Riverraid" in args.game:
+                set_special_color_weight(3497752, 20000)
     except Exception as e:
         print(e)
         root_median, root_mode = None, None
@@ -210,8 +228,12 @@ def main():
                     resize_stack = np.stack(resize_stack)
                     space_stack = np.stack(space_stack)
                     if args.mode:
-                        mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
-                                    mode=root_mode, space_frame=resize_stack)
+                        if args.game == "coinrun":
+                            mode.save_coinrun(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt',
+                                              visualizations_mode, space_frame=resize_stack)
+                        else:
+                            mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
+                                      mode=root_mode, space_frame=resize_stack)
                     if args.flow:
                         flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.pt', visualizations_flow)
                     if args.median:
@@ -268,11 +290,16 @@ def configure(args):
         print("\n\n\t\tYou are not using an Augmented environment\n\n")
     augmented = "Augmented" in config.game_name
     print(f"Playing {config.game_name}...")
-    env = Atari(config.game_name, config.width, config.height, ends_at_life=True,
-                history_length=config.history_length, max_no_op_actions=30)
-    env.augmented = True
-    state = env.reset()
-    make_deterministic(0 if args.folder == "train" else 1 if args.folder == "validation" else 2, env)
+    if config.game_name.lower() == 'coinrun':
+        env_name = "ecoinrun"
+        env = ProcgenEnv(num_envs=1, env_name=env_name, center_agent=False) # use_backgrounds=False, restrict_themes=True
+        state = None
+    else:
+        env = Atari(config.game_name, config.width, config.height, ends_at_life=True,
+                    history_length=config.history_length, max_no_op_actions=30)
+        env.augmented = True
+        state = env.reset()
+        make_deterministic(0 if args.folder == "train" else 1 if args.folder == "validation" else 2, env)
     agent = load_agent(args, env)
     return agent, augmented, state
 
@@ -300,7 +327,6 @@ def create_folders(args, data_base_folder):
     os.makedirs(vis_folder + "/Median", exist_ok=True)
     os.makedirs(vis_folder + "/Flow", exist_ok=True)
     os.makedirs(vis_folder + "/Mode", exist_ok=True)
-
 
 
 if __name__ == '__main__':

@@ -16,8 +16,8 @@ resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [1, 2, 3, 4]
-device: 'cuda:1'
+device_ids: [7, 8, 9, 0]
+device: 'cuda:7'
 
 logdir: '../output/logs/final'
 checkpointdir: '../output/checkpoints/final'

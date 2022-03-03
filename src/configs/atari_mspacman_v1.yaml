@@ -1,11 +1,11 @@
-seed: 1
+seed: 123123
 model: 'TcSpace'
 exp_name: mspacman
-resume: false
+resume: true
 load_time_consistency: true
 add_flow: true
 save_relevant_objects: false
-resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
+resume_ckpt: '../output/checkpoints/final/mspacman_seed0_aow0.0/model_000005001.pth'
 # '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
 # '../output/checkpoints/mspacman_atari_pretrained/model.pth'
 #
@@ -16,11 +16,11 @@ resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [7, 8, 9, 0]
+device_ids: [7, 8]
 device: 'cuda:7'
 
-logdir: '../output/logs/final'
-checkpointdir: '../output/checkpoints/final'
+logdir: '../output/logs/tmp'
+checkpointdir: '../output/checkpoints/tmp'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
@@ -32,9 +32,9 @@ dataset_roots:
 
 train:
   log: true
-  batch_size: 16
+  batch_size: 8
   max_epochs: 10000
-  max_steps: 5000
+  max_steps: 6000
   print_every: 200
   save_every: 200
   num_workers: 8
@@ -49,6 +49,13 @@ train:
     bg:
       optim: 'Adam'
       lr: 1e-3
+
+eval_cfg:
+  train:
+    num_samples:
+      cluster: 32
+      ap: 32
+      mse: 32
 
 arch:
   motion_input: false

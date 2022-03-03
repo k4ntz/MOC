@@ -28,6 +28,8 @@ def augment_dict(obs, info, game):
         return _augment_dict_mspacman(obs, info)
     elif game == "Tennis":
         return _augment_dict_tennis(obs, info)
+    elif game == "coinrun":
+        return _augment_dict_coinrun(obs, info)
     elif game == "Carnival":
         return _augment_dict_carnival(obs, info)
     elif game == "SpaceInvaders":
@@ -36,6 +38,10 @@ def augment_dict(obs, info, game):
         return _augment_dict_pong(obs, info)
     elif game == "Boxing":
         return _augment_dict_boxing(obs, info)
+    elif game == "AirRaid":
+        return _augment_dict_air_raid(obs, info)
+    elif game == "Riverraid":
+        return _augment_dict_riverraid(obs, info)
     else:
         raise ValueError(f"Game {game} not found for augmentation!")
 
@@ -61,6 +67,90 @@ def _augment_dict_boxing(obs, info):
     bb_by_color(labels, obs, objects_colors['white'], "white")
     bb_by_color(labels, obs, objects_colors['black'], "black")
     labels['bbs'] = [bb for bb in labels['bbs'] if (bb[5] not in ["white", "black"]) or (bb[0] > 25 and bb[3] > 5)]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
+
+def _augment_dict_riverraid(obs, info):
+    labels = info['labels'] = {}
+    labels['bbs'] = []
+    objects_colors = {
+        "water": (45, 50, 184),
+        "background1": (110, 156, 66),
+        "background2": (53, 95, 24),
+        "player": (232, 232, 74),
+        "fuel_gauge": (255, 100, 255),
+        "enemy": (0, 0, 0),
+        "building": (0, 0, 255),
+        "score": (255, 200, 200),
+        "logo": (150, 255, 150),
+        "lives": (150, 150, 255),
+        "shot": (255, 0, 0),
+        "fuel": (70, 0, 0),
+        "fuel_board": (255, 0, 255),
+        "street": (255, 255, 255),
+    }
+    if IMAGE_OFFSET is not None:
+        obs += IMAGE_OFFSET
+    mask = cv2.inRange(obs, np.array(objects_colors['water']), np.array(objects_colors['water'])).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array(objects_colors['background1']), np.array(objects_colors['background1'])).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array((1, 1, 1)), np.array((1, 1, 1))).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array((142, 142, 142)), np.array((142, 142, 142))).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array(objects_colors['player']), np.array(objects_colors['player'])).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array(objects_colors['background2']), np.array(objects_colors['background2'])).astype(np.bool)
+    black_white = np.ones_like(obs)
+    black_white[mask] = [255, 255, 255]
+    black_white[np.invert(mask)] = [0, 0, 0]
+    bb_by_color(labels, black_white, (0, 0, 0), "enemy", closing_active=False)
+    labels['bbs'] = [(*bb[:4], "S", "building") if bb[1] <= 31 or bb[1] >= 115 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "M", "street") if bb[3] >= 28 else bb for bb in labels['bbs']]
+    fuel = {'bbs': []}
+    bb_by_color(fuel, obs, (214, 92, 92), "fuel", closing_active=False)
+    bb_by_color(fuel, obs, (214, 214, 214), "fuel", closing_active=False)
+    for f_obj in fuel['bbs']:
+        labels['bbs'] = [(*bb[:4], "M", "fuel")
+                         if bb[0] <= f_obj[0] <= bb[0] + bb[2] and bb[1] <= f_obj[1] <= bb[1] + bb[3]
+                         else bb for bb in labels['bbs']]
+    bb_by_color(labels, obs, objects_colors['player'], "player", closing_active=False)
+    labels['bbs'] = [(*bb[:4], "S", "lives") if bb[0] >= 192 and bb[1] <= 57 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "S", "logo") if bb[0] >= 192 and bb[1] >= 69 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "S", "score") if 163 <= bb[0] <= 166 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "S", "shot") if bb[3] <= 4 and bb[0] <= 160 and bb[2] >= 5 else bb for bb in labels['bbs']]
+    fuel_gauge = [bb for bb in labels['bbs'] if 177 <= bb[0] <= 191]
+    labels['bbs'] = [bb for bb in labels['bbs'] if not (177 <= bb[0] <= 191)]
+    labels['bbs'] = [bb for bb in labels['bbs'] if bb[2] > 2 or bb[3] > 2]
+    fuel_gauge = (min(f[0] for f in fuel_gauge), min(f[1] for f in fuel_gauge), max(f[0] + f[2] for f in fuel_gauge), max(f[1] + f[3] for f in fuel_gauge))
+    labels['bbs'] += [(fuel_gauge[0], fuel_gauge[1], fuel_gauge[2] - fuel_gauge[0], fuel_gauge[3] - fuel_gauge[1], "M", "fuel_gauge")]
+    labels['bbs'] += [(175, 65, 14, 38, "S", "fuel_board")]
+    if IMAGE_OFFSET is not None:
+        obs -= IMAGE_OFFSET
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
+
+
+def _augment_dict_air_raid(obs, info):
+    labels = info['labels'] = {}
+    labels['bbs'] = []
+    objects_colors = {
+        "black": (0, 0, 0),
+        "background1": (112, 0, 92),
+        "background2": (44, 44, 44),
+        "player": (0, 255, 255),
+        "enemy": (255, 255, 0),
+        "building": (0, 0, 255),
+        "score": (0, 255, 0),
+        "shot": (255, 0, 0),
+    }
+    mask = cv2.inRange(obs, np.array(objects_colors['black']), np.array(objects_colors['black'])).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array(objects_colors['background1']), np.array(objects_colors['background1'])).astype(np.bool)
+    mask |= cv2.inRange(obs, np.array(objects_colors['background2']), np.array(objects_colors['background2'])).astype(np.bool)
+    black_white = np.ones_like(obs)
+    black_white[mask] = [255, 255, 255]
+    black_white[np.invert(mask)] = [0, 0, 0]
+    bb_by_color(labels, black_white, objects_colors['black'], "enemy")
+    labels['bbs'] = [(*bb[:4], "M", "player") if 156 <= bb[0] <= 158 and 8 <= bb[2] <= 13 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "M", "building") if 170 <= bb[0] and 24 <= bb[2] else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "M", "shot") if bb[2] <= 5 and bb[3] <= 5 else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "S", "score") if 8 <= bb[0] <= 12 else bb for bb in labels['bbs']]
     plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
@@ -97,7 +187,7 @@ def plot_bounding_boxes(obs, bbs, objects_colors):
     if PLOT_BB:
         for bb in bbs:
             try:
-                mark_bb(obs, bb, np.array([255 - cv for cv in objects_colors[bb[5]]]))
+                mark_bb(obs, bb, np.array([cv for cv in objects_colors[bb[5]]]))
             except KeyError as err:
                 print(err)
                 mark_bb(obs, bb, np.array([255, 255, 255]))
@@ -229,6 +319,18 @@ def _augment_dict_carnival(obs, info):
     labels['bbs'] += [(14, 69, 13, 29, "S", "pipes")]
     plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
+
+def _augment_dict_coinrun(obs, info):
+    labels = info['labels'] = {}
+    labels['bbs'] = []
+    objects_colors = {
+        "owl": (214, 92, 92),
+        "bonus": (204, 0, 0),
+    }
+    labels['bbs'] += [(34, 73, 34, 38, "S", "owl")]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
+
 
 
 def print_obj(brig, y, x, size=(10, 8)):
@@ -411,12 +513,13 @@ def points_around(image_array, y, x, color, size):
 
 
 class RandomAgent(Agent):
-    def __init__(self, env):
+    def __init__(self, env, game):
         self.env = env
+        self.game = game
         print(self.env.action_space)
 
     def draw_action(self, state):
-        return self.env.action_space.sample()
+        return self.env.action_space.sample() # if self.game != "coinrun" else np.random.randint((self.env.ac_space.eltype.n, ))
 
 
 def load_agent(args, env):
@@ -432,12 +535,13 @@ def load_agent(args, env):
         print("\n================================\nWARNING: Random Agent was selected, as no suitable a"
               "gent with the name of the game was found in folder 'agents'"
               " or the agent could not be loaded.\n===========================\n")
-        agent = RandomAgent(env)
+        agent = RandomAgent(env, args.game)
     return agent
 
 
 def put_lives(info_dict):
-    info_dict['labels']['lives'] = info_dict['ale.lives']
+    if 'ale.lives' in info_dict:
+        info_dict['labels']['lives'] = info_dict['ale.lives']
     return info_dict['labels']
 
 

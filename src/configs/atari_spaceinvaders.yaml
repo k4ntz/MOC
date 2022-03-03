@@ -31,7 +31,7 @@ dataset_roots:
 
 
 train:
-  log: false
+  log: true
   batch_size: 16
   max_epochs: 10000
   max_steps: 5000

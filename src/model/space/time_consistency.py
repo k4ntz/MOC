@@ -18,6 +18,7 @@ class TcSpace(nn.Module):
 
     def __init__(self):
         nn.Module.__init__(self)
+        print(f'{arch.area_object_weight=}')
         self.space = Space()
         self.zero = nn.Parameter(torch.tensor(0.0))
         self.count_difference_variance = RunningVariance()
@@ -68,6 +69,8 @@ class TcSpace(nn.Module):
         else:
             flow_scaling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step / 2)
             area_object_scaling = 1 - flow_scaling
+
+        # print(f'{z_what_loss_objects=} {area_object_scaling=} {arch.area_object_weight=} => {z_what_loss_objects * area_object_scaling * arch.area_object_weight}')
         tc_log = {
             'z_what_loss': z_what_loss,
             'z_what_loss_pool': z_what_loss_pool,

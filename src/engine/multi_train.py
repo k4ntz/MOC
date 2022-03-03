@@ -2,7 +2,7 @@ import itertools
 from .train import train
 import numpy as np
 from rtpt import RTPT
-
+import ast
 
 def boolean_print(v):
     return f'{v + 0}'
@@ -28,7 +28,7 @@ def lr_print(v):
         return s
 
 
-def multi_train(base_cfg):
+def multi_train(cfg):
     #  'aow': ('arch.area_object_weight', np.logspace(0, 1.5, 3), lambda v: f'{v:.1f}')
     #         {
     #             'fi': ('arch.flow_input', [False], boolean_print),
@@ -111,11 +111,11 @@ def multi_train(base_cfg):
             'aow': ('arch.area_object_weight', np.insert(np.logspace(1, 1, 1), 0, 0.0), lambda v: f'{v:.1f}'),
         },
         # {
-        #     'seed': ('seed', range(8, 9), identity_print),
-        #     'aow': ('arch.area_object_weight', np.logspace(1, 1, 1), lambda v: f'{v:.1f}'),
+        #     'seed': ('seed', range(6, 9), identity_print),
+        #     'aow': ('arch.area_object_weight', np.insert(np.logspace(3, 3, 1), 0, 0.0), lambda v: f'{v:.1f}'),
         # },
     ]
-    base_exp_name = base_cfg.exp_name
+    base_exp_name = cfg.exp_name
     total_experiments = sum(len(list(itertools.product(*[v[1] for v in experiment_set.values()])))
                             for experiment_set in experiment_sets)
     i = 0
@@ -125,18 +125,29 @@ def multi_train(base_cfg):
         configs = itertools.product(*[v[1] for v in experiment_set.values()])
         params = [v[0] for v in experiment_set.values()]
         params_short = [k for k in experiment_set.keys()]
+        base_conf = [recursive_getatt(cfg, p) for p in params]
+        print(base_conf)
         for conf in configs:
-            cfg = base_cfg.clone()
             conf = [c.item() if isinstance(c, np.float) else c for c in conf]
+            print(f'{cfg.arch.area_object_weight=}')
             cfg.merge_from_list([val for pair in zip(params, conf) for val in pair])
+            print(f'{cfg.arch.area_object_weight=} {[val for pair in zip(params, conf) for val in pair]=}')
             conf_str = [config_line[2](c) for c, config_line in zip(conf, experiment_set.values())]
             cfg.merge_from_list(
                 ['exp_name', base_exp_name + "_" + "_".join([f'{para}{v}' for para, v in zip(params_short, conf_str)])])
             print("=========" * 10)
             print("==========", "Starting experiment with the following cfg:", "==========",
                   cfg.exp_name, f"[{i}/{total_experiments}]", "==========")
-            print(cfg)
+            # print(cfg)
             print("=========" * 10)
+
             train(cfg, rtpt_active=False)
             i += 1
             rtpt.step()
+        cfg.merge_from_list([val for pair in zip(params, base_conf) for val in pair])
+
+
+def recursive_getatt(cfg, key):
+    for subkey in key.split("."):
+        cfg = cfg[subkey]
+    return cfg

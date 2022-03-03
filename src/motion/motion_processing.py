@@ -177,6 +177,7 @@ def process_motion_to_latents(img, motion, G=16):
     :return z_pres: (G * G, 1) in (-1, 1) (tanh)
     :return z_where: (G * G, 4), where all grid cells without z_pres == 1 only contain zero
     """
+    H, W = motion.shape
     vis_motion = motion > motion.mean()
     vis_motion = (closing(vis_motion, square(3)) * 255).astype(np.uint8)
     # TODO: Investigate Canny function
@@ -187,8 +188,8 @@ def process_motion_to_latents(img, motion, G=16):
     # bbs = merge_bbs(bbs)
     motion_z_pres = torch.zeros((G, G, 1))
     motion_z_where = torch.zeros((G, G, 4))
-    to_G_y = 210 / G
-    to_G_x = 160 / G
+    to_G_y = H / G
+    to_G_x = W / G
     for x, y, w, h in bbs:
         # One could collect background colors and prune non-objects only consisting of those colors.
         # But background might be of same color in other area
@@ -196,16 +197,16 @@ def process_motion_to_latents(img, motion, G=16):
             x, y, w, h = select(img, x, y, w, h)
             if x < 0:
                 continue
-        w = min(160 - x, w)
-        h = min(210 - y, h)
-        z_where_x = ((x + w / 2) / 160) * 2 - 1
-        z_where_y = ((y + h / 2) / 210) * 2 - 1
+        w = min(W - x, w)
+        h = min(H - y, h)
+        z_where_x = ((x + w / 2) / W) * 2 - 1
+        z_where_y = ((y + h / 2) / H) * 2 - 1
         y_idx = int((y + h // 2) // to_G_y)
         x_idx = int((x + w // 2) // to_G_x)
-        if motion_z_pres[y_idx, x_idx] == 0.0 or w / 160 * h / 210 > motion_z_where[y_idx, x_idx][:2].prod():
+        if motion_z_pres[y_idx, x_idx] == 0.0 or w / W * h / H > motion_z_where[y_idx, x_idx][:2].prod():
             motion_z_pres[y_idx, x_idx] = 1.0
             motion_z_where[y_idx, x_idx] = torch.tensor(
-                [w / 160, h / 210, z_where_x, z_where_y])
+                [w / W, h / H, z_where_x, z_where_y])
     return vis_motion, contours, motion_z_pres.reshape(G * G, -1), motion_z_where.reshape(G * G, -1)
 
 
@@ -245,7 +246,7 @@ class ProcessingVisualization:
 class Identity(ProcessingVisualization):
     def make_visualization(self, frame, motion, space_frame=None):
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/MotionIdentity_{self.vis_counter:04}.png',
-                   motion)
+                   motion * 255)
         vis_motion = motion > 0
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/Identity_{self.vis_counter:04}.png',
                    self.apply_data(frame, vis_motion))
@@ -323,7 +324,7 @@ class BoundingBoxes(ProcessingVisualization):
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         objects = objects[:, [2, 0, 3, 1]]
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects))
-        result = Image.fromarray(bb_img.permute(1, 2, 0).numpy())
+        result = Image.fromarray(ndimage.zoom(bb_img.permute(1, 2, 0).numpy(), (3, 3, 1), order=1))
         result.save(f'{self.vis_path}/BoundingBox/{self.vis_counter:04}.png')
 
 
@@ -332,13 +333,14 @@ class ZWhereZPres(ProcessingVisualization):
         vis_motion, contours, z_pres, z_where = process_motion_to_latents(frame, motion)
         z_where = z_where[z_pres.squeeze() > 0.5]
         image = np.array(frame)
+        H, W, C = frame.shape
         z_where_space = torch.clone(z_where)
         z_where[:, 2:] += 1
         z_where[:, 2:] /= 2
-        z_where[:, 0] *= 160
-        z_where[:, 2] *= 160
-        z_where[:, 1] *= 210
-        z_where[:, 3] *= 210
+        z_where[:, 0] *= W
+        z_where[:, 2] *= W
+        z_where[:, 1] *= H
+        z_where[:, 3] *= H
 
         z_where_space[:, 2:] += 1
         z_where_space[:, 2:] /= 2
@@ -366,8 +368,8 @@ class ZWhereZPres(ProcessingVisualization):
         cc_bb_img = draw_bb(torch_img, cc_bb, colors=['orange'] * len(contours))
         result_cc = Image.fromarray(cc_bb_img.permute(1, 2, 0).numpy())
         result_cc.save(f'{self.vis_path}/{self.motion_type}/cc_bb_{self.vis_counter:04}.png')
-        to_G_x = 160 // self.G
-        to_G_y = 210 // self.G
+        to_G_x = W // self.G
+        to_G_y = H // self.G
         grid_flow = z_pres.numpy().reshape((self.G, self.G)).repeat(to_G_x, axis=1).repeat(to_G_y, axis=0)
         vis_frame = frame[:grid_flow.shape[0], :grid_flow.shape[1]]
         cv.imwrite(f'{self.vis_path}/{self.motion_type}/vis_motion_{self.vis_counter:04}.png',

@@ -23,6 +23,12 @@ def save(trail, output_path, visualizations=None, mode=None, space_frame=None):
         save_frame(frame, mode, output_path.format(i), visualizations=visualizations, space_frame=space_frame[i])
 
 
+def save_coinrun(trail, output_path, visualizations=None, space_frame=None):
+    frame_modes = [align(frame, prev) for frame, prev in zip(trail[-4:], trail[-5:])]
+
+    for i, (frame, frame_mode) in enumerate(zip(trail[-4:], frame_modes)):
+        save_frame(frame, frame_mode, output_path.format(i), visualizations=visualizations, space_frame=space_frame[i])
+
 def save_frame(frame, mode, output_path, visualizations=None, space_frame=None):
     """
     Computes the flow from frame2 to frame1
@@ -34,10 +40,34 @@ def save_frame(frame, mode, output_path, visualizations=None, space_frame=None):
     :param visualizations: List[ProcessingVisualization] for visualizations
     :param space_frame: [H_2, W_2, 3] array resized for SPACE
     """
-    mode_delta = np.abs(frame - mode)
+    mode_delta = np.abs(frame.astype(np.int32) - mode.astype(np.int32))
     mode_delta = np.max(mode_delta, axis=-1)
+    # print("Warning:temporary mode modification not yet removed!")
+    # mode_delta = np.maximum(np.zeros_like(mode_delta), mode_delta - 60).astype(np.uint8)
     delta_max = mode_delta.max()
     mode_delta = mode_delta / delta_max if delta_max > 0 else mode_delta
     save_motion(frame, mode_delta, output_path)
     for vis in visualizations:
         vis.save_vis(frame, mode_delta, space_frame=space_frame)
+
+
+def align(frame, ref):
+    best_aligned = np.zeros_like(frame)
+    best_delta = 1000
+    offset = 0
+    for x in range(-offset, offset + 1, 1):
+        for y in range(-offset, offset + 1, 1):
+            align = np.copy(frame)
+            sub_ref = ref[y:] if y >= 0 else ref[:y]
+            sub_ref = sub_ref[:, x:] if x >= 0 else sub_ref[:, :x]
+            ysc = slice(None, -y) if y > 0 else slice(-y, None)
+            xsc = slice(None, -x) if x > 0 else slice(-x, None)
+            align[ysc, xsc] = sub_ref
+            mode_delta = np.abs(frame.astype(np.int32) - align.astype(np.int32))
+            delta = np.mean(np.maximum(np.zeros_like(mode_delta), mode_delta - 120))
+            if delta < best_delta:
+                best_aligned = align
+                best_delta = delta
+
+    return best_aligned
+
