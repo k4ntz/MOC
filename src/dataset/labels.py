@@ -21,9 +21,13 @@ label_list_space_invaders = ["no_label"] + [f"{side}_score" for side in ['left',
                                                                                               range(6)] \
                             + ["space_ship", "player", "block", "bullet"]
 
+label_list_riverraid = ["no_label", "player", 'fuel_gauge', 'fuel', 'lives', 'logo', 'score', 'shot', 'fuel_board',
+                        'building', 'street', 'enemy']
+
+label_list_air_raid = ["no_label", "player", 'score', 'building', 'shot', 'enemy']
+
 
 def filter_relevant_boxes(game, boxes_batch, boxes_gt):
-    # print(boxes_batch[0])
     if "MsPacman" in game:
         return [box_bat[box_bat[:, 1] < 104 / 128] for box_bat in boxes_batch]
     elif "Carnival" in game:
@@ -35,9 +39,13 @@ def filter_relevant_boxes(game, boxes_batch, boxes_gt):
         return [box_bat[box_bat[:, 1] > 21 / 128] for box_bat in boxes_batch]
     elif "Boxing" in game:
         return [box_bat[(box_bat[:, 0] > 19 / 128) * (box_bat[:, 1] < 110 / 128)] for box_bat in boxes_batch]
+    elif "AirRaid" in game:
+        return [box_bat[box_bat[:, 0] > 8 / 128] for box_bat in boxes_batch]
+    elif "Riverraid" in game:
+        return [box_bat[box_bat[:, 0] < 98 / 128] for box_bat in boxes_batch]  # Does not cover Fuel Gauge
     elif "Tennis" in game:
         return [box_bat[np.logical_or((box_bat[:, 0] > 8 / 128) * (box_bat[:, 1] < 60 / 128),
-                                         (box_bat[:, 0] > 68 / 128) * (box_bat[:, 1] < 116 / 128))]
+                                      (box_bat[:, 0] > 68 / 128) * (box_bat[:, 1] < 116 / 128))]
                 for box_bat in boxes_batch]
     else:
         raise ValueError(f"Game {game} could not be found in labels")
@@ -67,6 +75,10 @@ def label_list_for(game):
         return label_list_boxing
     elif "Tennis" in game:
         return label_list_tennis
+    elif "AirRaid" in game:
+        return label_list_air_raid
+    elif "Riverraid" in game:
+        return label_list_riverraid
     elif "SpaceInvaders" in game:
         return label_list_space_invaders
     else:

@@ -249,9 +249,9 @@ class SpaceEval:
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
             z_pres_prob = z_pres_prob.squeeze()
             z_pres = z_pres_prob > 0.5
-            # if not (0.25 <= z_pres.sum() / virtual_batch_size <= 50):
-            #     z_whats = None
-            #     break
+            if not (0.05 <= z_pres.sum() / virtual_batch_size <= 50 * 4):
+                z_whats = None
+                break
             if cfg.save_relevant_objects:
                 for idx, (sel, bbs) in enumerate(zip(z_pres, z_where)):
                     for obj_idx, bb in enumerate(bbs[sel]):
