@@ -62,16 +62,21 @@ def prepare_mean_std(experiments):
 
         for sub_df in sub_dfs:
             add_contrived_columns(sub_df)
+        metrics = [column for column in sub_dfs[0]]
         if first:
             columns.append(sub_dfs[0]['global_step'])
             first = False
-        for metric in sub_dfs[0]:
-            concat_over_seeds = pd.concat([d[metric] for d in sub_dfs], axis=1)
+
+        for idx, sub_df in enumerate(sub_dfs):
+            sub_df.rename(columns={column: f'{directories[idx]}_{column}' for column in sub_df}, inplace=True)
+        for metric in metrics:
+            concat_over_seeds = pd.concat([sub_df[f'{d}_{metric}'] for d, sub_df in zip(directories, sub_dfs)], axis=1)
             mean = concat_over_seeds.mean(axis=1)
             mean.name = f'{k}_{metric}_mean'
             std = concat_over_seeds.std(axis=1)
             std.name = f'{k}_{metric}_std'
             columns.extend([mean, std])
+            columns.extend([concat_over_seeds[column] for column in concat_over_seeds])
     df = pd.concat(columns, axis=1)
     return df
 
@@ -114,7 +119,7 @@ def bar_plot(experiments, key, joined_df, title=None, caption="A plot of ...", g
 
 
 def save_and_tex(caption, key, kind="line"):
-    img_path = os.path.join(result_path, "img", f"{caption}_{kind}_{key}.png")
+    img_path = os.path.join(result_path, "img", f"{caption}_{kind}_{key}.pdf")
     if os.path.exists(img_path):
         os.remove(img_path)
     plt.savefig(img_path, bbox_inches="tight")
@@ -151,39 +156,45 @@ def pr_plot(experiment_groups, joined_df):
     for game in experiment_groups:
         plt.figure(figsize=(12, 7))
 
-        plt.ylim((-0.1, 1.1))
+        plt.ylim((-0.05, 1.05))
+        plt.xlim((-0.05, 1.05))
         plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
-            x = joined_df[f'{game}_{expis}_relevant_recall_mean'].to_numpy()
-            y = joined_df[f'{game}_{expis}_relevant_precision_mean'].to_numpy()
-            x_err = joined_df[f'{game}_{expis}_relevant_recall_std'].to_numpy()
-            y_err = joined_df[f'{game}_{expis}_relevant_precision_std'].to_numpy()
-            x_ = x[1:] - x[:-1]
-            y_ = y[1:] - y[:-1]
-            dist = np.sqrt(x_**2 + y_**2)
-
+            if expis == "aow10.0":
+                continue
+            if expis == "baseline":
+                x = np.concatenate(
+                    [joined_df[f'{game}_{expis}_seed{idx}_relevant_recall'].to_numpy() for idx in range(5)])
+                y = np.concatenate(
+                    [joined_df[f'{game}_{expis}_seed{idx}_relevant_precision'].to_numpy() for idx in range(5)])
+            else:
+                x = np.concatenate([joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
+                y = np.concatenate([joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
+            # x_err = joined_df[f'{game}_{expis}_relevant_recall_std'].to_numpy()
+            # y_err = joined_df[f'{game}_{expis}_relevant_precision_std'].to_numpy()
+            # dist = np.sqrt(x_**2 + y_**2)
+            #
             high = np.array(mcolors.to_rgb(c))
-            red = my_cmap((high * 0.2, high))
-            colors = red(np.linspace(0, 1, len(x)))
-            colors2 = red(np.linspace(0, 1, len(x[4::5])))
-            plt.scatter(x[4::5], y[4::5], c=colors2, zorder=3, edgecolors='black', alpha=0.8)
-            plt.scatter(x, y, c=colors, zorder=3, edgecolors='black', alpha=0.2)
-            for xe, ye, ex, ey, ec in zip(x[4::5], y[4::5], x_err[4::5], y_err[4::5], colors):
-                plt.errorbar(xe, ye, xerr=ex, yerr=ey, fmt='none', ecolor=ec, capsize=4)
+            red = my_cmap((high * 0.5, high))
+            colors = red(np.concatenate([np.linspace(0, 1, 26) for _ in range(5)]))
+            # plt.scatter(x[4::5], y[4::5], c=colors2, zorder=3, edgecolors='black', alpha=0.8)
+            # plt.scatter(x, y, c=colors, zorder=3, edgecolors='black', alpha=0.8)
+            # for xe, ye, ex, ey, ec in zip(x[4::5], y[4::5], x_err[4::5], y_err[4::5], colors):
+            #     plt.errorbar(xe, ye, xerr=ex, yerr=ey, fmt='none', ecolor=ec, capsize=4)
             # plt.quiver(x[:-1][dist > dth], y[:-1][dist > dth], x_[dist > dth],
             #            y_[dist > dth], np.linspace(0, 1, len(x) - 1)[dist > dth],
             #            angles='xy', width=0.003, scale_units='xy', scale=1,
             #            linewidth=1, edgecolor='#00000080', cmap=red, zorder=4)
             prs = np.stack((x, y), axis=1)
-            print(prs)
             bounds = np.array([pr for pr in prs if all(not all(pr2 > pr) for pr2 in prs)])
             bounds_ind = np.argsort(bounds[:, 0])
             bounds = bounds[bounds_ind]
+            plt.scatter(x, y, alpha=0.5, c=colors, s=15, marker='x')
             bounds = np.insert(bounds, 0, [0.0, bounds[0, 1]], axis=0)
             bounds = np.append(bounds, [[bounds[-1, 0], 0.0]], axis=0)
-            plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5)
-            plt.plot(x, y, linestyle='dotted', c=c, zorder=0, alpha=0.2)
+            plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), )
         plt.legend(loc="lower left")
         save_and_tex(translate(game), "Precision-Recall Curve", kind="Quiver")
 
