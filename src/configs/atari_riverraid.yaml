@@ -21,12 +21,13 @@ train:
   batch_size: 16
   max_epochs: 1000
   max_steps: 5000
-  print_every: 500
-  save_every: 1000
+  print_every: 200
+  save_every: 500
   num_workers: 4
   clip_norm: 1.0
   max_ckpt: 4
   eval_on: true
+  eval_every: 200
   solver:
     fg:
       optim: 'RMSprop'
