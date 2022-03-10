@@ -155,6 +155,7 @@ def main():
         compute_root_median(args, data_base_folder)
         exit(0)
     set_plot_bb(args.plot_bb)
+    # Trick for easier labeling
     if "Tennis" in args.game:
         image_offset(f"offsets/tennis.png")
     if "Riverraid" in args.game:
@@ -183,6 +184,9 @@ def main():
         print("Ensuring that global median (mode) is used.")
         if not args.no_color_hist:
             set_color_hist(root_mode)
+            # Exceptions where mode-delta is not working well, but it is easily fixed,
+            # by marking some colors interesting or uninteresting respectively.
+            # Those would be no issue with FlowNet
             if "Pong" in args.game:
                 set_special_color_weight(15406316, 8)
             if "AirRaid" in args.game:

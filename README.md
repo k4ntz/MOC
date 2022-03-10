@@ -1,7 +1,24 @@
-# TcSPACE
+# SPACE-Time
 
-This fork is used for my master thesis, aiming to amplify SPACE with techniques using optical flow or constrastive approaches.
+We heavily modified the create_dataset.py described below for SPACE-Time:
 
+It tries to use an Agent from folder `agents` also in root directory'
+`python3 create_dataset.py -f train -g Pong`
+
+Important new options are:
+
+* `--plot_bb` adds bounding boxes to the generated images!
+* `--root` use the global mode image instead of the mode of the trail
+* `--root-median` computes the mode and median images from all of those already generated. 
+
+Some other frequently changed things are currently not settings yet, but set in the code...
+One such thing is the visualization; in `motion_processing.py` we define the class ProcessingVisualization 
+and implementations, that take in the frames and motion and visualize sth. for every `self.every_n` up to `self.max_vis`
+times. 
+
+The settings for the visualization are defined (grouped by motion type and one for the ground truth labels)
+inside the main function. 
+E.g `ZWhereZPres` does show most of the steps used when going from binary motion yes/no to z_where and z_pres latents.
 # SPACE
 
 This is the AIML Rework of the SPACE model presented in the following paper:

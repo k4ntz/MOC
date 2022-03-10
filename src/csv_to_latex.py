@@ -7,6 +7,31 @@ import matplotlib.colors as mcolors
 import re
 import numpy as np
 
+
+label_list_pacman = ["no_label", "pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost", "eyes",
+                     "white_ghost", "fruit", "save_fruit", "life1", "life2", "score", "corner_block"]
+
+label_list_pong = ["no_label", "player", 'enemy', 'ball', 'enemy_score', 'player_score']
+
+label_list_carnival = ["no_label", "owl", 'rabbit', 'shooter', 'refill', 'bonus', "duck",
+                       "flying_duck", "score", "pipes", "eating_duck", "bullet"]
+
+label_list_boxing = ["no_label", "black", 'black_score', 'clock', 'white', 'white_score', 'logo']
+
+label_list_tennis = ["no_label", "player", 'enemy', 'ball', 'ball_shadow', 'net', 'logo',
+                     'player_score', 'enemy_score']
+
+# Maybe enemy bullets, but how should SPACE differentiate
+label_list_space_invaders = ["no_label"] + [f"{side}_score" for side in ['left', 'right']] + [f"enemy_{idx}"
+                                                                                              for idx in
+                                                                                              range(6)] \
+                            + ["space_ship", "player", "block", "bullet"]
+
+label_list_riverraid = ["no_label", "player", 'fuel_gauge', 'fuel', 'lives', 'logo', 'score', 'shot', 'fuel_board',
+                        'building', 'street', 'enemy']
+
+label_list_air_raid = ["no_label", "player", 'score', 'building', 'shot', 'enemy']
+
 RESULT_TEX = os.path.join("D:", "results", "final", "result.tex")
 
 sns.set_theme()
@@ -134,12 +159,13 @@ def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of 
     for game in experiment_groups:
         plt.figure(figsize=(12, 7))
         plt.ylim((-0.1, 1.1))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=18)
+        plt.xticks(fontsize=18)
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
             plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c, label=f"{translate(expis)}")
             plt.fill_between(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
                              joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'], alpha=0.5, color=c)
-        plt.legend(loc="lower right")
+        plt.legend(loc="lower right", fontsize=18)
         save_and_tex(translate(game), key)
 
 from matplotlib.colors import LinearSegmentedColormap
@@ -304,6 +330,47 @@ def select_game(expi):
             return game
     raise ValueError(f'{expi} does not contain any of the known games...')
 
+object_table ="""\\begin{{subtable}}[b]{{\\textwidth}}\\centering
+\\begin{{tabular}}{{@{{}}lccrr@{{}}}}
+\\toprule
+\\textbf{{Object/Entity}} & \\textbf{{Method}} & \\textbf{{Relevant}} & \\textbf{{Precision}} & \\textbf{{Recall}} \\\\ 
+\\midrule
+{0} \\\\
+\\bottomrule
+\\end{{tabular}}
+\\caption{{{1}}}
+\\end{{subtable}}
+"""
+
+def generate_object_tables(desired_experiment_order):
+    for game in desired_experiment_order:
+        with open(RESULT_TEX, "a") as tex:
+            tex.write(object_table.format(" \\\\ \n".join([" & ".join([translate(label), "Color", "Yes/No", "1.000", "1.000"]) for label in label_list_for(game) if label != "no_label"]), translate(game)))
+            tex.write("\n")
+
+def label_list_for(game):
+    """
+    Return Labels from line in csv file
+    """
+    if "mspacman" in game:
+        return label_list_pacman
+    elif "carnival" in game:
+        return label_list_carnival
+    elif "pong" in game:
+        return label_list_pong
+    elif "boxing" in game:
+        return label_list_boxing
+    elif "tennis" in game:
+        return label_list_tennis
+    elif "air_raid" in game:
+        return label_list_air_raid
+    elif "riverraid" in game:
+        return label_list_riverraid
+    elif "space_invaders" in game:
+        return label_list_space_invaders
+    else:
+        raise ValueError(f"Game {game} could not be found in labels")
+
 
 def main():
     if os.path.exists(RESULT_TEX):
@@ -316,14 +383,25 @@ def main():
                                                                                                           1][2:])
     joined_df = prepare_mean_std(experiments)
     experiment_groups = sub_group_by(experiments, select_game)
-    mutual_info_columns = ["relevant_precision", "relevant_recall", "relevant_f_score"]
+    mutual_info_columns = ["relevant_precision", "relevant_recall", "relevant_f_score",
+                           "relevant_few_shot_accuracy_with_1",
+                           "relevant_few_shot_accuracy_with_4",
+                           "relevant_few_shot_accuracy_with_16",
+                           "relevant_bayes_accuracy",
+                           "relevant_few_shot_accuracy_cluster_nn", "relevant_adjusted_mutual_info_score"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    table_by_metric(experiment_groups, mutual_info_columns, joined_df)
+    # table_by_metric(experiment_groups, mutual_info_columns, joined_df)
     # line_plot(experiments, "relevant_ap_avg", joined_df)
-    line_plot(experiment_groups, "relevant_f_score", joined_df)
-    pr_plot(experiment_groups, joined_df)
+    # line_plot(experiment_groups, "relevant_f_score", joined_df)
+    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
+    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
+    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_16", joined_df)
+    # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
+    # line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
+    # pr_plot(experiment_groups, joined_df)
+    generate_object_tables(desired_experiment_order)
     print("Plotting completed")
 
 
