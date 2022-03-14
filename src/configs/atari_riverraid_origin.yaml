@@ -13,7 +13,7 @@ dataset: 'ATARI'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../data/ATARI'
+  ATARI: '../aiml_atari_data_final/space_like'
 
 train:
   batch_size: 16
