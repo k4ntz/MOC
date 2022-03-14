@@ -41,7 +41,8 @@ result_path = os.path.join("D:", "results", "final")
 metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI',
     'few_shot_accuracy_cluster_nn': 'CCA',
-    'ap_avg': "Avg AP",
+    'ap_avg': "Average AP",
+    'accuarcy': "Accuracy",
     'aow0.0': "SPACE-Flow",
     'aow10.0': "SPACE-Time",
     'baseline': "SPACE",
@@ -323,6 +324,42 @@ def add_contrived_columns(df):
     return df
 
 
+qual_page="""\\newpage
+\\thispagestyle{{empty}}
+\\newgeometry{{left=1cm,bottom=1cm,right=1cm,top=1cm}}
+    \\begin{{sidewaysfigure}}[htbp]
+    \\centering
+    \\centerline{{\\includegraphics[width=1\\textwidth]{{img_qual/0-separations_{0}.png}}}}
+    \\caption{{{1}. The Columns from left to right: Input Image, Reconstruction, Foreground, 
+    Bounding Boxes, Background, K x Background Components, K x Background Masks, K x Background Color Maps, Alpha}}
+    \\end{{sidewaysfigure}}
+\\restoregeometry
+"""
+
+
+def switch_aow(experiment_name):
+    if "aow" in experiment_name:
+        split = experiment_name.split("_")
+        return "_".join(split[:-2] + ['z', split[-1]] + [split[-2]])
+    return experiment_name
+
+def switch_aow_back(experiment_name):
+    if "aow" in experiment_name:
+        split = experiment_name.split("_")
+        return "_".join(split[:-3] + [split[-1]] + [split[-2]])
+    return experiment_name
+
+def qualitative_appendix(files):
+    pngs = [switch_aow(f) for f in files if "seed4" in f]
+    pngs = sorted(pngs)
+    for f in pngs:
+        with open(RESULT_TEX, "a") as tex:
+            tex.write(qual_page.format(switch_aow_back(f), translate(f).replace('\\_seed4', '').replace("z", " ").replace("\\_", " ")))
+            tex.write("\n")
+
+
+
+
 
 def select_game(expi):
     for game in ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']:
@@ -383,16 +420,17 @@ def main():
                                                                                                           1][2:])
     joined_df = prepare_mean_std(experiments)
     experiment_groups = sub_group_by(experiments, select_game)
-    mutual_info_columns = ["relevant_precision", "relevant_recall", "relevant_f_score",
-                           "relevant_few_shot_accuracy_with_1",
-                           "relevant_few_shot_accuracy_with_4",
-                           "relevant_few_shot_accuracy_with_16",
-                           "relevant_bayes_accuracy",
-                           "relevant_few_shot_accuracy_cluster_nn", "relevant_adjusted_mutual_info_score"]
+    # mutual_info_columns = ["relevant_accuracy", "relevant_ap_avg", "relevant_f_score",
+    #             "all_accuracy", "all_ap_avg", "all_f_score"]
+    mutual_info_columns = ["relevant_few_shot_accuracy_with_1", "relevant_few_shot_accuracy_with_4",
+                           "relevant_few_shot_accuracy_with_16", "relevant_few_shot_accuracy_with_64",
+                           "relevant_few_shot_accuracy_cluster_nn"]
+
+    mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    # table_by_metric(experiment_groups, mutual_info_columns, joined_df)
+    table_by_metric(experiment_groups, mutual_info_columns, joined_df)
     # line_plot(experiments, "relevant_ap_avg", joined_df)
     # line_plot(experiment_groups, "relevant_f_score", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
@@ -401,7 +439,8 @@ def main():
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
     # line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
     # pr_plot(experiment_groups, joined_df)
-    generate_object_tables(desired_experiment_order)
+    # generate_object_tables(desired_experiment_order)
+    # qualitative_appendix(files)
     print("Plotting completed")
 
 
