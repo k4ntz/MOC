@@ -6,7 +6,8 @@ from collections import defaultdict
 import matplotlib.colors as mcolors
 import re
 import numpy as np
-
+from mpl_toolkits.mplot3d.axes3d import Axes3D
+from mpl_toolkits.mplot3d import proj3d
 
 label_list_pacman = ["no_label", "pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost", "eyes",
                      "white_ghost", "fruit", "save_fruit", "life1", "life2", "score", "corner_block"]
@@ -163,11 +164,15 @@ def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of 
         plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=18)
         plt.xticks(fontsize=18)
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
-            plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c, label=f"{translate(expis)}")
-            plt.fill_between(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
-                             joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'], alpha=0.5, color=c)
+            plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c,
+                     label=f"{translate(expis)}")
+            plt.fill_between(joined_df['global_step'],
+                             joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
+                             joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'],
+                             alpha=0.5, color=c)
         plt.legend(loc="lower right", fontsize=18)
         save_and_tex(translate(game), key)
+
 
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
@@ -176,6 +181,7 @@ import matplotlib.colors as mcolors
 def my_cmap(colors):
     nodes = [0.0, 1.0]
     return LinearSegmentedColormap.from_list("mycmap", list(zip(nodes, colors)), N=256)
+
 
 def pr_plot(experiment_groups, joined_df):
     plt.clf()
@@ -197,8 +203,10 @@ def pr_plot(experiment_groups, joined_df):
                 y = np.concatenate(
                     [joined_df[f'{game}_{expis}_seed{idx}_relevant_precision'].to_numpy() for idx in range(5)])
             else:
-                x = np.concatenate([joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
-                y = np.concatenate([joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
+                x = np.concatenate(
+                    [joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
+                y = np.concatenate(
+                    [joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
             # x_err = joined_df[f'{game}_{expis}_relevant_recall_std'].to_numpy()
             # y_err = joined_df[f'{game}_{expis}_relevant_precision_std'].to_numpy()
             # dist = np.sqrt(x_**2 + y_**2)
@@ -287,13 +295,15 @@ def bf(name):
 
 
 def table_entry(joined_df, idx, game, c, metric, variants):
-    all_mean = [joined_df.loc[joined_df["global_step"] == idx][game + "_" + v + "_" + metric + "_mean"].item() for v in variants]
+    all_mean = [joined_df.loc[joined_df["global_step"] == idx][game + "_" + v + "_" + metric + "_mean"].item() for v in
+                variants]
 
     mean = joined_df.loc[joined_df["global_step"] == idx][game + "_" + c + "_" + metric + "_mean"].item()
     std = joined_df.loc[joined_df["global_step"] == idx][game + "_" + c + "_" + metric + "_std"].item()
     if mean > 0.99 * np.max(all_mean):
         return f'\\textbf{{{mean :.3f} $\\pm$ {std :.3f}}}'
     return f'{mean :.3f} $\\pm$ {std :.3f}'
+
 
 def table_by_metric(experiment_groups, columns, joined_df, at=None, caption=None, group_key="space_invaders"):
     if at is None:
@@ -311,7 +321,10 @@ def table_by_metric(experiment_groups, columns, joined_df, at=None, caption=None
                     for c in experiment_groups[group_key] for idx in at]))
         with open(RESULT_TEX, "a") as tex:
             tex.write(table_metric_tex.format(header, " \\\\ \n".join(content), caption, ";".join([metric]),
-                                              ("c".join(["|"] * (len(experiment_groups) + 2)).replace('|', '||', 2).replace('||', '|', 1)),
+                                              ("c".join(["|"] * (len(experiment_groups) + 2)).replace('|', '||',
+                                                                                                      2).replace('||',
+                                                                                                                 '|',
+                                                                                                                 1)),
                                               translate(metric), 4))
             tex.write("\n")
 
@@ -320,11 +333,12 @@ def add_contrived_columns(df):
     for style in ['relevant', 'all', 'moving']:
         aps = df.filter(regex=f'{style}_ap')
         df[f'{style}_ap_avg'] = aps.mean(axis=1)
-        df[f'{style}_f_score'] = 2 * df[f'{style}_precision'] * df[f'{style}_recall'] / (df[f'{style}_precision'] + df[f'{style}_recall'] + 1e-8)
+        df[f'{style}_f_score'] = 2 * df[f'{style}_precision'] * df[f'{style}_recall'] / (
+                df[f'{style}_precision'] + df[f'{style}_recall'] + 1e-8)
     return df
 
 
-qual_page="""\\newpage
+qual_page = """\\newpage
 \\thispagestyle{{empty}}
 \\newgeometry{{left=1cm,bottom=1cm,right=1cm,top=1cm}}
     \\begin{{sidewaysfigure}}[htbp]
@@ -343,22 +357,23 @@ def switch_aow(experiment_name):
         return "_".join(split[:-2] + ['z', split[-1]] + [split[-2]])
     return experiment_name
 
+
 def switch_aow_back(experiment_name):
+    experiment_name = experiment_name.replace("seed4", "")
     if "aow" in experiment_name:
         split = experiment_name.split("_")
         return "_".join(split[:-3] + [split[-1]] + [split[-2]])
     return experiment_name
+
 
 def qualitative_appendix(files):
     pngs = [switch_aow(f) for f in files if "seed4" in f]
     pngs = sorted(pngs)
     for f in pngs:
         with open(RESULT_TEX, "a") as tex:
-            tex.write(qual_page.format(switch_aow_back(f), translate(f).replace('\\_seed4', '').replace("z", " ").replace("\\_", " ")))
+            tex.write(qual_page.format(switch_aow_back(f),
+                                       translate(f).replace('\\_seed4', '').replace("z", " ").replace("\\_", " ")))
             tex.write("\n")
-
-
-
 
 
 def select_game(expi):
@@ -367,7 +382,8 @@ def select_game(expi):
             return game
     raise ValueError(f'{expi} does not contain any of the known games...')
 
-object_table ="""\\begin{{subtable}}[b]{{\\textwidth}}\\centering
+
+object_table = """\\begin{{subtable}}[b]{{\\textwidth}}\\centering
 \\begin{{tabular}}{{@{{}}lccrr@{{}}}}
 \\toprule
 \\textbf{{Object/Entity}} & \\textbf{{Method}} & \\textbf{{Relevant}} & \\textbf{{Precision}} & \\textbf{{Recall}} \\\\ 
@@ -379,11 +395,15 @@ object_table ="""\\begin{{subtable}}[b]{{\\textwidth}}\\centering
 \\end{{subtable}}
 """
 
+
 def generate_object_tables(desired_experiment_order):
     for game in desired_experiment_order:
         with open(RESULT_TEX, "a") as tex:
-            tex.write(object_table.format(" \\\\ \n".join([" & ".join([translate(label), "Color", "Yes/No", "1.000", "1.000"]) for label in label_list_for(game) if label != "no_label"]), translate(game)))
+            tex.write(object_table.format(" \\\\ \n".join(
+                [" & ".join([translate(label), "Color", "Yes/No", "1.000", "1.000"]) for label in label_list_for(game)
+                 if label != "no_label"]), translate(game)))
             tex.write("\n")
+
 
 def label_list_for(game):
     """
@@ -409,6 +429,85 @@ def label_list_for(game):
         raise ValueError(f"Game {game} could not be found in labels")
 
 
+def set_axes_equal(ax):
+    '''Make axes of 3D plot have equal scale so that spheres appear as spheres,
+    cubes as cubes, etc..  This is one possible solution to Matplotlib's
+    ax.set_aspect('equal') and ax.axis('equal') not working for 3D.
+
+    Input
+      ax: a matplotlib axis, e.g., as output from plt.gca().
+    '''
+
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    x_middle = np.mean(x_limits)
+    y_range = abs(y_limits[1] - y_limits[0])
+    y_middle = np.mean(y_limits)
+    z_range = abs(z_limits[1] - z_limits[0])
+    z_middle = np.mean(z_limits)
+
+    plot_radius = 0.5*max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+
+def accuracy_plot(experiment_groups, joined_df):
+    ax1 = plt.axes(projection='3d')
+
+    xlen = 3 * 8
+    _x = np.arange(xlen + 8)
+    _x = np.array([sx for sx in _x if sx % 4 != 0])
+    _y = np.arange(4)
+    _xx, _yy = np.meshgrid(_x, _y)
+    x, y = _xx.ravel(), _yy.ravel()
+
+    top = np.zeros_like(x, dtype=np.double)
+    xc = 0
+    for expis in experiment_groups:
+        for c in experiment_groups["space_invaders"]:
+            for yc, samples in enumerate([1, 4, 16, 64]):
+                top[xc + yc * xlen] = joined_df.loc[joined_df["global_step"] == 5000][expis + "_" + c + "_" + f"relevant_few_shot_accuracy_with_{samples}_mean"].item()
+            xc += 1
+
+    bottom = np.zeros_like(top)
+    width = depth = 1
+    print(top)
+    ax1.view_init(10, -82)
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c'] * 8
+    print(len(colors))
+    print(len(top))
+    ax1.bar3d(x, y, bottom, width, depth, top, shade=True, color=colors * 4, linewidth=0.3)
+    ax1.set_title('Accuracy')
+    ax1.set_zticks([0.0, 0.25, 0.5, 0.75, 1.0], size='small')
+    ax1.set_yticks([0, 1, 2, 3], ["1", "4", "16", "64"], size='small')
+    ax1.set_xticks([1, 5, 9, 13, 17, 21, 25, 29],
+                   ["AirRaid", "Boxing", "Carnival", "MsPacman", "Pong", "Riverraid", "SpaceInvaders", "Tennis"],
+                   size='small', rotation=60, ha="right")
+    ax1.tick_params(pad=0)
+    scale = np.diag([4.0, 1.0, 1.0, 1.0])
+    scale = scale * (1.0 / scale.max())
+    scale[3, 3] = 1.0
+
+    def short_proj():
+        return np.dot(Axes3D.get_proj(ax1), scale)
+
+    # ax1.get_proj = short_proj
+    ax1.set_box_aspect(aspect=(4, 1, 1))
+    from matplotlib.lines import Line2D
+    custom_lines = [Line2D([0], [0], color='#1f77b4', lw=4),
+                    Line2D([0], [0], color='#ff7f0e', lw=4),
+                    Line2D([0], [0], color='#2ca02c', lw=4)]
+    ax1.legend(custom_lines, ['SPACE', 'SPACE-Flow', 'SPACE-Time'])
+    img_path = os.path.join(result_path, "img", "accuracy.svg")
+    plt.savefig(img_path, bbox_inches="tight")
+
+
+
 def main():
     if os.path.exists(RESULT_TEX):
         os.remove(RESULT_TEX)
@@ -422,15 +521,18 @@ def main():
     experiment_groups = sub_group_by(experiments, select_game)
     # mutual_info_columns = ["relevant_accuracy", "relevant_ap_avg", "relevant_f_score",
     #             "all_accuracy", "all_ap_avg", "all_f_score"]
-    mutual_info_columns = ["relevant_few_shot_accuracy_with_1", "relevant_few_shot_accuracy_with_4",
-                           "relevant_few_shot_accuracy_with_16", "relevant_few_shot_accuracy_with_64",
-                           "relevant_few_shot_accuracy_cluster_nn"]
-
-    mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
+    # mutual_info_columns = ["relevant_few_shot_accuracy_with_1", "relevant_few_shot_accuracy_with_4",
+    #                        "relevant_few_shot_accuracy_with_16", "relevant_few_shot_accuracy_with_64",
+    #                        "relevant_few_shot_accuracy_cluster_nn"]
+    #
+    # mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
+    mutual_info_columns = ["relevant_f_score", "relevant_few_shot_accuracy_with_4",
+                           "relevant_adjusted_mutual_info_score"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
+    # desired_experiment_order = ['riverraid', 'space_invaders']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    table_by_metric(experiment_groups, mutual_info_columns, joined_df)
+    # table_by_metric(experiment_groups, mutual_info_columns, joined_df)
     # line_plot(experiments, "relevant_ap_avg", joined_df)
     # line_plot(experiment_groups, "relevant_f_score", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
@@ -441,6 +543,7 @@ def main():
     # pr_plot(experiment_groups, joined_df)
     # generate_object_tables(desired_experiment_order)
     # qualitative_appendix(files)
+    accuracy_plot(experiment_groups, joined_df)
     print("Plotting completed")
 
 
