@@ -101,7 +101,6 @@ def _augment_dict_riverraid(obs, info):
     black_white[mask] = [255, 255, 255]
     black_white[np.invert(mask)] = [0, 0, 0]
     bb_by_color(labels, black_white, (0, 0, 0), "enemy", closing_active=False)
-    labels['bbs'] = [(*bb[:4], "S", "building") if bb[1] <= 31 or bb[1] >= 115 else bb for bb in labels['bbs']]
     labels['bbs'] = [(*bb[:4], "M", "street") if bb[3] >= 28 else bb for bb in labels['bbs']]
     fuel = {'bbs': []}
     bb_by_color(fuel, obs, (214, 92, 92), "fuel", closing_active=False)
@@ -110,6 +109,7 @@ def _augment_dict_riverraid(obs, info):
         labels['bbs'] = [(*bb[:4], "M", "fuel")
                          if bb[0] <= f_obj[0] <= bb[0] + bb[2] and bb[1] <= f_obj[1] <= bb[1] + bb[3]
                          else bb for bb in labels['bbs']]
+    labels['bbs'] = [(*bb[:4], "S", "building") if bb[1] <= 31 or bb[1] >= 115 else bb for bb in labels['bbs']]
     bb_by_color(labels, obs, objects_colors['player'], "player", closing_active=False)
     labels['bbs'] = [(*bb[:4], "S", "lives") if bb[0] >= 192 and bb[1] <= 57 else bb for bb in labels['bbs']]
     labels['bbs'] = [(*bb[:4], "S", "logo") if bb[0] >= 192 and bb[1] >= 69 else bb for bb in labels['bbs']]

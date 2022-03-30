@@ -6,8 +6,8 @@ load_time_consistency: true
 add_flow: true
 resume_ckpt: ''
 parallel: true
-device_ids: [9, 12, 13, 15]
-device: 'cuda:9'
+device_ids: [0, 1, 2, 3]
+device: 'cuda:0'
 
 logdir: '../output/logs/final'
 checkpointdir: '../output/checkpoints/final'
@@ -67,7 +67,8 @@ arch:
   fix_alpha_value: 0.1
 
   motion_underestimating: 1.5
-  motion_object_found_lambda: 0.1
+  motion_object_found_lambda: 0.025
+  z_where_offset: 0.2
 
   K: 4
   bg_sigma: 0.10

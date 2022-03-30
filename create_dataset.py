@@ -149,7 +149,7 @@ def main():
         Identity(vis_folder, "Mode", max_vis=50, every_n=1),
         ZWhereZPres(vis_folder, "Mode", max_vis=20, every_n=2),
     ]
-    visualizations_bb = [BoundingBoxes(vis_folder, '', max_vis=50, every_n=1)]
+    visualizations_bb = [BoundingBoxes(vis_folder, '', max_vis=20, every_n=1)]
 
     if args.rootmedian:
         compute_root_median(args, data_base_folder)

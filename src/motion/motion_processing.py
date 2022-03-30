@@ -318,15 +318,15 @@ class Erosion(ProcessingVisualization):
 
 class BoundingBoxes(ProcessingVisualization):
     def make_visualization(self, frame, motion, space_frame=None):
-
+        print("New Vis")
         image = np.array(frame)
         zoom = 3
         image = ndimage.zoom(image, (zoom, zoom, 1), order=0)
         labels = motion[5]
         bb_coor = motion.drop([4, 5], axis=1).to_numpy()
         objects = torch.from_numpy(bb_coor)
-        objects[:, [2, 3]] *= 160 * zoom
-        objects[:, [0, 1]] *= 210 * zoom
+        objects[:, [2, 3]] *= 128 * zoom
+        objects[:, [0, 1]] *= 128 * zoom
         torch_img = torch.from_numpy(image).permute(2, 0, 1)
         objects = objects[:, [2, 0, 3, 1]]
         bb_img = draw_bb(torch_img, objects, colors=['red'] * len(objects), labels=labels)

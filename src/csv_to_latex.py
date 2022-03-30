@@ -173,6 +173,29 @@ def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of 
         plt.legend(loc="lower right", fontsize=18)
         save_and_tex(translate(game), key)
 
+def line_plot_samples(experiment_groups, key, joined_df, title=None, caption="A plot of ..."):
+    plt.clf()
+    for game in experiment_groups:
+        plt.figure(figsize=(12, 7))
+        plt.ylim((-0.1, 1.1))
+        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=18)
+        plt.xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=18)
+        plt.xticks(fontsize=18)
+        for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
+            means = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_mean"].item()
+                     for samples in [1, 4, 16, 64]])
+            stds = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_std"].item()
+                     for samples in [1, 4, 16, 64]])
+            plt.plot([0, 1, 2, 3], means, color=c, marker="x",
+                     label=f"{translate(expis)}")
+            plt.fill_between([0, 1, 2, 3],
+                             means - stds,
+                             means + stds,
+                             alpha=0.3, color=c)
+
+        plt.legend(loc="lower right", fontsize=18)
+        save_and_tex(translate(game), "oversamples")
+
 
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
@@ -536,8 +559,10 @@ def main():
     # line_plot(experiments, "relevant_ap_avg", joined_df)
     # line_plot(experiment_groups, "relevant_f_score", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
+    line_plot_samples(experiment_groups, "relevant_few_shot_accuracy_with_", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_16", joined_df)
+    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_64", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
     # line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
     # pr_plot(experiment_groups, joined_df)

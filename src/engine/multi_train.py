@@ -106,14 +106,17 @@ def multi_train(cfg):
         #     'steps': ('train.max_steps', [3000], thousand_print),
         #     'dyn': ('arch.dynamic_scheduling', [True, False], boolean_print),
         # },
+        # {
+        #     'seed': ('seed', range(3), identity_print),
+        #     'szst': ('arch.z_scale_mean_start_value', np.array([-2.0, -2.5]), lambda v: f'{v:.1f}'),
+        #     'szen': ('arch.z_scale_mean_end_value', np.array([-2.0, -2.5]), lambda v: f'{v:.1f}'),
+        #     'szstd': ('arch.z_scale_std_value', np.array([0.1, 0.14, 0.18]), lambda v: f'{v:.1f}'),
+        #     'aow': ('arch.area_object_weight', np.logspace(1, 1, 1), lambda v: f'{v:.1f}'),
+        # },
         {
-            'seed': ('seed', range(5), identity_print),
+            'seed': ('seed', range(5, 10), identity_print),
             'aow': ('arch.area_object_weight', np.insert(np.logspace(1, 1, 1), 0, 0.0), lambda v: f'{v:.1f}'),
         },
-        # {
-        #     'seed': ('seed', range(6, 9), identity_print),
-        #     'aow': ('arch.area_object_weight', np.insert(np.logspace(3, 3, 1), 0, 0.0), lambda v: f'{v:.1f}'),
-        # },
     ]
     base_exp_name = cfg.exp_name
     total_experiments = sum(len(list(itertools.product(*[v[1] for v in experiment_set.values()])))
