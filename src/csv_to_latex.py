@@ -43,7 +43,8 @@ metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI',
     'few_shot_accuracy_cluster_nn': 'CCA',
     'ap_avg': "Average AP",
-    'accuarcy': "Accuracy",
+    'accuracy_': "Accuracy",
+    'accuracy': "Accuracy",
     'aow0.0': "SPACE-Flow",
     'aow10.0': "SPACE-Time",
     'baseline': "SPACE",
@@ -57,6 +58,8 @@ metric_name_translator = {
     'carnival': "Carnival",
     'riverraid': "Riverraid",
     'f_score': "F-Score",
+    'few_shot_': "Few-Shot ",
+    'with_': "",
 }
 
 
@@ -109,7 +112,7 @@ def prepare_mean_std(experiments):
 
 
 figure = """
-\\begin{{subfigure}}{{.45\\textwidth}}
+\\begin{{subfigure}}{{.53\\textwidth}}\\captionsetup{{aboveskip=-0.17em}}  
   \\centering
   \\includegraphics[width=\\textwidth]{{{1}}}
   \\caption{{{0}}}
@@ -159,10 +162,10 @@ def save_and_tex(caption, key, kind="line"):
 def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of ..."):
     plt.clf()
     for game in experiment_groups:
-        plt.figure(figsize=(12, 7))
+        plt.figure(figsize=(14, 7))
         plt.ylim((-0.1, 1.1))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=18)
-        plt.xticks(fontsize=18)
+        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+        plt.xticks(fontsize=24)
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
             plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c,
                      label=f"{translate(expis)}")
@@ -170,17 +173,18 @@ def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of 
                              joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
                              joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'],
                              alpha=0.5, color=c)
-        plt.legend(loc="lower right", fontsize=18)
+        plt.legend(loc="lower right", fontsize=28)
+        plt.ylabel(translate(key), fontsize=28)
+        plt.xlabel("Step", fontsize=28)
         save_and_tex(translate(game), key)
 
 def line_plot_samples(experiment_groups, key, joined_df, title=None, caption="A plot of ..."):
     plt.clf()
     for game in experiment_groups:
-        plt.figure(figsize=(12, 7))
+        plt.figure(figsize=(14, 7))
         plt.ylim((-0.1, 1.1))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=18)
-        plt.xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=18)
-        plt.xticks(fontsize=18)
+        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+        plt.xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=24)
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
             means = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_mean"].item()
                      for samples in [1, 4, 16, 64]])
@@ -193,7 +197,9 @@ def line_plot_samples(experiment_groups, key, joined_df, title=None, caption="A 
                              means + stds,
                              alpha=0.3, color=c)
 
-        plt.legend(loc="lower right", fontsize=18)
+        plt.legend(loc="lower right", fontsize=28)
+        plt.ylabel(translate(key), fontsize=28)
+        plt.xlabel("Samples per Class", fontsize=28)
         save_and_tex(translate(game), "oversamples")
 
 
@@ -214,8 +220,10 @@ def pr_plot(experiment_groups, joined_df):
 
         plt.ylim((-0.05, 1.05))
         plt.xlim((-0.05, 1.05))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-        plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+        plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+        plt.ylabel("Precision", fontsize=28)
+        plt.xlabel("Recall", fontsize=28)
 
         for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
             if expis == "aow10.0":
@@ -249,11 +257,11 @@ def pr_plot(experiment_groups, joined_df):
             bounds = np.array([pr for pr in prs if all(not all(pr2 > pr) for pr2 in prs)])
             bounds_ind = np.argsort(bounds[:, 0])
             bounds = bounds[bounds_ind]
-            plt.scatter(x, y, alpha=0.5, c=colors, s=15, marker='x')
+            plt.scatter(x, y, alpha=0.5, c=colors, s=35, marker='x')
             bounds = np.insert(bounds, 0, [0.0, bounds[0, 1]], axis=0)
             bounds = np.append(bounds, [[bounds[-1, 0], 0.0]], axis=0)
-            plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), )
-        plt.legend(loc="lower left")
+            plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), linewidth=3)
+        plt.legend(loc="lower left", fontsize=22)
         save_and_tex(translate(game), "Precision-Recall Curve", kind="Quiver")
 
 
@@ -549,15 +557,14 @@ def main():
     #                        "relevant_few_shot_accuracy_cluster_nn"]
     #
     # mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
-    mutual_info_columns = ["relevant_f_score", "relevant_few_shot_accuracy_with_4",
-                           "relevant_adjusted_mutual_info_score"]
+    mutual_info_columns = ["relevant_bayes_accuracy"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
     # desired_experiment_order = ['riverraid', 'space_invaders']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    # table_by_metric(experiment_groups, mutual_info_columns, joined_df)
+    table_by_metric(experiment_groups, mutual_info_columns, joined_df)
     # line_plot(experiments, "relevant_ap_avg", joined_df)
-    # line_plot(experiment_groups, "relevant_f_score", joined_df)
+    line_plot(experiment_groups, "relevant_f_score", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
     line_plot_samples(experiment_groups, "relevant_few_shot_accuracy_with_", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
@@ -565,10 +572,10 @@ def main():
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_64", joined_df)
     # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
     # line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
-    # pr_plot(experiment_groups, joined_df)
+    pr_plot(experiment_groups, joined_df)
     # generate_object_tables(desired_experiment_order)
     # qualitative_appendix(files)
-    accuracy_plot(experiment_groups, joined_df)
+    # accuracy_plot(experiment_groups, joined_df)
     print("Plotting completed")
 
 

@@ -16,6 +16,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from dataset import get_label_list
 from collections import Counter
 import numpy as np
+import joblib
 
 N_NEIGHBORS = 24
 DISPLAY_CENTROIDS = True
@@ -66,6 +67,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         clf = RidgeClassifier()
         clf.fit(current_train_sample, current_train_labels)
         acc = clf.score(test_x, test_y)
+        filename = f'{cfg.logdir}/{cfg.exp_name}/z_what-classifier.joblib.pkl'
+        joblib.dump(clf, filename)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
 
     clf = KMeans(n_clusters=len(relevant_labels))
