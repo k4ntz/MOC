@@ -61,13 +61,14 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     few_shot_accuracy = {}
     z_what_by_game = {rl: train_x[train_y == rl] for rl in relevant_labels}
     labels_by_game = {rl: train_y[train_y == rl] for rl in relevant_labels}
+    import ipdb; ipdb.set_trace()
     for training_objects_per_class in [1, 4, 16, 64]:
         current_train_sample = torch.cat([z_what_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         current_train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         clf = RidgeClassifier()
         clf.fit(current_train_sample, current_train_labels)
         acc = clf.score(test_x, test_y)
-        filename = f'{cfg.logdir}/{cfg.exp_name}/z_what-classifier.joblib.pkl'
+        filename = f'{cfg.logdir}/{cfg.exp_name}/z_what-classifier_with_{training_objects_per_class}.joblib.pkl'
         joblib.dump(clf, filename)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
 

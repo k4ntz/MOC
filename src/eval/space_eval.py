@@ -405,7 +405,7 @@ class SpaceEval:
     def save_to_json(self, result_dict, json_path, info):
         """
         Save evaluation results to json file
-        
+
         :param result_dict: a dictionary
         :param json_path: checkpointdir
         :param info: any other thing you want to save
@@ -417,43 +417,48 @@ class SpaceEval:
         tosave = OrderedDict([
             ('date', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             ('info', info),
-            ('APs', list(result_dict['APs'])),
-            ('iou_thresholds', list(result_dict['iou_thresholds'])),
-            ('AP average', np.mean(result_dict['APs'])),
-            ('error_rate', result_dict['error_rate']),
-            ('accuracy', result_dict['accuracy']),
-            ('perfect', result_dict['perfect']),
-            ('undercount', result_dict['undercount']),
-            ('overcount', result_dict['overcount']),
         ])
+        for metric in ['APs', 'accuracy', 'error_rate', 'iou_thresholds', 'overcount', 'perfect', 'precision', 'recall', 'undercount']:
+            if hasattr(result_dict[f'{metric}_all'], '__iter__'):
+                tosave[metric] = list(result_dict[f'{metric}_all'])
+                tosave[f'{metric}_avg'] = np.mean(result_dict[f'{metric}_all'])
+                tosave[f'{metric}_relevant'] = list(result_dict[f'{metric}_relevant'])
+                tosave[f'{metric}_relevant_avg'] = np.mean(result_dict[f'{metric}_relevant'])
+                tosave[f'{metric}_moving'] = list(result_dict[f'{metric}_moving'])
+                tosave[f'{metric}_moving_avg'] = np.mean(result_dict[f'{metric}_moving'])
+            else:
+                tosave[metric] = result_dict[f'{metric}_all']
+                tosave[f'{metric}_relevant'] = result_dict[f'{metric}_relevant']
+                tosave[f'{metric}_moving'] = result_dict[f'{metric}_moving']
         with open(json_path, 'w') as f:
             json.dump(tosave, f, indent=2)
 
         print(f'Results have been saved to {json_path}.')
 
     def print_result(self, result_dict, files):
-        APs = result_dict['APs']
-        iou_thresholds = result_dict['iou_thresholds']
-        accuracy = result_dict['accuracy']
-        perfect = result_dict['perfect']
-        overcount = result_dict['overcount']
-        undercount = result_dict['undercount']
-        error_rate = result_dict['error_rate']
-        for file in files:
-            print('-' * 30, file=file)
-            print('{:^15} {:^15}'.format('IoU threshold', 'AP'), file=file)
-            print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
-            for thres, ap in zip(iou_thresholds, APs):
-                print('{:<15.2} {:<15.4}'.format(thres, ap), file=file)
-            print('{:15} {:<15.4}'.format('Average:', np.mean(APs)), file=file)
-            print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
+        for suffix in ['all', 'relevant', 'moving']:
+            APs = result_dict[f'APs_{suffix}']
+            iou_thresholds = result_dict[f'iou_thresholds_{suffix}']
+            accuracy = result_dict[f'accuracy_{suffix}']
+            perfect = result_dict[f'perfect_{suffix}']
+            overcount = result_dict[f'overcount_{suffix}']
+            undercount = result_dict[f'undercount_{suffix}']
+            error_rate = result_dict[f'error_rate_{suffix}']
+            for file in files:
+                print('\n' + '-' * 10 + f'metrics on {suffix} data points' + '-' * 10, file=file)
+                print('{:^15} {:^15}'.format('IoU threshold', 'AP'), file=file)
+                print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
+                for thres, ap in zip(iou_thresholds, APs):
+                    print('{:<15.2} {:<15.4}'.format(thres, ap), file=file)
+                print('{:15} {:<15.4}'.format('Average:', np.mean(APs)), file=file)
+                print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
 
-            print('{:15} {:<15}'.format('Perfect:', perfect), file=file)
-            print('{:15} {:<15}'.format('Overcount:', overcount), file=file)
-            print('{:15} {:<15}'.format('Undercount:', undercount), file=file)
-            print('{:15} {:<15.4}'.format('Accuracy:', accuracy), file=file)
-            print('{:15} {:<15.4}'.format('Error rate:', error_rate), file=file)
-            print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
+                print('{:15} {:<15}'.format('Perfect:', perfect), file=file)
+                print('{:15} {:<15}'.format('Overcount:', overcount), file=file)
+                print('{:15} {:<15}'.format('Undercount:', undercount), file=file)
+                print('{:15} {:<15.4}'.format('Accuracy:', accuracy), file=file)
+                print('{:15} {:<15.4}'.format('Error rate:', error_rate), file=file)
+                print('{:15} {:15}'.format('-' * 15, '-' * 15), file=file)
 
     # def save_best(self, evaldir, metric_name, value, checkpoint, checkpointer, min_is_better):
     #     metric_file = os.path.join(evaldir, f'best_{metric_name}.json')
