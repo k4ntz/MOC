@@ -10,15 +10,15 @@ eval_cfg = CfgNode({
             'ap': 1024,
             'cluster': 1024,
         },
-        
+
         # For dataloader
         'batch_size': 32,
         'num_workers': 4,
     },
     'test': {
         # For dataloader
-        'batch_size': 32,
+        'batch_size': 2,
         'num_workers': 4,
     }
-    
+
 })

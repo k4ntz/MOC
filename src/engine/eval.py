@@ -10,7 +10,7 @@ def eval(cfg):
     assert cfg.resume
     assert cfg.eval.checkpoint in ['best', 'last']
     assert cfg.eval.metric in ['ap_dot5', 'ap_avg']
-    
+
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
     print('Model name:', cfg.model)
@@ -22,9 +22,9 @@ def eval(cfg):
         print('Using parallel:', cfg.parallel)
     if cfg.parallel:
         print('Device ids:', cfg.device_ids)
-    
+
     print('Loading data')
-    testset = get_dataset(cfg, 'test')
+    testset = get_dataset(cfg, 'val')
     model = get_model(cfg)
     model = model.to(cfg.device)
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
@@ -40,9 +40,9 @@ def eval(cfg):
     if cfg.parallel:
         assert 'cpu' not in cfg.device
         model = nn.DataParallel(model, device_ids=cfg.device_ids)
-        
+
     evaldir = osp.join(cfg.evaldir, cfg.exp_name)
     info = {
-        'exp_name': cfg.exp_name + cfg.seed
+        'exp_name': cfg.exp_name + str(cfg.seed)
     }
-    evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir, info)
+    evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir, info, global_step=100000)

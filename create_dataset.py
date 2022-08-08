@@ -69,8 +69,6 @@ def draw_action(agent, state):
 
 
 bgr_folder = None
-bgr84_folder = None
-bgr64_folder = None
 rgb_folder = None
 flow_folder = None
 median_folder = None
@@ -218,11 +216,7 @@ def main():
                         space_stack.append(frame)
                         frame_space = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
                         resize_stack.append(np.array(frame_space))
-                        frame_space84 = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((84, 84), Image.ANTIALIAS)
-                        frame_space64 = Image.fromarray(frame[:, :, ::-1], 'RGB').resize((64, 64), Image.ANTIALIAS)
                         frame_space.save(f'{bgr_folder}/{image_count:05}_{i}.png')
-                        frame_space84.save(f'{bgr84_folder}/{image_count:05}_{i}.png')
-                        frame_space64.save(f'{bgr64_folder}/{image_count:05}_{i}.png')
                         img = Image.fromarray(frame, 'RGB')
                         img.save(f'{rgb_folder}/{image_count:05}_{i}.png')
                         bb.save(args, frame_space, img_info, f'{bb_folder}/{image_count:05}_{i}.csv',
@@ -309,19 +303,15 @@ def configure(args):
 
 
 def create_folders(args, data_base_folder):
-    global rgb_folder, bgr_folder, bgr64_folder, bgr84_folder, flow_folder, median_folder, bb_folder, vis_folder, mode_folder
+    global rgb_folder, bgr_folder, flow_folder, median_folder, bb_folder, vis_folder, mode_folder
     rgb_folder = f"{data_base_folder}/rgb/{args.game}-v0/{args.folder}"
     bgr_folder = f"{data_base_folder}/space_like_128/{args.game}-v0/{args.folder}"
-    bgr64_folder = f"{data_base_folder}/space_like_64/{args.game}-v0/{args.folder}"
-    bgr84_folder = f"{data_base_folder}/space_like_84/{args.game}-v0/{args.folder}"
     bb_folder = f"{data_base_folder}/bb/{args.game}-v0/{args.folder}"
     flow_folder = f"{data_base_folder}/flow/{args.game}-v0/{args.folder}"
     median_folder = f"{data_base_folder}/median/{args.game}-v0/{args.folder}"
     mode_folder = f"{data_base_folder}/mode/{args.game}-v0/{args.folder}"
     vis_folder = f"{data_base_folder}/vis/{args.game}-v0/{args.folder}"
     os.makedirs(bgr_folder, exist_ok=True)
-    os.makedirs(bgr64_folder, exist_ok=True)
-    os.makedirs(bgr84_folder, exist_ok=True)
     os.makedirs(rgb_folder, exist_ok=True)
     os.makedirs(flow_folder, exist_ok=True)
     os.makedirs(median_folder, exist_ok=True)
