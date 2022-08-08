@@ -22,7 +22,7 @@ class Space(nn.Module):
         """
         Inference.
         With time-dimension for consistency
-        :param x: (B, 3, H, W)
+        :param x: (B, 3, H, W) # being 128 x 128
         :param motion: (B, 1, H, W)
         :param motion_z_pres: z_pres hint from motion (B, G * G, 1)
         :param motion_z_where: z_where hint from motion (B, G * G, 4)
@@ -36,6 +36,12 @@ class Space(nn.Module):
         # (B, 3, H, W), (B, 3, H, W), (B, T)
         bg_likelihood, bg, kl_bg, log_bg = self.bg_module(x, global_step)
 
+        if motion is None:
+            motion = torch.zeros(x.shape[0], 1, x.shape[2], x.shape[3]).cuda()
+        if motion_z_pres is None:
+            motion_z_pres = torch.zeros(x.shape[0], arch.G * arch.G, 1).cuda()
+        if motion_z_where is None:
+            motion_z_where = torch.zeros(x.shape[0], arch.G * arch.G, 4).cuda()
         # Foreground extraction
         fg_likelihood, fg, alpha_map, kl_fg, log_fg = self.fg_module(x, motion, motion_z_pres,
                                                                      motion_z_where, global_step)
@@ -92,9 +98,12 @@ class Space(nn.Module):
         z_pres = z_pres_prob > 0.5
         z_where = z_where[z_pres]
         z_encs = torch.concat((z_where, z_depth[z_pres], z_what[z_pres]), dim=1)
-        labels = z_classifier.predict(z_encs, **kwargs)
-        pos = z_where[2:]
-        result = defaultdict(list)
-        for label, p in zip(labels, pos):
-            result[label].append(tuple(coordinate.item() for coordinate in p))
-        return result
+        if z_classifier is not None:
+            labels = z_classifier.predict(z_encs, **kwargs)
+            pos = z_where[2:]
+            result = defaultdict(list)
+            for label, p in zip(labels, pos):
+                result[label].append(tuple(coordinate.item() for coordinate in p))
+            return result
+        else:
+            return z_encs

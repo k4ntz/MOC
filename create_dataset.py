@@ -7,7 +7,7 @@ from pprint import pprint
 from augmentation import augment_dict, draw_names, show_image, load_agent, \
     dict_to_serie, put_lives, set_plot_bb, image_offset
 from glob import glob
-from mushroom_rl.environments import Atari
+from utils_rl import Atari
 import json
 from collections import namedtuple
 from utils_rl import make_deterministic
@@ -170,8 +170,8 @@ def main():
     consecutive_images_info = []
 
     series = []
+    print("Init steps...")
     for _ in range(200):
-        print("Init step...")
         state, reward, done, info, obs = draw_action(agent, state)
 
     pbar = tqdm(total=limit)

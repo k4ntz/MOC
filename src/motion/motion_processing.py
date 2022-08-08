@@ -318,7 +318,6 @@ class Erosion(ProcessingVisualization):
 
 class BoundingBoxes(ProcessingVisualization):
     def make_visualization(self, frame, motion, space_frame=None):
-        print("New Vis")
         image = np.array(frame)
         zoom = 3
         image = ndimage.zoom(image, (zoom, zoom, 1), order=0)
