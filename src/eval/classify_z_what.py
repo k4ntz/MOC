@@ -61,7 +61,9 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     few_shot_accuracy = {}
     z_what_by_game = {rl: train_x[train_y == rl] for rl in relevant_labels}
     labels_by_game = {rl: train_y[train_y == rl] for rl in relevant_labels}
-    import ipdb; ipdb.set_trace()
+
+    os.makedirs(f'{cfg.logdir}/{cfg.exp_name}', exist_ok=True)
+    os.makedirs(f'classifiers', exist_ok=True)
     for training_objects_per_class in [1, 4, 16, 64]:
         current_train_sample = torch.cat([z_what_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
         current_train_labels = torch.cat([labels_by_game[rl][:training_objects_per_class] for rl in relevant_labels])
@@ -71,6 +73,8 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         filename = f'{cfg.logdir}/{cfg.exp_name}/z_what-classifier_with_{training_objects_per_class}.joblib.pkl'
         joblib.dump(clf, filename)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
+    joblib.dump(clf, f"classifiers/{cfg.exp_name}_z_what_classifier.joblib.pkl")
+    print(f"Saved classifiers in {cfg.logdir}/{cfg.exp_name}")
 
     clf = KMeans(n_clusters=len(relevant_labels))
     y = clf.fit_predict(z_what)

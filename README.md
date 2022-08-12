@@ -13,20 +13,20 @@ Important new options are:
 
 * `--plot_bb` adds bounding boxes to the generated images!
 * `--root` use the global mode image instead of the mode of the trail
-* `--root-median` computes the mode and median images from all of those already generated. 
+* `--root-median` computes the mode and median images from all of those already generated.
 
 Some other frequently changed things are currently not settings yet, but set in the code...
-One such thing is the visualization; in `motion_processing.py` we define the class ProcessingVisualization 
+One such thing is the visualization; in `motion_processing.py` we define the class ProcessingVisualization
 and implementations, that take in the frames and motion and visualize sth. for every `self.every_n` up to `self.max_vis`
-times. 
+times.
 
 The settings for the visualization are defined (grouped by motion type and one for the ground truth labels)
-inside the main function. 
+inside the main function.
 E.g `ZWhereZPres` does show most of the steps used when going from binary motion yes/no to z_where and z_pres latents.
 
 **Loading the model**
 
-The model SPACE-Time is loaded with `Checkpointer` in `src/utils.py`, while the config in `src/configs` 
+The model SPACE-Time is loaded with `Checkpointer` in `src/utils.py`, while the config in `src/configs`
 (e.g. `atari_mspacman.yaml`) control which model is loaded. Usage can be seen in `train.py`:
 
 ```python
@@ -56,11 +56,11 @@ For Space-Time the flags for `load_time_consistency` and `add_flow` are set to `
 
 ```python
 space = model.space
-# x is the image on device as a Tensor, z_classifier accepts the latents, 
+# x is the image on device as a Tensor, z_classifier accepts the latents,
 # only_z_what control if only the z_what latent should be used (see docstring)
-scene = space.scene_description(x, z_classifier=z_classifier, only_z_what=True) 
-# scene now contains a dict[int (the label) -> list[(int, int)] 
-# (the positions of the object in the domain (-1, 1) that can be mapped into (0, H) 
+scene = space.scene_description(x, z_classifier=z_classifier, only_z_what=True)
+# scene now contains a dict[int (the label) -> list[(int, int)]
+# (the positions of the object in the domain (-1, 1) that can be mapped into (0, H)
 # by using zwhere_to_box (see Appendix in paper).
 #
 # The label index can be converted into a string label using the index
@@ -81,7 +81,7 @@ Commonly I train the model using:
 
 `python main.py --task multi_train --config configs/atari_riverraid.yaml`
 
-`multi_train` refers to `src/engine/multi_train.py` that enables running multiple trainings/experiments sequentially. 
+`multi_train` refers to `src/engine/multi_train.py` that enables running multiple trainings/experiments sequentially.
 There (following the many commented-out examples) configs that should be altered (relative to the `.yaml`) can be noted.
 The script will then iterate over the powerset of configuration options, i.e. every combination of setting. Consider the following configuration as an example:
 
@@ -96,15 +96,19 @@ The script will then iterate over the powerset of configuration options, i.e. ev
 
 Here we iterate over five seeds respectively once for `arch.area_object_weight = 0.0` and `arch.area_object_weight = 10.0`. This corresponds to the setting used for evaluation of SPACE-Time and Space-Time without Object Consistency (SPACE-Flow). The third element in the tuple is function to map a compact descriptive string as its used for the experiment name used in the output folder.
 
-Evaluation is run alongside training if the config `train.eval_on` is set to True. 
+Evaluation is run alongside training if the config `train.eval_on` is set to True.
 
-For running the baseline SPACE with the current evaluation and dataset framework please switch to branch `space_upstream`, 
-where these usage instructions similarly apply. 
+For running the baseline SPACE with the current evaluation and dataset framework please switch to branch `space_upstream`,
+where these usage instructions similarly apply.
 
 **AIML Lab specific notes**
 
 The models and datasets will be stored in `/storage-01/ml-trothenbacher/space-time/`, but are currently still stored in my user folder `~/SPACE` distributed over DGX-B, DGX-C and DGX-D as I did not know of the storage option and loading from storage was still really slow at the time. Some configs and steps might not translate directly to the new file structure.
 
+
+## Loading the model for RL task
+There is an example `load_model.py` that allows to load and give a look at the SPACE-time model easily. You can launch the following command from the `src` folder:
+`python3 load_model.py --config configs/atari_pong_classifier.yaml`
 
 # SPACE
 

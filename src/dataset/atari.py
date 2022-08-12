@@ -15,6 +15,7 @@ from skimage.morphology import (erosion, dilation, opening, closing, white_topha
 from torchvision import transforms
 from torchvision.utils import draw_bounding_boxes as draw_bb
 
+
 class Atari(Dataset):
     def __init__(self, cfg, mode):
         assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'

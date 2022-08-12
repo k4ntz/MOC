@@ -5,16 +5,7 @@ resume: true
 load_time_consistency: true
 add_flow: true
 save_relevant_objects: false
-resume_ckpt: '../output/checkpoints/final/mspacman_seed0_aow10.0/model_000005001.pth' # bring SpaceTime
-# '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
-# '../output/checkpoints/mspacman_atari_pretrained/model.pth'
-#
-# '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
-#'../output/checkpoints/mspacman_atari+z_area_object_1e1/model_000186501.pth'
-# '../output/checkpoints/mspacman_baseline/model_000177001.pth'
-# 'result_checkpoints/base_z_what_model_000078001.pth'
-# 'output/checkpoints/atari_mspacman/model_000079001.pth'
-# '../pretrained/atari_joint.pth'
+resume_ckpt: 'trained_models/mspacman_seed0_aow10.0/model_000005001.pth' # bring SpaceTime
 parallel: true
 device_ids: [0]
 device: 'cuda:0'
@@ -34,7 +25,7 @@ train:
   log: true
   batch_size: 1
   max_epochs: 10000
-  max_steps: 5002
+  max_steps: 5001
   print_every: 200
   save_every: 200
   num_workers: 8

@@ -35,6 +35,7 @@ def make_deterministic(seed, mdp, states_dict=None):
         torch.backends.cudnn.benchmark = False
         print(f"Reset environment to recovered random state ")
 
+
 def load_activation_function(act_f, game_name, seed):
     """
     load a pretrain act_f and freeze the weights.
@@ -242,6 +243,7 @@ except ImportError:
     print(colored("AtariARI Not found, please install it:", "red"))
     print(colored("https://github.com/mila-iqia/atari-representation-learning:", "blue"))
     ATARI_ARI_INSTALLED = False
+
 
 class Atari(Environment):
     """

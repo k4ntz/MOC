@@ -45,4 +45,5 @@ def eval(cfg):
     info = {
         'exp_name': cfg.exp_name + str(cfg.seed)
     }
-    evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir, info, global_step=100000)
+    evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir,
+                        info, global_step=100000, cfg=cfg)

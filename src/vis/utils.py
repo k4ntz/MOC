@@ -1,64 +1,9 @@
 import torch
 import matplotlib
 
-matplotlib.use('agg')
+# matplotlib.use('agg')
 from utils import spatial_transform, inverse_spatial_transform
-
-rbox = torch.zeros(3, 21, 21)
-rbox[0, :2, :] = 1
-rbox[0, -2:, :] = 1
-rbox[0, :, :2] = 1
-rbox[0, :, -2:] = 1
-rbox = rbox.view(1, 3, 21, 21)
-
-gbox = torch.zeros(3, 21, 21)
-gbox[1, :2, :] = 1
-gbox[1, -2:, :] = 1
-gbox[1, :, :2] = 1
-gbox[1, :, -2:] = 1
-gbox = gbox.view(1, 3, 21, 21)
-
-blbox = torch.zeros(3, 21, 21)
-blbox[2, :2, :] = 1
-blbox[2, -2:, :] = 1
-blbox[2, :, :2] = 1
-blbox[2, :, -2:] = 1
-blbox = blbox.view(1, 3, 21, 21)
-
-ybox = torch.zeros(3, 21, 21)
-ybox[0, :2, :] = 1
-ybox[0, -2:, :] = 1
-ybox[0, :, :2] = 1
-ybox[0, :, -2:] = 1
-ybox[1, :2, :] = 1
-ybox[1, -2:, :] = 1
-ybox[1, :, :2] = 1
-ybox[1, :, -2:] = 1
-ybox = ybox.view(1, 3, 21, 21)
-
-abox = torch.zeros(3, 21, 21)
-abox[1, :2, :] = 1
-abox[1, -2:, :] = 1
-abox[1, :, :2] = 1
-abox[1, :, -2:] = 1
-abox[2, :2, :] = 1
-abox[2, -2:, :] = 1
-abox[2, :, :2] = 1
-abox[2, :, -2:] = 1
-abox = abox.view(1, 3, 21, 21)
-
-pbox = torch.zeros(3, 21, 21)
-pbox[0, :2, :] = 1
-pbox[0, -2:, :] = 1
-pbox[0, :, :2] = 1
-pbox[0, :, -2:] = 1
-pbox[2, :2, :] = 1
-pbox[2, -2:, :] = 1
-pbox[2, :, :2] = 1
-pbox[2, :, -2:] = 1
-pbox = pbox.view(1, 3, 21, 21)
-
-boxes = torch.cat((rbox, gbox, blbox, ybox, abox, pbox))
+from .color_box import boxes, gbox, rbox
 
 
 def visualize(x, z_pres, z_where_scale, z_where_shift, rbox=rbox, gbox=gbox, num_obj=8 * 8):
@@ -134,3 +79,28 @@ def colored_bbox_in_one_image(x, z_pres, z_where_scale, z_where_shift, gbox=gbox
 
 # Times 10 to prevent index out of bound.
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 10
+
+
+def fill_image_with_scene(image, scene):
+    """
+
+    """
+    image = image.to("cpu")
+    B, _, *img_shape = 1, image.size()
+    img_shape = 128, 128
+    for label_n, z_where in scene.items():
+        cbox = boxes[label_n]
+        N = len(z_where)
+        z_pres = torch.ones(N)
+        z_where_scale = torch.tensor(z_where)[..., :2]
+        z_where_shift = torch.tensor(z_where)[..., 2:]
+        z_scale = z_where_scale.reshape(-1, 2)
+        z_shift = z_where_shift.reshape(-1, 2)
+        # argmax_cluster = argmax_cluster.view(-1, 1, 1, 1)
+        # kbox = boxes[argmax_cluster.view(-1)]
+        bbox = inverse_spatial_transform(z_pres.reshape(((len(z_pres), 1, 1, 1))) * cbox,  # + (1 - z_pres) * rbox,
+                                         torch.cat((z_scale, z_shift), dim=1),
+                                         torch.Size([B * N, 3, *img_shape]))
+        image = (bbox.reshape(N, 3, *img_shape)
+                 .sum(dim=0).clamp(0.0, 1.0) + image).clamp(0.0, 1.0)
+    return image

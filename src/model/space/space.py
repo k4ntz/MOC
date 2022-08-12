@@ -5,7 +5,6 @@ from attrdict import AttrDict
 from .arch import arch
 from .fg import SpaceFg
 from .bg import SpaceBg
-import time
 from collections import defaultdict
 
 
@@ -31,9 +30,12 @@ class Space(nn.Module):
             loss: a scalar. Note it will be better to return (B,)
             log: a dictionary for visualization
         """
+        if motion is not None:
+            motion = motion[0].unsqueeze(0)
+            motion_z_pres = motion_z_pres[0].unsqueeze(0)
+            motion_z_where = motion_z_where[0].unsqueeze(0)
+            motion, motion_z_pres, motion_z_where = None, None, None
 
-        # Background extraction
-        # (B, 3, H, W), (B, 3, H, W), (B, T)
         bg_likelihood, bg, kl_bg, log_bg = self.bg_module(x, global_step)
 
         if motion is None:
@@ -83,28 +85,32 @@ class Space(nn.Module):
 
         return loss, log
 
-    def scene_description(self, x, z_classifier, only_z_what=True, **kwargs):
+    def scene_description(self, x, z_classifier, only_z_what=True, size=True, **kwargs):
         """
         Computes a dictionary where each entity is located
         :param x: (3, H, W)
         :param z_classifier: a classifier mapping encodings (z_where, z_depth and z_what concatenated)
             to labels. Has to be able to do z_classifier.predict(list of z_encodings) to return a list of labels
         :param only_z_what: predicts labels only on active (z_pres) z_what encodings, but disregards z_where / z_depth
+        :param size: if True, also returns the size encoding of the objects
         :return: dict[label, list of (int, int)], all positions of the object in question
         """
         _, log = self.forward(x.unsqueeze(dim=0))
         z_where, z_pres_prob, z_what, z_depth = log['z_where'], log['z_pres_prob'], log['z_what'], log['z_depth']
-        z_where, z_what, z_depth = z_where.detach().cpu(), z_what.detach().cpu(), z_depth.detach().cpu()
+        z_where, z_what, z_depth = z_where.squeeze().detach().cpu(), z_what.squeeze().detach().cpu(), z_depth.squeeze().detach().cpu()
         z_pres_prob = z_pres_prob.squeeze().detach().cpu()
         z_pres = z_pres_prob > 0.5
+        if size:
+            pos = z_where[z_pres]
+        else:
+            pos = z_where[z_pres][:,:2]
         if only_z_what:
             z_encs = z_what[z_pres]
         else:
             z_encs = torch.concat((z_where[z_pres], z_depth[z_pres], z_what[z_pres]), dim=1)
         if z_classifier is None:
-            return z_where[z_pres], z_encs
+            return z_encs, pos
         labels = z_classifier.predict(z_encs, **kwargs)
-        pos = z_where[2:]
         result = defaultdict(list)
         for label, p in zip(labels, pos):
             result[label].append(tuple(coordinate.item() for coordinate in p))

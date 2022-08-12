@@ -40,6 +40,7 @@ def grid_z_where_vis(z_where, imgs, z_pres, scaling=4):
     grid = imgs * (scaling * grid + 4) / 9
     return make_grid(grid, 4, normalize=False, pad_value=1)
 
+
 class SpaceVis:
     @torch.no_grad()
     def train_vis(self, model, writer: SummaryWriter, log, global_step, mode, cfg, dataset, num_batch=8):

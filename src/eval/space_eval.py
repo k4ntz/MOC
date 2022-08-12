@@ -29,9 +29,10 @@ class SpaceEval:
         self.first_eval = True
 
     @torch.no_grad()
-    def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step):
+    def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step, cfg):
         losses, logs = self.apply_model(testset, device, model, global_step)
         result_dict = self.eval_ap_and_acc(logs, testset, bb_path)
+        clustering_result_dict = self.eval_clustering(logs, testset, global_step, cfg)
         os.makedirs(evaldir, exist_ok=True)
         path = osp.join(evaldir, 'results_{}.json'.format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
         self.save_to_json(result_dict, path, info)

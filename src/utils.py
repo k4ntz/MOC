@@ -35,20 +35,27 @@ turned = False
 
 
 def draw_bounding_boxes(image, boxes_batch, labels=None):
-    _, imW, imH = image.shape
+    if image.shape[0] == 3:
+        _, imW, imH = image.shape
+    else:
+        imH, imW, _ = image.shape
     if not torch.is_tensor(image):
         image = torch.tensor(image)
-    bb = (boxes_batch[0][:, :4] * (imW, imW, imH, imH)).round()
+    boxes_batch = np.array(boxes_batch)
+    if boxes_batch.min() < -0.5:
+        boxes_batch = (boxes_batch + 1)/2
+    # bb = (boxes_batch[0][:, :4] * (imW, imW, imH, imH)).round()
+    bb = (np.array(boxes_batch)[:, :4] * (imW, imW, imH, imH)).round()
     bb[:, [0, 1, 2, 3]] = bb[:, [2, 0, 3, 1]]  # swapping xmin <-> ymax ... etc
     if imW == 128 and imH == 128 and RESTORE_COLORS:
         image = torch.tensor(np.flip(image.to("cpu").numpy(), axis=0).copy())
     else:
         image = image.to("cpu")
+    colors = ["red"] * 200
     if labels is not None:
         labels = label_names(labels)
         # colors = [base_objects_colors[lab] for lab in labels]
-        colors = ["red"] * 50
-    image = draw_bb(image, torch.tensor(bb), colors=colors)
+    image = draw_bb(image.T, torch.tensor(bb), colors=colors).T
     return image
 
 
@@ -98,7 +105,7 @@ class Checkpointer:
             pickle.dump(model_list, f)
         self.save(path, model, optimizer_fg, optimizer_bg, epoch, global_step)
 
-    def load(self, path, model, optimizer_fg, optimizer_bg, device):
+    def load(self, path, model, optimizer_fg=None, optimizer_bg=None, device=None):
         """
         Return starting epoch and global step
         """
@@ -124,7 +131,7 @@ class Checkpointer:
         print('Checkpoint loaded.')
         return checkpoint
 
-    def load_last(self, path, model, optimizer_fg, optimizer_bg, device):
+    def load_last(self, path, model, optimizer_fg=None, optimizer_bg=None, device=None):
         """
         If path is '', we load the last checkpoint
         """
