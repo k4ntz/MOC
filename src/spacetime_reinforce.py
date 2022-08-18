@@ -3,6 +3,7 @@ import os.path as osp
 import numpy as np
 import matplotlib.pyplot as plt
 import gym
+import os
 
 import torch
 import torch.nn as nn
@@ -10,6 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+from rtpt import RTPT
 from engine.utils import get_config
 from model import get_model
 from utils import Checkpointer
@@ -20,10 +22,12 @@ from torchvision import transforms
 # load config
 cfg, task = get_config()
 
-def sprint(scene):
-    print("-"*10)
-    for obj in scene:
-        print([float("{0:.2f}".format(n)) for n in obj])
+# stuff to save and load policy model
+PATH_TO_OUTPUTS = os.getcwd() + "/classifiers/"
+if not os.path.exists(PATH_TO_OUTPUTS):
+    os.makedirs(PATH_TO_OUTPUTS)
+# lambda name function to create policy model file path
+model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_policy_model.pth"
 
 
 def clean_scene(scene):
@@ -74,6 +78,7 @@ spacetime_model = get_model(cfg)
 policy = Policy(6, nb_action)
 optimizer = optim.Adam(policy.parameters(), lr=1e-2)
 eps = np.finfo(np.float32).eps.item()
+i_episode = 0
 
 # move to cuda when possible
 use_cuda = 'cuda' in cfg.device
@@ -110,24 +115,33 @@ def select_action(state):
     return action.item()
 
 
-# after episode function from reinforce
-def finish_episode():
-    R = 0
-    policy_loss = []
-    returns = []
-    for r in policy.rewards[::-1]:
-        R = r + 0.99 * R
-        returns.insert(0, R)
-    returns = torch.tensor(returns)
-    returns = (returns - returns.mean()) / (returns.std() + eps)
-    for log_prob, R in zip(policy.saved_log_probs, returns):
-        policy_loss.append(-log_prob * R)
-    optimizer.zero_grad()
-    policy_loss = torch.cat(policy_loss).sum()
-    policy_loss.backward()
-    optimizer.step()
-    del policy.rewards[:]
-    del policy.saved_log_probs[:]
+# save model helper function
+def save_policy(training_name, policy, episode, optimizer):
+    if not os.path.exists(PATH_TO_OUTPUTS):
+        os.makedirs(PATH_TO_OUTPUTS)
+    model_path = model_name(training_name)
+    print("Saving {}".format(model_path))
+    torch.save({
+            'policy': policy.state_dict(),
+            'episode': episode,
+            'optimizer': optimizer.state_dict()
+            }, model_path)
+
+
+# load model
+def load_model(model_path, policy, optimizer=None):
+    print("{} does exist, loading ... ".format(model_path))
+    checkpoint = torch.load(model_path)
+    policy.load_state_dict(checkpoint['policy'])
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+    i_episode = checkpoint['episode']
+    return policy, optimizer, i_episode
+
+# load if exists
+model_path = model_name(cfg.exp_name)
+if os.path.isfile(model_path):
+    policy, optimizer, i_episode = load_model(model_path, policy, optimizer)
 
 
 # helper function to get scene
@@ -146,13 +160,18 @@ def get_scene(observation, space):
 # env = Atari(env_name)
 max_episode = 50000
 # episode loop
-running_reward = 0
-for i_episode in range(max_episode):
+running_reward = None
+# training loop
+rtpt = RTPT(name_initials='DV/QT/TR', experiment_name=cfg.exp_name,
+                max_iterations=cfg.train.num_episodes)
+rtpt.start()
+while i_episode < max_episode:
     state, ep_reward = env.reset(), 0
     action = np.random.randint(nb_action)
     # env step loop
     for t in range(1, 10000):  # Don't infinite loop while learning
         observation, reward, done, info = env.step(action)
+        ep_reward += reward
         policy.rewards.append(reward)
         scene_list = get_scene(observation, space)
         # flatten scene list
@@ -162,5 +181,31 @@ for i_episode in range(max_episode):
             i_episode, ep_reward, running_reward, t), end="\r")
         if done:
             break
-    running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
-    finish_episode()
+    # replace first running reward with last reward for loaded models
+    if running_reward is None:
+        running_reward = ep_reward
+    else:
+        running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+    # finish up episode and optimize
+    R = 0
+    policy_loss = []
+    returns = []
+    for r in policy.rewards[::-1]:
+        R = r + 0.99 * R            # gamma
+        returns.insert(0, R)
+    returns = torch.tensor(returns)
+    returns = (returns - returns.mean()) / (returns.std() + eps)
+    for log_prob, R in zip(policy.saved_log_probs, returns):
+        policy_loss.append(-log_prob * R)
+    optimizer.zero_grad()
+    policy_loss = torch.cat(policy_loss).sum()
+    policy_loss.backward()
+    optimizer.step()
+    del policy.rewards[:]
+    del policy.saved_log_probs[:]
+    # save if necessary
+    if (i_episode + 1) % 100 == 0:
+        save_policy(cfg.exp_name, policy, i_episode + 1, optimizer)
+    # finish episode
+    i_episode += 1
+    rtpt.step()
