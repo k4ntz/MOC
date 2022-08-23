@@ -160,7 +160,7 @@ def get_scene(observation, space):
 # env = Atari(env_name)
 max_episode = 50000
 # episode loop
-running_reward = None
+running_reward = -999
 # training loop
 rtpt = RTPT(name_initials='DV/QT/TR', experiment_name=cfg.exp_name,
                 max_iterations=max_episode)
@@ -182,7 +182,7 @@ while i_episode < max_episode:
         if done:
             break
     # replace first running reward with last reward for loaded models
-    if running_reward is None:
+    if running_reward == -999:
         running_reward = ep_reward
     else:
         running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
