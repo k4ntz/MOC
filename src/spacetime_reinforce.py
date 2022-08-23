@@ -163,7 +163,7 @@ max_episode = 50000
 running_reward = None
 # training loop
 rtpt = RTPT(name_initials='DV/QT/TR', experiment_name=cfg.exp_name,
-                max_iterations=cfg.train.num_episodes)
+                max_iterations=max_episode)
 rtpt.start()
 while i_episode < max_episode:
     state, ep_reward = env.reset(), 0
