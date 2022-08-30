@@ -134,8 +134,9 @@ def main():
     print("Settings:", args)
     print("=============" * 5)
     folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
-    data_base_folder = "aiml_atari_data_final"
-    mode_base_folder = "aiml_atari_data_final"
+    folder_sizes = {"train": 20, "test": 20, "validation": 20}
+    data_base_folder = "aiml_atari_data"
+    mode_base_folder = "aiml_atari_data"
     REQ_CONSECUTIVE_IMAGE = 20 if args.root else 30
     create_folders(args, data_base_folder)
     visualizations_flow = [
@@ -305,7 +306,7 @@ def configure(args):
 def create_folders(args, data_base_folder):
     global rgb_folder, bgr_folder, flow_folder, median_folder, bb_folder, vis_folder, mode_folder
     rgb_folder = f"{data_base_folder}/rgb/{args.game}-v0/{args.folder}"
-    bgr_folder = f"{data_base_folder}/space_like_128/{args.game}-v0/{args.folder}"
+    bgr_folder = f"{data_base_folder}/space_like/{args.game}-v0/{args.folder}"
     bb_folder = f"{data_base_folder}/bb/{args.game}-v0/{args.folder}"
     flow_folder = f"{data_base_folder}/flow/{args.game}-v0/{args.folder}"
     median_folder = f"{data_base_folder}/median/{args.game}-v0/{args.folder}"

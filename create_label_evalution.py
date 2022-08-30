@@ -43,7 +43,7 @@ def main():
     print("=============" * 5)
     print("Settings:", args)
     print("=============" * 5)
-    data_base_folder = "aiml_atari_data_final"
+    data_base_folder = "aiml_atari_data"
     create_folders(args, data_base_folder)
     bb_vis = BoundingBoxes(bb_eval_folder, '', max_vis=50, every_n=1)
 

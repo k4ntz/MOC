@@ -29,7 +29,7 @@ import pandas as pd
 from PIL import Image
 import PIL
 
-folder = "validation"
+folder = "train"
 
 action = ["visu", "extract"][1]
 
@@ -85,13 +85,15 @@ def img_path_to_tensor(path):
 
 for i in tqdm(range(0, nb_images, 4 if TIME_CONSISTENCY else 1)):
     if TIME_CONSISTENCY:
-        fn = [f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/{folder}/{i + j:05}.png" for j in range(4)]
+        fn = [f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/{folder}/{i:05}_{j}.png" for j in range(4)]
         image = torch.stack([img_path_to_tensor(f) for f in fn]).to(cfg.device).unsqueeze(0)
+        img_path_fs = [f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/{i:05}_{j}.png" for j in range(4)]
+        image_fs = torch.stack([img_path_to_tensor(f) for f in img_path_fs]).to(cfg.device).unsqueeze(0)
     else:
         img_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/{folder}/{i:05}.png"
         image = open_image(img_path).to(cfg.device)
-    img_path_fs = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/{i:05}.png"
-    image_fs = open_image(img_path_fs).to(cfg.device)
+        img_path_fs = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/{i:05}.png"
+        image_fs = open_image(img_path_fs).to(cfg.device)
 
     # TODO: treat global_step in a more elegant way
     with torch.no_grad():

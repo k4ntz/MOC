@@ -28,7 +28,7 @@ dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data_final/space_like'
+  ATARI: '../aiml_atari_data/space_like'
 
 train:
   log: true
