@@ -6,6 +6,9 @@ import gym
 import os
 import math
 import random
+import pickle
+import bz2
+import os
 
 import torch
 import torch.nn as nn
@@ -23,6 +26,10 @@ from torchvision import transforms
 
 # load config
 cfg, task = get_config()
+
+# lambda for loading and saving qtable
+PATH_TO_OUTPUTS = os.getcwd() + "/ql_checkpoints/"
+model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + ".pbz2"
 
 # init env stuff
 cfg.device_ids = [0]
@@ -101,7 +108,7 @@ Q = {}
 gamma =  0.97
 eps_start = 1.0
 eps_end = 0.01
-eps_decay = 100000
+eps_decay = 20000
 learning_rate = 0.05
 # calc len of all possible states = all possible position combinations
 state_len = env.observation_space.shape[0] * 2 \
@@ -109,17 +116,56 @@ state_len = env.observation_space.shape[0] * 2 \
         + env.observation_space.shape[0]
 
 
+# function to save qtable
+def save_qtable(training_name, q_table, i_episode):
+    if not os.path.exists(PATH_TO_OUTPUTS):
+        os.makedirs(PATH_TO_OUTPUTS)
+    checkpoint_path = model_name(training_name)
+    print("Saving {}".format(checkpoint_path))
+    saving_dict = {}
+    saving_dict["q_table"] = q_table
+    saving_dict["i_episode"] = i_episode
+    # create bz2 file
+    qfile = bz2.BZ2File(checkpoint_path,'w')
+    pickle.dump(saving_dict, qfile)
+    qfile.close()
+
+
+# check checks if model with given name exists,
+# and loads it
+def load_qtable(training_name):
+    if not os.path.exists(PATH_TO_OUTPUTS):
+        print("{} does not exist".format(PATH_TO_OUTPUTS))
+        return None, None
+    checkpoint_path = model_name(training_name)
+    if not os.path.isfile(checkpoint_path):
+        print("{} does not exist".format(checkpoint_path))
+        return None, None
+    # load bz2 file
+    qfile = bz2.BZ2File(checkpoint_path,'r')
+    loading_dict = pickle.load(qfile)
+    qfile.close()
+    return loading_dict["q_table"], loading_dict["i_episode"]
+
+
 # function to select action by given state
-def select_action(state, global_step):
+def select_action(state, episode):
+    eps_threshold = eps_start
+    eps_threshold = eps_end + (eps_start - eps_end) * \
+        math.exp(-1. * episode / eps_decay)
     if state is not None:
         sample = random.random()
-        eps_threshold = eps_start
-        eps_threshold = eps_end + (eps_start - eps_end) * \
-            math.exp(-1. * global_step / eps_decay)
         if sample > eps_threshold:
-            return np.argmax(Q[state])
-    return random.randrange(n_actions)
+            return np.argmax(Q[state]), eps_threshold
+    return random.randrange(n_actions), eps_threshold
 
+ 
+exp_name = cfg.exp_name + "-qlearning"
+# check if q table loading is not null
+tmp_Q, tmp_i_episode = load_qtable(exp_name)
+if tmp_Q is not None:
+    Q = tmp_Q
+    i_episode = tmp_i_episode
 
 max_episode = 50000
 # episode loop
@@ -138,7 +184,7 @@ while i_episode < max_episode:
     # env step loop
     for t in range(1, 10000):  # Don't infinite loop while learning
         # select action
-        action = select_action(state, t)
+        action, eps_t = select_action(state, i_episode)
         # do action and observe
         observation, reward, done, info = env.step(action)
         ep_reward += reward
@@ -153,8 +199,8 @@ while i_episode < max_episode:
         Q[state][action] = Q[state][action] + learning_rate * (reward + gamma * \
                 np.max(Q[next_state]) - Q[state][action])
         # finish step
-        print('Episode: {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(
-            i_episode, ep_reward, running_reward, len(Q), t), end="\r")
+        print('Episode: {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\tEps Treshold: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(
+            i_episode, ep_reward, running_reward, eps_t, len(Q), t), end="\r")
         state = next_state
         if done:
             break
@@ -163,6 +209,9 @@ while i_episode < max_episode:
         running_reward = ep_reward
     else:
         running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+    # checkpoint saver
+    if i_episode % 100 == 0:
+        save_qtable(exp_name, Q, i_episode)
     # finish episode
     i_episode += 1
     rtpt.step()
