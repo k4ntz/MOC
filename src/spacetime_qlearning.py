@@ -209,9 +209,9 @@ while i_episode < max_episode:
         running_reward = ep_reward
     else:
         running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
+    # finish episode
+    i_episode += 1
     # checkpoint saver
     if i_episode % 100 == 0:
         save_qtable(exp_name, Q, i_episode)
-    # finish episode
-    i_episode += 1
     rtpt.step()
