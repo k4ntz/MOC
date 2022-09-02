@@ -242,36 +242,11 @@ class SpaceEval:
         all_labels = []
         all_labels_moving = []
         image_refs = []
-        batch_size = eval_cfg.train.batch_size
-        img_path = os.path.join(dataset.image_path, dataset.game, dataset.mode)
         virtual_batch_size = eval_cfg.train.batch_size // 4
         for i, img in enumerate(logs):
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
             z_pres_prob = z_pres_prob.squeeze()
             z_pres = z_pres_prob > 0.5
-            if not (0.05 <= z_pres.sum() / virtual_batch_size <= 50 * 4):
-                z_whats = None
-                break
-            if cfg.save_relevant_objects:
-                for idx, (sel, bbs) in enumerate(zip(z_pres, z_where)):
-                    for obj_idx, bb in enumerate(bbs[sel]):
-                        image = Image.open(os.path.join(img_path, f'{i * batch_size + idx // 4:05}_{idx % 4}.png'))
-                        width, height, center_x, center_y = bb.tolist()
-                        center_x = (center_x + 1.0) / 2.0 * 128
-                        center_y = (center_y + 1.0) / 2.0 * 128
-                        bb = (int(center_x - width * 128),
-                              int(center_y - height * 128),
-                              int(center_x + width * 128),
-                              int(center_y + height * 128))
-                        try:
-                            cropped = image.crop(bb)
-                            cropped.save(f'{self.relevant_object_hover_path}Img/'
-                                         f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png')
-                        except:
-                            image.save(f'{self.relevant_object_hover_path}Img/'
-                                       f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png')
-                        new_image_path = f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png'
-                        image_refs.append(new_image_path)
             # (N, 32)
             boxes_batch = convert_to_boxes(z_where, z_pres, z_pres_prob, with_conf=True)
             z_whats.extend(z_what[z_pres])
