@@ -109,7 +109,7 @@ gamma =  0.97
 eps_start = 1.0
 eps_end = 0.01
 eps_decay = 10000
-learning_rate = 0.05
+learning_rate = 0.001
 # calc len of all possible states = all possible position combinations
 state_len = env.observation_space.shape[0] * 2 \
         + env.observation_space.shape[1] \
