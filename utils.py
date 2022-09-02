@@ -17,24 +17,118 @@ def augment_dict(obs, info, game):
     else:
         raise ValueError
 
-def _augment_dict_spaceinvaders(obs, info):
-    raise NotImplementedError
-    labels = info['labels']
-    objects_colors = {"player": (50, 132, 50), "planet": (151, 25, 122),
-                      "enemy":  (134, 134, 29), "shield": (181, 83, 40),
-                      "gfig":  (50, 132, 50),  "yfig": (162, 134, 56)}
-    x, y = labels['enemies_x'], labels['enemies_x']
-    # x, y = labels['enemies_x'], labels['enemies_x']
-    x = x + 100
-    y_player = labels['player_x'] + 2
-    x_player = 190
-    find_objects(obs, objects_colors['enemy'])
-    print(labels)
-    mark_point(obs, x, y, color=(255, 0, 0), show=False, size=1)
-    mark_point(obs, x_player, y_player, color=(0, 255, 0))
+
+def find_and_merge(image, color, merge_margin):
+    # adapted from   www.onooks.com/how-to-merge-neighboring-bounding-boxes
+    # tuplify
+    def tup(point):
+        return (point[0], point[1])
+
+    # returns true if the two boxes overlap
+    def overlap(source, target):
+        # unpack points
+        tl1, br1 = source
+        tl2, br2 = target
+
+        # checks
+        if (tl1[0] >= br2[0] or tl2[0] >= br1[0]):
+            return False
+        if (tl1[1] >= br2[1] or tl2[1] >= br1[1]):
+            return False
+        return True
+
+    # returns all overlapping boxes
+    def getAllOverlaps(boxes, bounds, index):
+        overlaps = []
+        for a in range(len(boxes)):
+            if a != index:
+                x, y, w, h = boxes[a]
+                if overlap(bounds, [[x, y], [x + w, y + h]]):
+                    overlaps.append(a)
+        return overlaps
+    # go through the contours and save the box edges
+    mask = cv2.inRange(image, np.array(color), np.array(color))
+    contours, hierarchy = cv2.findContours(mask.copy(), 1, 1)
+    boxes = []  # each element is [[top-left], [bottom-right]]
+    hierarchy = hierarchy[0]
+    max_area = 5000
+    for component in zip(contours, hierarchy):
+        currentContour = component[0]
+        currentHierarchy = component[1]
+        x, y, w, h = cv2.boundingRect(currentContour)
+        if currentHierarchy[3] < 0 and w * h < max_area:
+            # cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),1)
+            boxes.append([x, y, w, h])
+
+    # go through the boxes and start merging
+    # this is gonna take a long time
+    finished = False
+    points = [[[0, 0]]]
+    while not finished:
+        # set end con
+        finished = True
+
+        for point in points:
+            point = point[0]
+
+        # loop through boxes
+        index = len(boxes) - 1
+        while index >= 0:
+            # add margin
+            x, y, w, h = boxes[index]
+            tl = [x, y]
+            br = [x + h, y + w]
+            tl[0] -= merge_margin
+            tl[1] -= merge_margin
+            br[0] += merge_margin
+            br[1] += merge_margin
+
+            # get matching boxes
+            overlaps = getAllOverlaps(boxes, [tl, br], index)
+
+            # check if empty
+            if len(overlaps) > 0:
+                # combine boxes
+                # convert to a contour
+                con = []
+                overlaps.append(index)
+                for ind in overlaps:
+                    x, y, w, h = boxes[ind]
+                    tl, br = [x, y], [x + w, y + h]
+                    con.append([tl])
+                    con.append([br])
+                con = np.array(con)
+
+                # get bounding rect
+                x, y, w, h = cv2.boundingRect(con)
+
+                # stop growing
+                w -= 1
+                h -= 1
+                merged = [x, y, w, h]
+
+                # highlights
+                points = con
+
+                # remove boxes from list
+                overlaps.sort(reverse = True)
+                for ind in overlaps:
+                    del boxes[ind]
+                boxes.append(merged)
+
+                # set flag
+                finished = False
+                break
+
+            # increment
+            index -= 1
+
+    # return [[box[0][1], box[0][0]] for box in boxes]
+    return boxes
+
 
 def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
-                 min_distance=None):
+                 min_distance=None, merge=False, merge_margin=3):
     """
     image: image to detects objects from
     color: fixed color of the object
@@ -43,15 +137,23 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
     position: presuposed position
     tol_p: tolerance on the position
     min_distance: minimal distance between two detected objects
+    merge: merge objects if distance are too close
+    merge_margin: if merge, the minimum margin
     """
-    mask = cv2.inRange(image, np.array(color), np.array(color))
-    output = cv2.bitwise_and(image, image, mask = mask)
-    contours, _ = cv2.findContours(mask.copy(), 1, 1)
+    if merge:
+        contours = find_and_merge(image, color, merge_margin)
+    else:
+        mask = cv2.inRange(image, np.array(color), np.array(color))
+        cntrs, _ = cv2.findContours(mask.copy(), 1, 1)
+        contours = []
+        for cnt in cntrs:
+            y, x, h, w = cv2.boundingRect(cnt)
+            contours.append([y, x, h, w])
     detected = []
     for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
+        y, x, h, w = cnt
         if size is not None:
-            if not assert_in((h, w), size, tol_s):
+            if not assert_in((w, h), size, tol_s):
                 continue
         if position is not None:
             if not assert_in((x, y), position, tol_p):
@@ -59,13 +161,14 @@ def find_objects(image, color, size=None, tol_s=10, position=None, tol_p=2,
         if min_distance is not None:
             too_close = False
             for det in detected:
-                if abs(det[0] - y) + abs(det[1] - x) < min_distance:
+                if abs(det[0] - x) + abs(det[1] - y) < min_distance:
                     too_close = True
                     break
             if too_close:
                 continue
-        detected.append((y, x))
+        detected.append((x, y))
     return detected
+
 
 def _augment_dict_tennis(obs, info):
     labels = info['labels']
@@ -81,6 +184,7 @@ def _augment_dict_tennis(obs, info):
         if len(detected) == 0:
             if obj not in ['ball', 'ball_shadow']:
                 # print(f"no {obj} detected")
+                import ipdb; ipdb.set_trace()
                 return False
         elif len(detected) == 1:
             x, y = detected[0][0], detected[0][1]
@@ -89,6 +193,7 @@ def _augment_dict_tennis(obs, info):
             # mark_point(obs, x, y, objects_colors[obj], show=False)
         else:
             print("problem")
+            import ipdb; ipdb.set_trace()
             return False
     for obj in ['player', 'enemy']:  # scores
         detected = find_objects(obs, objects_colors[obj],
@@ -105,6 +210,7 @@ def _augment_dict_tennis(obs, info):
     # show_image(obs)
     return labels
 
+
 def _augment_dict_pong(obs, info):
     labels = info['labels']
     # print(labels)
@@ -120,7 +226,7 @@ def _augment_dict_pong(obs, info):
             pres = enough_color_around(obs, x, y, objects_colors["background"],
                                        threshold=4)
             if not pres:
-                del labels[f"ball_x"]; del labels[f"ball_y"]
+                del labels["ball_x"]; del labels["ball_y"]
                 continue
         labels[f"{obj}_x"], labels[f"{obj}_y"] = x, y
     for score in scores:
@@ -135,7 +241,7 @@ def _augment_dict_pong(obs, info):
                 labels[f"{score}_y"] = y
                 # mark_point(obs, x, y, (255, 0, 0))
                 break
-    return labels
+    return True
 
 
 def assert_in(observed, target, tol):
@@ -179,6 +285,39 @@ def _augment_dict_mspacman(obs, info):
     if color_around(obs, x_t, y_t, base_objects_colors["fruit"]):
         labels['fruit_visible'] = True
     return True
+
+
+def _augment_dict_spaceinvaders(obs, info):
+    labels = info['labels']
+    objects = {"planet": (151, 25, 122), # "player": (50, 132, 50),
+               "invader":  (134, 134, 29), "shield": (181, 83, 40),
+               "missile": (142, 142, 142)}
+    scores = {"green_scores":  (50, 132, 50),  "yellow_scores": (162, 134, 56)}
+    y_player = labels['player_x']
+    x_player = 185
+    labels['player'] = [x_player, y_player]
+    del labels["player_x"]
+    invaders = find_objects(obs, objects['invader'], size=(10, 10), tol_s=5)
+    labels['invaders'] = invaders
+    planet = find_objects(obs, objects['planet'], size=(7, 7), tol_s=3)
+    if planet:
+        labels['planet'] = planet[0]
+    else:
+        labels['planet'] = []
+    # for inv in invaders:
+    #     mark_point(obs, inv[0], inv[1], color=(255, 255, 0), show=False, size=1)
+    for score in scores:
+        found = find_objects(obs, scores[score], position=(10, 100), tol_p=(20, 100),
+                              merge=True, merge_margin=3)  # scores at the top
+        # for found in founds:
+        #     mark_point(obs, found[0], found[1], color=(255, 255, 255), show=False, size=1)
+        labels[score] = found
+    for targ_obj, mind in zip(["shield", "missile"], [26, 7]):
+        found = find_objects(obs, objects[targ_obj], min_distance=mind)
+        labels[f'{targ_obj}s'] = found
+    # print(labels)
+    return True
+
 
 
 def draw_names(obs, info):
@@ -258,22 +397,6 @@ def show_image(image_array):
     plt.show()
 
 
-# def dict_to_array(info_dict, game):
-#     labels = info_dict['labels']
-#     array = []
-#     if game == "MsPacman":
-#         array.append(labels['player_x']); array.append(labels['player_y'])
-#         for enemy in ['blinky', 'inky', 'pinky', 'sue']:
-#             array.append(labels[f'enemy_{enemy}_x']); array.append(labels[f'enemy_{enemy}_y'])
-#         array.append(labels['fruit_x']); array.append(labels['fruit_y'])
-#         array.append(labels['player_score']); array.append(labels['ghosts_count'])
-#         array.append(labels['player_direction']); array.append(labels['num_lives'])
-#         array.append(labels['dots_eaten_count'])
-#         return np.array(array, dtype=np.uint16)
-#     else:
-#         raise ValueError
-
-
 def enough_color_around(image_array, x, y, color, size=3, threshold=10):
     """
     checks if the color is present in the square of (2*size+1) x (2*size+1)
@@ -284,6 +407,7 @@ def enough_color_around(image_array, x, y, color, size=3, threshold=10):
                      for i in ran for j in ran]
     return np.sum(points_around) >= threshold
 
+
 def load_agent(path):
     from mushroom_rl.utils.parameters import Parameter
     from mushroom_rl.algorithms.agent import Agent
@@ -292,6 +416,7 @@ def load_agent(path):
     agent.policy.set_epsilon(epsilon_test)
     agent.policy._predict_params = {} # mushroom_rl compatibility
     return agent
+
 
 def dict_to_serie(info_dict):
     info_dict['labels']['lives'] = info_dict['ale.lives']

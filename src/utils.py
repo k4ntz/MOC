@@ -16,6 +16,8 @@ from torchvision.utils import save_image as Simage
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes as draw_bb
+from ast import literal_eval
+
 
 colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
           (0, 255, 255), (255, 100, 100), (100, 100, 100), (100, 100, 255), (100, 200, 100)] * 100
@@ -34,6 +36,10 @@ RESTORE_COLORS = True
 turned = False
 
 def draw_bounding_boxes(image, boxes_batch, labels=None):
+    if len(image.shape) == 4:
+        image = image.squeeze(0)
+    if "float" in str(image.dtype):
+        image = (image * 255).to(torch.uint8)
     _, imW, imH = image.shape
     if not torch.is_tensor(image):
         image = torch.tensor(image)
@@ -46,9 +52,10 @@ def draw_bounding_boxes(image, boxes_batch, labels=None):
     if labels is not None:
         labels = label_names(labels)
         # colors = [base_objects_colors[lab] for lab in labels]
-        colors = ["red"] * 50
-    image = draw_bb(image, torch.tensor(bb), colors=colors)
+    colors = [(0,255,0)] * 50
+    image = draw_bb(image, torch.tensor(bb), colors=colors, width=2)
     return image
+
 
 class Checkpointer:
     def __init__(self, checkpointdir, max_num):
@@ -277,12 +284,16 @@ def image_pca(image, bbox, z_what, row_color=True):
     plt.show()
 
 
-label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
-              "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
+mspacman_label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky',
+                        "blue_ghost", "white_ghost", "fruit", "save_fruit",
+                        "life", "life2", "score"]
+
+spaceinvaders_label_list = ["player", "invader", "missile", "shield",
+                            "planet", "green_score", "yellow_score"]
 
 
 def place_labels(labels, boxes_batch, image):
-    labels = label_names(labels)
+    # labels = label_names(labels)
     if isinstance(image, torch.Tensor):
         image = image.cpu().numpy()
     if len(image) == 3:
@@ -296,11 +307,55 @@ def place_labels(labels, boxes_batch, image):
     return image
 
 
-def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
+def get_labels(serie, boxes_batch, game, return_form="int"):
     """
-    Return starting epoch and global step
-    return_form in `labels`, `labels_n`, or `one_hot`
+    Return starting the label list
+    return_form in `str`, `int`
     """
+    def extract_data(pd_item):
+        return literal_eval(pd_item.item())
+
+    def _get_label_spaceinvaders(serie, boxes_batch, return_form):
+        bb = (boxes_batch[0][:,:4] * (210, 210, 160, 160)).round().astype(int)
+        # Fill labels list
+        potential_obj = ["shields", "invaders", "missiles", "player",
+                         "yellow_scores", "green_scores", "planet"]
+        pieces = {}
+        for pobj in potential_obj:
+            pieces[pobj] = extract_data(serie[pobj])
+        labels = []
+        for bbx in bb:
+            min_dist = np.inf
+            label = ""
+            cor_pos = None
+            for name, pos in pieces.items():
+                # print(name)
+                if len(pos) > 0 and isinstance(pos[0], int):  # single object
+                    cur_dist = abs(bbx[0] - pos[0]) + abs(bbx[3] - pos[1])
+                    if cur_dist < min_dist:
+                        label = name
+                        min_dist = cur_dist
+                        cor_pos = pos
+                else: # multiple objects
+                    for spos in pos:
+                        cur_dist = abs(bbx[0] - spos[0]) + abs(bbx[2] - spos[1])
+                        if cur_dist < min_dist:
+                            label = name[:-1]
+                            min_dist = cur_dist
+                            cor_pos = spos
+            labels.append(label)
+        if return_form == "str":
+            return labels
+        elif return_form == "int":
+            return torch.LongTensor([spaceinvaders_label_list.index(lab) for lab in labels])
+
+    if "mspacman" in game.lower():
+        return _get_label_mspacman(serie, boxes_batch, return_form)
+    elif "spaceinvaders" in game.lower():
+        return _get_label_spaceinvaders(serie, boxes_batch, return_form)
+
+
+def _get_label_mspacman(serie, boxes_batch, return_form="labels_n"):
     enemy_list = ['sue', 'inky', 'pinky', 'blinky']
     pieces = {"save_fruit": (170, 136), "life": (169, 21), \
               "life2": (169, 38), "score0": (183, 81)}
@@ -312,6 +367,7 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
             pieces[en] = (serie[f'{en}_y'].item(), serie[f'{en}_x'].item())
         if not serie[f'{en}_blue'].item():
             all_blue = False
+    # Fill labels list
     labels = []
     for bbx in bb:
         min_dist = np.inf
@@ -329,15 +385,10 @@ def get_labels(serie, boxes_batch, return_form="labels_n", show=False):
             elif serie[f'{label}_white'].item():
                 label = "white_ghost"
         labels.append(label)
-    if return_form == "labels":
+    if return_form == "str":
         return labels
-    elif return_form == "one_hot":
-        one_hot_t = torch.zeros(len(bb), len(label_list))
-        for i, lab in enumerate(labels):
-            one_hot_t[i][label_list.index(lab)] = 1
-        return one_hot_t
-    elif return_form == "labels_n":
-        return torch.LongTensor([label_list.index(lab) for lab in labels])
+    elif return_form == "int":
+        return torch.LongTensor([mspacman_label_list.index(lab) for lab in labels])
     else:
         print("\n\nUNCORECT return_form\n\n")
 
@@ -375,7 +426,7 @@ def mark_point(image_array, x, y, color=(255, 0, 0), size=2, show=True):
 def label_names(labels):
     if torch.is_tensor(labels):
         if np.all([i in [0, 1] for i in labels]):  # one hot
-            return [label_list[i] for i in labels.argmax(1)]
+            return [mspacman_label_list[i] for i in labels.argmax(1)]
         else:
-            return [label_list[i] for i in labels]
+            return [mspacman_label_list[i] for i in labels]
     return labels

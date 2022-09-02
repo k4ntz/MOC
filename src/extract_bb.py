@@ -23,11 +23,11 @@ from termcolor import colored
 import pandas as pd
 
 
-folder = "validation"
+folder = "test"
 
 action = ["visu", "extract"][0]
 
-folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
+folder_sizes = {"train": 5000, "test": 5000, "validation": 5000}
 nb_images = folder_sizes[folder]
 
 cfg, task = get_config()
@@ -51,6 +51,7 @@ all_labels = []
 for i in tqdm(range(nb_images)):
     img_path = f"../aiml_atari_data/space_like/{cfg.gamelist[0]}/{folder}/{i:05}.png"
     img_path_fs = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/{i:05}.png"
+    img_path_fs = f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}/01296.png"
     image = open_image(img_path).to(cfg.device)
     image_fs = open_image(img_path_fs).to(cfg.device)
 
@@ -72,29 +73,32 @@ for i in tqdm(range(nb_images)):
     boxes_batch = convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))
     # boxes_batch, zwhats = boxes_and_what(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0), z_what)
 
-
-    if action == "visu":
-        if False:
-            labels = get_labels(table.iloc[[i]], boxes_batch)
-            image = place_labels(labels, boxes_batch, image_fs[0])
-        else:
-            labels = None
-        image = draw_bounding_boxes(image, boxes_batch, labels)
-        show_image(image)
-        exit()
+    labels = get_labels(table.iloc[[i]], boxes_batch, game=cfg.gamelist[0])
+    if action == "visu" and i % 100 == 0:
+        import matplotlib; matplotlib.use("TkAgg")
+        image = draw_bounding_boxes(image_fs, boxes_batch, None)
+        # image = image_fs.squeeze(0)
+        if True:
+            labels_names = get_labels(table.iloc[[i]], boxes_batch,
+                                      game=cfg.gamelist[0], return_form='str')
+            # image = place_labels(labels_names, boxes_batch, image)
+            show_image(image)
         # show_image(image_fs[0])
 
-    assert z_what_pres.shape[0] == labels.shape[0]
+    assert z_what_pres.shape[0] == np.array(labels).shape[0]
     all_z_what.append(z_what_pres.detach().cpu())
     all_labels.append(labels.detach().cpu())
 
 
-# all_z_what = torch.cat(all_z_what)
-# all_labels = torch.cat(all_labels)
 
 if action == "extract":
-    torch.save(all_z_what, f"labeled/z_what_{folder}.pt")
-    torch.save(all_labels, f"labeled/labels_{folder}.pt")
+    all_z_what = torch.cat(all_z_what)
+    all_labels = torch.cat(all_labels)
+    save_folder = f"labeled/{cfg.gamelist[0]}"
+    os.makedirs(save_folder, exist_ok=True)
+    torch.save(all_z_what, f"{save_folder}/z_what_{folder}.pt")
+    torch.save(all_labels, f"{save_folder}/labels_{folder}.pt")
+    print(f"saved z_whats and labels in {save_folder}")
 
 # import ipdb; ipdb.set_trace()
     # image = (image[0] * 255).round().to(torch.uint8)  # for draw_bounding_boxes

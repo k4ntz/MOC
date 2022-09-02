@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from rational.torch import Rational
+from activations.torch import Rational
 
 # n_features = [60]
 class Network(nn.Module):

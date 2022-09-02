@@ -15,7 +15,8 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
+# folder_sizes = {"train": 50000, "test": 5000, "validation": 5000}
+folder_sizes = {"train": 5000, "test": 5000, "validation": 5000}
 
 
 parser = argparse.ArgumentParser(
@@ -30,7 +31,7 @@ parser.add_argument('-g', '--game', type=str, help='An atari game',
 parser.add_argument('--render', default=False, action="store_true",
                     help='renders the environment')
 parser.add_argument('-r', '--random', default=False, action="store_true",
-                    help='renders the environment')
+                    help='Select image with p = 0.01')
 parser.add_argument('-f', '--folder', type=str, choices=folder_sizes.keys(),
                     required=True,
                     help='folder to write to: train, test or validation')
@@ -99,17 +100,20 @@ while True:
         env.render()
         sleep(0.01)
     # img = draw_names(obs, info)  # to see where the objects are
+    if done:
+        state, reward, done, info, obs = env.step(action)
+        if done: # stuck
+            env.reset()
+            for _ in range(200):
+                action = agent.draw_action(state)
+                # action = env.action_space.sample()
+                state, reward, done, info, obs = env.step(action)
     if (not args.random) or np.random.rand() < 0.01:
         image_n = index[image_count]
         try:
+        # if True:
             if not augment_dict(obs, info, args.game): # wrong image
                 # print("Wrong image")
-                if done:
-                    env.reset()
-                    for _ in range(200):
-                        action = agent.draw_action(state)
-                        # action = env.action_space.sample()
-                        state, reward, done, info, obs = env.step(action)
                 continue
             ## RAW IMAGE
             img = Image.fromarray(obs, 'RGB')
@@ -120,18 +124,13 @@ while True:
                 obs[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
             img.save(f'{bgr_folder}/{image_n:05}.png')  # better quality than jpg
             series.append(dict_to_serie(info))
-            if done:
-                env.reset()
-                for _ in range(200):
-                    action = agent.draw_action(state)
-                    # action = env.action_space.sample()
-                    state, reward, done, info, obs = env.step(action)
             pbar.update(1)
             image_count += 1
             if image_count == limit:
                 break
-        except IndexError:
+        except IndexError as e:
             # print("Wrong image")
+            # import ipdb; ipdb.set_trace()
             continue
 
 df = pd.DataFrame(series, dtype=int)

@@ -14,6 +14,8 @@ parser.add_argument('type', metavar='N', type=str,
                     help='an integer for the accumulator')
 parser.add_argument('-dim', type=int, choices=[2, 3], default=2,
                     help='Number of dimension for PCA/TSNE visualization')
+parser.add_argument('-s', '--save', action="store_true",
+                    help='Wether or not to save the plot')
 parser.add_argument('-method', choices=["pca", "tsne", "linear", "nn"],
                     default="pca", type=str,
                     help='Method : "pca", "tsne" for show \n \
@@ -25,13 +27,23 @@ device = torch.device('cuda' if torch.cuda.is_available() and args.type=="nn" el
 
 nb_used_sample = 60000
 
-z_what_train = torch.load("labeled/z_what_train.pt").to(device)[:nb_used_sample]
-train_labels = torch.load("labeled/labels_train.pt").to(device)[:nb_used_sample]
-z_what_test = torch.load("labeled/z_what_test.pt").to(device)[:nb_used_sample]
-test_labels = torch.load("labeled/labels_test.pt").to(device)[:nb_used_sample]
+# game = "MsPacman-v0"
+# label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
+# "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
+colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'purple', 'orange',
+          'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
 
-label_list = ["pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost",
-              "white_ghost", "fruit", "save_fruit", "life", "life2", "score0"]
+game = "SpaceInvaders-v0"
+label_list = ["player", "invader", "missile", "shield",
+              "planet", "green_score", "yellow_score"]
+colors = ['g', 'y', 'b', 'brown', 'm', 'olive', 'r', 'pink', 'purple', 'orange',
+          'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
+
+z_what_train = torch.load(f"labeled/{game}/z_what_train.pt").to(device)[:nb_used_sample]
+train_labels = torch.load(f"labeled/{game}/labels_train.pt").to(device)[:nb_used_sample]
+z_what_test = torch.load(f"labeled/{game}/z_what_test.pt").to(device)[:nb_used_sample]
+test_labels = torch.load(f"labeled/{game}/labels_test.pt").to(device)[:nb_used_sample]
+
 
 
 
@@ -40,8 +52,7 @@ if args.type == "show":
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
     train_all = torch.cat((z_what_train, train_labels.unsqueeze(1)), 1)
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'purple', 'orange',
-              'olive', 'brown', 'tomato', 'darkviolet', 'grey', 'chocolate']
+
     # SORT THE INDICES
     sorted = []
     for i in range(train_labels.max() + 1):
@@ -65,8 +76,13 @@ if args.type == "show":
     if args.dim == 2:
         fig, ax = plt.subplots(1, 1)
         # ax.set_facecolor('xkcd:salmon')
-        ax.set_facecolor((0.3, 0.3, 0.3))
-        nb_used_sample = min(nb_used_sample, 10000)
+        # ax.set_facecolor((0.3, 0.3, 0.3))
+        fig.set_size_inches(12, 12)
+        nb_used_sample = min(nb_used_sample, 2000)
+        for axis in ['top','bottom','left','right']:
+            ax.spines[axis].set_linewidth(4)
+        ax.tick_params(axis='both', which='major', labelsize=16)
+        ax.tick_params(axis='both', which='minor', labelsize=16)
         for i, idx in enumerate(sorted):
             if "pacman" in label_list:
                 colr = [np.array(base_objects_colors[label_list[i]])/255]
@@ -75,7 +91,7 @@ if args.type == "show":
             ax.scatter(z_what_emb[:, 0][idx].squeeze()[:nb_used_sample],
                        z_what_emb[:, 1][idx].squeeze()[:nb_used_sample],
                        c=colr, label=label_list[i].replace("_", " "),
-                       alpha=0.7)
+                       alpha=1)
     else:  # 3
         from mpl_toolkits.mplot3d import Axes3D
         fig = plt.figure()
@@ -89,8 +105,12 @@ if args.type == "show":
                        c=colors[i], label=label_list[i].replace("_", " "),
                        alpha=0.7)
 
-    plt.legend(prop={'size': 19})
-    plt.show()
+    plt.legend(prop={'size': 19}, framealpha=0.95)
+    if args.save:
+        plt.savefig(f"{args.method}_{game}.svg")
+        print(f"saved at {args.method}_{game}.svg")
+    else:
+        plt.show()
 
 else:
     if args.method == "linear":
