@@ -1,8 +1,39 @@
 from yacs.config import CfgNode
 
 arch = CfgNode({
-    
+    # TR
+    'adjacent_consistency_weight': 0.0,
+    'pres_inconsistency_weight': 0.0,
+    'area_pool_weight': 0.0,
+    'area_object_weight': 10.0,
+    'cosine_sim': True,
+    'object_threshold': 0.5,
+    'z_cos_match_weight': 5.0,
+    'full_object_weight': 3000,  # Unused
+    'motion_input': True,
+    'motion': True,
+    'motion_kind': 'mode',
+    'motion_direct_weight': 1.0,  # Unused
+    'motion_loss_weight_z_pres': 10.0,
+    'motion_loss_weight_z_where': 100.0,
+    'motion_loss_weight_alpha': 1,
+    'motion_weight': 100.0,
+    'motion_sigmoid_steepen': 10000.0,  # Unused
+    'motion_cooling_end_step': 3000,
+    'motion_cooling_start_step': 0,
+    'dynamic_scheduling': True,
+    'agree_sim': True,
+    'dynamic_steepness': 2.0,
+    'use_variance': True,
+    'motion_underestimating': 2.0,
+    'motion_object_found_lambda': 0.025,
+    'z_where_offset': 0.1,
+    'acceptable_non_moving': 8,  # Unused
+    'variance_steps': 20,
+    'motion_requirement': 2.0,  # Unused
+    # SPACE-config
     'img_shape': (128, 128),
+    'T': 4,
     
     # Grid size. There will be G*G slots
     'G': 8,
@@ -42,11 +73,6 @@ arch = CfgNode({
     'tau_end_step': 10000,
     'tau_start_value': 2.5,
     'tau_end_value': 2.5,
-    
-    # Turn on boundary loss or not
-    'boundary_loss': True,
-    # When to turn off boundary loss
-    'bl_off_step': 100000000,
     
     # Fix alpha for the first N steps
     'fix_alpha_steps': 0,

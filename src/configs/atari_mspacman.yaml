@@ -1,52 +1,68 @@
 seed: 1
-model: 'SPACE'
+model: 'TcSpace'
+exp_name: mspacman
 resume: false
-resume_ckpt: ''
-parallel: false
-device_ids: [4, 5, 6, 7]
-device: 'cuda:4'
+load_time_consistency: true
+add_flow: true
+save_relevant_objects: false
+resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
+# '../output/checkpoints/mid/mspacman_pt_seed0_aow0.0/model_000160101.pth'
+# '../output/checkpoints/mspacman_atari_pretrained/model.pth'
+#
+# '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
+#'../output/checkpoints/mspacman_atari+z_area_object_1e1/model_000186501.pth'
+# '../output/checkpoints/mspacman_baseline/model_000177001.pth'
+# 'result_checkpoints/base_z_what_model_000078001.pth'
+# 'output/checkpoints/atari_mspacman/model_000079001.pth'
+# '../pretrained/atari_joint.pth'
+parallel: true
+device_ids: [7, 8, 9, 0]
+device: 'cuda:7'
 
-logdir: '../output/logs'
-checkpointdir: '../output/checkpoints'
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
 evaldir: '../output/eval'
 
 dataset: 'ATARI'
+dataset_style: '_128'
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../data/ATARI'
-  # ATARI: '../aiml_atari_data/space_like'
-
+  ATARI: '../aiml_atari_data/space_like'
 
 train:
-  batch_size: 12
-  max_epochs: 1000
-  max_steps: 160000
-  print_every: 500
-  save_every: 1000
-  num_workers: 4
+  log: true
+  batch_size: 16
+  max_epochs: 10000
+  max_steps: 5000
+  print_every: 200
+  save_every: 200
+  num_workers: 8
   clip_norm: 1.0
   max_ckpt: 4
-  eval_on: false
+  eval_on: true
+  eval_every: 200
   solver:
     fg:
       optim: 'RMSprop'
-      lr: 1e-5
+      lr: 3e-5
     bg:
       optim: 'Adam'
       lr: 1e-3
 
 arch:
+  motion_input: false
+  motion: true
+  motion_kind: 'mode'
   G: 16
   fg_sigma: 0.20
-
-  z_pres_start_step: 10000
-  z_pres_end_step: 15000
+  z_pres_start_step: 1000
+  z_pres_end_step: 5000
   z_pres_start_value: 0.1
   z_pres_end_value: 1e-10
 
   z_scale_mean_start_step: 0
-  z_scale_mean_end_step: 20000
+  z_scale_mean_end_step: 5000
   z_scale_mean_start_value: -2.0
   z_scale_mean_end_value: -2.5
 
@@ -55,12 +71,14 @@ arch:
   tau_start_value: 2.5
   tau_end_value: 2.5
 
-  fix_alpha_steps: 4000
+  fix_alpha_steps: -1
   fix_alpha_value: 0.1
+
+  motion_underestimating: 1.5
+  motion_object_found_lambda: 0.025
 
   K: 3
   bg_sigma: 0.10
-  boundary_loss: false
 
 gamelist: [
     # 'Atlantis-v0',

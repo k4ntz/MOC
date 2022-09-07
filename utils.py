@@ -6,6 +6,7 @@ import cv2
 
 
 def augment_dict(obs, info, game):
+    import ipdb; ipdb.set_trace()
     if game == "MsPacman":
         return _augment_dict_mspacman(obs, info)
     elif game == "Tennis":

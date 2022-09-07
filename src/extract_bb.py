@@ -41,8 +41,9 @@ model = model.to(cfg.device)
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
 use_cpu = 'cpu' in cfg.device
 if cfg.resume_ckpt:
-    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
+    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, device=cfg.device)
 
+model.training = False
 
 table = pd.read_csv(f"../aiml_atari_data/rgb/{cfg.gamelist[0]}/{folder}_labels.csv")
 # print(colored("Please change number of images !", "red"))
@@ -57,7 +58,9 @@ for i in tqdm(range(nb_images)):
 
 
     # TODO: treat global_step in a more elegant way
-    loss, log = model(image, global_step=100000000)
+    if len(image.shape) == 4: # only one image
+        image = image.unsqueeze(0)
+    loss, log = model(image, global_step=100000000, motion=None, motion_z_pres=None, motion_z_where=None)
     # (B, N, 4), (B, N, 1), (B, N, D)
     z_where, z_pres_prob, z_what = log['z_where'], log['z_pres_prob'], log['z_what']
     # (B, N, 4), (B, N), (B, N)
@@ -73,7 +76,8 @@ for i in tqdm(range(nb_images)):
     boxes_batch = convert_to_boxes(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0))
     # boxes_batch, zwhats = boxes_and_what(z_where, z_pres.unsqueeze(0), z_pres_prob.unsqueeze(0), z_what)
 
-    labels = get_labels(table.iloc[[i]], boxes_batch, game=cfg.gamelist[0])
+    # labels = get_labels(table.iloc[[i]], boxes_batch, game=cfg.gamelist[0])
+    labels = get_labels(table.iloc[[i]], boxes_batch[0], game=cfg.gamelist[0])
     if action == "visu" and i % 100 == 0:
         import matplotlib; matplotlib.use("TkAgg")
         image = draw_bounding_boxes(image_fs, boxes_batch, None)

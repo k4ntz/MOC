@@ -8,7 +8,7 @@ from engine.show import show
 from model import get_model
 from vis import get_vislogger
 from dataset import get_dataset, get_dataloader
-from utils import Checkpointer, open_image, show_image, save_image, \
+from augmentation import Checkpointer, open_image, show_image, save_image, \
     corners_to_wh, colors, image_pca
 import os
 import os.path as osp
@@ -25,9 +25,8 @@ cfg, task = get_config()
 model = get_model(cfg)
 model = model.to(cfg.device)
 checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
-use_cpu = 'cpu' in cfg.device
 if cfg.resume_ckpt:
-    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, use_cpu=use_cpu)
+    checkpoint = checkpointer.load(cfg.resume_ckpt, model, None, None, cfg.device)
 
 img_path = f"../data/ATARI/MsPacman-v0/train/00001.jpg"
 image = open_image(img_path).to(cfg.device)

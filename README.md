@@ -1,3 +1,115 @@
+# SPACE-Time
+
+:exclamation: :boom: Due to VPN issues I could not prepare the files & test the instructions mentioned below. So if anything is not working yet, let me know or maybe fix it directly. :boom: :exclamation:
+
+**Dataset Creation**
+
+We heavily modified the create_dataset.py described below for SPACE-Time:
+
+It tries to use an Agent from folder `agents` also in root directory'
+`python3 create_dataset.py -f train -g Pong`
+
+Important new options are:
+
+* `--plot_bb` adds bounding boxes to the generated images!
+* `--root` use the global mode image instead of the mode of the trail
+* `--root-median` computes the mode and median images from all of those already generated.
+
+Some other frequently changed things are currently not settings yet, but set in the code...
+One such thing is the visualization; in `motion_processing.py` we define the class ProcessingVisualization
+and implementations, that take in the frames and motion and visualize sth. for every `self.every_n` up to `self.max_vis`
+times.
+
+The settings for the visualization are defined (grouped by motion type and one for the ground truth labels)
+inside the main function.
+E.g `ZWhereZPres` does show most of the steps used when going from binary motion yes/no to z_where and z_pres latents.
+
+**Loading the model**
+
+The model SPACE-Time is loaded with `Checkpointer` in `src/utils.py`, while the config in `src/configs`
+(e.g. `atari_mspacman.yaml`) control which model is loaded. Usage can be seen in `train.py`:
+
+```python
+model = get_model(cfg)
+model = model.to(cfg.device)
+
+checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
+                            load_time_consistency=cfg.load_time_consistency, add_flow=cfg.add_flow)
+model.train()
+
+optimizer_fg, optimizer_bg = get_optimizers(cfg, model)
+
+if cfg.resume:
+    checkpoint = checkpointer.load_last(cfg.resume_ckpt, model, optimizer_fg, optimizer_bg, cfg.device)
+    if checkpoint:
+        start_epoch = checkpoint['epoch']
+        global_step = checkpoint['global_step'] + 1
+if cfg.parallel:
+    model = nn.DataParallel(model, device_ids=cfg.device_ids)
+```
+
+For Space-Time the flags for `load_time_consistency` and `add_flow` are set to `True`, so the model loads properly, but that should be already present in the respective config. Also `resume`should be set when loading a model.
+
+**Usage for downstream-task**
+
+`model.space` then retrieves the included `Space` model. `Space` exposes a method `scene_description` for retrieving the knowledge of a scene:
+
+```python
+space = model.space
+# x is the image on device as a Tensor, z_classifier accepts the latents,
+# only_z_what control if only the z_what latent should be used (see docstring)
+scene = space.scene_description(x, z_classifier=z_classifier, only_z_what=True)
+# scene now contains a dict[int (the label) -> list[(int, int)]
+# (the positions of the object in the domain (-1, 1) that can be mapped into (0, H)
+# by using zwhere_to_box (see Appendix in paper).
+#
+# The label index can be converted into a string label using the index
+# of `label_list_*` that are defined in `src/dataset/labels.py`.
+```
+
+During evaluation a new only_z_what-style-classifier using `RidgeRegression` is trained with validation data in a few-shot setting and saved along the checkpoints as `z_what-classifier_{samples_per_class}.joblib.pkl`. Here `samples_per_class are the amount of samples from each label class the classifier is trained with.
+
+It can be loaded as:
+
+```python
+joblib.load(filename)
+```
+
+**Training the model**
+
+Commonly I train the model using:
+
+`python main.py --task multi_train --config configs/atari_riverraid.yaml`
+
+`multi_train` refers to `src/engine/multi_train.py` that enables running multiple trainings/experiments sequentially.
+There (following the many commented-out examples) configs that should be altered (relative to the `.yaml`) can be noted.
+The script will then iterate over the powerset of configuration options, i.e. every combination of setting. Consider the following configuration as an example:
+
+```python
+[
+    {
+        'seed': ('seed', range(5), identity_print),
+        'aow': ('arch.area_object_weight', np.insert(np.logspace(1, 1, 1), 0, 0.0), lambda v: f'{v:.1f}'),
+    },
+]
+```
+
+Here we iterate over five seeds respectively once for `arch.area_object_weight = 0.0` and `arch.area_object_weight = 10.0`. This corresponds to the setting used for evaluation of SPACE-Time and Space-Time without Object Consistency (SPACE-Flow). The third element in the tuple is function to map a compact descriptive string as its used for the experiment name used in the output folder.
+
+Evaluation is run alongside training if the config `train.eval_on` is set to True.
+
+For running the baseline SPACE with the current evaluation and dataset framework please switch to branch `space_upstream`,
+where these usage instructions similarly apply.
+
+**AIML Lab specific notes**
+
+The models and datasets will be stored in `/storage-01/ml-trothenbacher/space-time/`, but are currently still stored in my user folder `~/SPACE` distributed over DGX-B, DGX-C and DGX-D as I did not know of the storage option and loading from storage was still really slow at the time. Some configs and steps might not translate directly to the new file structure.
+
+
+## Loading the model for RL task
+There is an example `load_model.py` that allows to load and give a look at the SPACE-time model easily. You can launch the following command from the `src` folder:
+`python3 load_model.py --config configs/atari_pong_classifier.yaml`
+
 # SPACE
 
 This is the AIML Rework of the SPACE model presented in the following paper:
@@ -77,18 +189,19 @@ python3 setup.py develop --user
 ```
 
 We have our own scripts:
-* To create a dataset for the game pong (`train` folder): <br/>
+* To create a dataset for the game pong (`train` folder) from root folder: <br/>
 `python3 create_dataset.py -f train -g Pong`
 
 * To create a dataset for the game Tennis (`train` folder) and make the data i.i.d.: <br/>
 `python3 create_dataset.py -f train -g Tennis --random`
 
-* To extract images for a game: <br/>
-`python3 extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
+All of the following is also called during eval stage when training. Check out train.py and the src/configs to configure.
 
-* To create a PCA (or tsne) and visualize in a plot: (only available for MsPacman) <br/>
-`python3 classify_z_what.py show -method pca -dim 2`
-(This needs labeled generated data, contact Quentin to get the arxiv)
+* To extract images for a game from src folder: <br/>
+`python3 post_eval/extract_bb.py --config configs/atari_spaceinvaders.yaml resume True resume_ckpt ../pretrained/atari_spaceinvaders.pth device cuda:0 `
+
+* To create a PCA (or tsne) and visualize in a plot from src: (only available for MsPacman yet) also always check the parameter descriptions of argparse <br/>
+`python3 post_eval/classify_z_what.py`
 
 ## Training and Evaluation
 

@@ -48,7 +48,8 @@ class SpaceBg(nn.Module):
     
     def anneal(self, global_step):
         pass
-    
+
+    # @profile
     def forward(self, x, global_step):
         """
         Background inference backward pass
@@ -107,7 +108,7 @@ class SpaceBg(nn.Module):
         masks = masks.view(B * K, 1, H, W)
         
         # Concatenate images (B*K, 4, H, W)
-        comp_vae_input = torch.cat(((masks + 1e-5).log(), x[:, None].repeat(1, K, 1, 1, 1).view(B * K, 3, H, W)), dim=1)
+        comp_vae_input = torch.cat(((masks + 1e-5).log(), x[:, None].repeat(1, K, 1, 1, 1).view(B * K, -1, H, W)), dim=1)
         
         # Component latents, each (B*K, L)
         z_comp_loc, z_comp_scale = self.comp_encoder(comp_vae_input)
@@ -125,7 +126,7 @@ class SpaceBg(nn.Module):
         comps = self.comp_decoder(z_comp)
         
         # Reshape (B*K, ...) -> (B, K, 3, H, W)
-        comps = comps.view(B, K, 3, H, W)
+        comps = comps.view(B, K, -1, H, W)
         masks = masks.view(B, K, 1, H, W)
         
         # Now we are ready to compute the background likelihoods
@@ -247,7 +248,7 @@ class ImageEncoderBg(nn.Module):
         Returns:
             enc: (B, D)
         """
-        return self.enc(x)
+        return self.enc(x[:, :3])
 
 
 class PredictMask(nn.Module):
@@ -376,7 +377,7 @@ class CompEncoder(nn.Module):
             z_comp_loc: (B, D)
             z_comp_scale: (B, D)
         """
-        x = self.enc(x)
+        x = self.enc(x[:, :4])
         z_comp_loc = x[:, :arch.z_comp_dim]
         z_comp_scale = F.softplus(x[:, arch.z_comp_dim:]) + 1e-4
         
@@ -505,7 +506,6 @@ class CompDecoderStrong(nn.Module):
             nn.CELU(),
             nn.GroupNorm(4, 16),
             nn.Conv2d(16, 3, 3, 1, 1)
-        
         )
     
     def forward(self, x):

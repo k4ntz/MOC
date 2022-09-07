@@ -1,0 +1,86 @@
+seed: 1
+model: 'TcSpace'
+exp_name: tennis
+resume: false
+load_time_consistency: true
+add_flow: true
+
+resume_ckpt: '../pretrained/atari_joint.pth'
+# '../output/checkpoints/mspacman_atari_pretrained/model.pth'
+#
+# '../output/checkpoints/mspacman_atari+z_what_1e-2/model_000162501.pth'
+#'../output/checkpoints/mspacman_atari+z_area_object_1e1/model_000186501.pth'
+# '../output/checkpoints/mspacman_baseline/model_000177001.pth'
+# 'result_checkpoints/base_z_what_model_000078001.pth'
+# 'output/checkpoints/atari_mspacman/model_000079001.pth'
+# '../pretrained/atari_joint.pth'
+parallel: true
+device_ids: [12, 13, 14, 15]
+device: 'cuda:12'
+
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
+evaldir: '../output/eval/final'
+
+dataset: 'ATARI'
+dataset_style: '_128'
+dataset_roots:
+  OBJ3D_SMALL: '../data/OBJ3D_SMALL'
+  OBJ3D_LARGE: '../data/OBJ3D_LARGE'
+  ATARI: '../aiml_atari_data/space_like'
+
+
+train:
+  log: false
+  batch_size: 16
+  max_epochs: 10000
+  max_steps: 5000
+  print_every: 200
+  save_every: 500
+  num_workers: 4
+  clip_norm: 1.0
+  max_ckpt: 4
+  eval_on: true
+  eval_every: 200
+  solver:
+    fg:
+      optim: 'RMSprop'
+      lr: 3e-5
+    bg:
+      optim: 'Adam'
+      lr: 1e-3
+
+arch:
+  motion_input: false
+  motion: true
+  motion_kind: 'mode'
+  G: 16
+  fg_sigma: 0.20
+
+  z_pres_start_step: 0
+  z_pres_end_step: 5000
+  z_pres_start_value: 0.1
+  z_pres_end_value: 1e-10
+
+  z_scale_mean_start_step: 0
+  z_scale_mean_end_step: 5000
+  z_scale_mean_start_value: -2.5
+  z_scale_mean_end_value: -3.0
+
+  tau_start_step: 0
+  tau_end_step: 10000
+  tau_start_value: 2.5
+  tau_end_value: 2.5
+
+  fix_alpha_steps: -1
+  fix_alpha_value: 0.1
+
+  motion_underestimating: 0.75
+  motion_object_found_lambda: 0.01
+
+  K: 3
+  bg_sigma: 0.10
+
+gamelist: [
+    'Tennis-v0',
+    ]

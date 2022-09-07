@@ -6,7 +6,10 @@ cfg = CfgNode({
     'seed': 8848,
     'exp_name': '',
     'model': 'SPACE',
-
+    'flow': False,
+    'add_flow': False,
+    # Whether a TcSpace or (Space for TcSpace) should be loaded
+    'load_time_consistency': True,
     # Resume training or not
     'resume': True,
     # If resume is true, then we load this checkpoint. If '', we load the last checkpoint
@@ -20,9 +23,10 @@ cfg = CfgNode({
     'checkpointdir': '../output/checkpoints/',
     'evaldir': '../output/eval/',
     'demodir': '../output/demo/',
-
+    'save_relevant_objects': False,
     # Dataset to use
     'dataset': 'OBJ3D_LARGE',
+    'dataset_style': 'space_like',
 
     'dataset_roots': {
         'ATARI': '../data/ATARI',
@@ -49,6 +53,7 @@ cfg = CfgNode({
 
     # For engine.train
     'train': {
+        'log': True,
         'batch_size': 16,
         'max_epochs': 1000,
         'max_steps': 1000000,
@@ -95,8 +100,10 @@ cfg = CfgNode({
 })
 
 from model.space.arch import arch
+from model.low_res_space.lr_arch import lr_arch
 from eval.eval_cfg import eval_cfg
 
-# For these two, please go to the correponding file
+# For these two, please go to the corresponding file
 cfg.arch = arch
+cfg.lr_arch = lr_arch
 cfg.eval_cfg = eval_cfg

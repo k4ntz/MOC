@@ -1,53 +1,95 @@
 import os
 import sys
 import torch
-import cv2
 import numpy as np
 from torch.utils.data import Dataset
+import skvideo.io as skv
 from PIL import Image
 import PIL
+import os.path as osp
+from .labels import get_labels, get_labels_moving, to_relevant, filter_relevant_boxes
+import pandas as pd
+import cv2 as cv
+from skimage.morphology import (disk, square)
+from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
+from torchvision import transforms
+from torchvision.utils import draw_bounding_boxes as draw_bb
+
 
 class Atari(Dataset):
-    def __init__(self, root, mode, cfg, gamelist=None):
-        assert mode in ['train', 'validation', 'test'], f'Invalid dataset mode "{mode}"'
-
-        # self.image_path = os.checkpointdir.join(root, f'{key_word}')
-        self.image_path = root
-
-        image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(root) \
-                    if gamelist is None or fn in gamelist \
-                    for img in os.listdir(os.path.join(root, fn, mode))]
+    def __init__(self, cfg, mode):
+        assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'
+        mode = 'validation' if mode == 'val' else mode
+        self.image_path = cfg.dataset_roots.ATARI + cfg.dataset_style
+        img_folder = "space_like" + cfg.dataset_style
+        self.motion_path = self.image_path.replace(img_folder, cfg.arch.motion_kind)
+        self.bb_base_path = self.image_path.replace(img_folder, 'bb')
+        self.mode = mode
+        self.game = cfg.gamelist[0]
+        self.arch = cfg.arch
+        self.transform = transforms.ToTensor()
+        self.motion = cfg.arch.motion
+        self.motion_kind = cfg.arch.motion_kind
+        self.valid_flow_threshold = 20
+        if len(cfg.gamelist) > 1:
+            print(f"Evaluation currently only supported for exactly one game not {cfg.gamelist}")
+        image_fn = [os.path.join(fn, mode, img) for fn in os.listdir(self.image_path)
+                    if cfg.gamelist is None or fn in cfg.gamelist
+                    for img in os.listdir(os.path.join(self.image_path, fn, mode)) if img.endswith(".png")]
         self.image_fn = image_fn
-        self.image_fn.sort()
-        # preprocessing flags
-        self.black_bg = getattr(cfg, mode).black_background
-        self.dilation = getattr(cfg, mode).dilation
 
-    def __getitem__(self, index):
-        fn = self.image_fn[index]
-
-        pil_img = Image.open(os.path.join(self.image_path, fn)).convert('RGB')
-        pil_img = pil_img.resize((128, 128), PIL.Image.BILINEAR)
-        # convert image to opencv
-        opencv_img = np.asarray(pil_img).copy()
-        if self.black_bg:
-            # get most dominant color
-            colors, count = np.unique(opencv_img.reshape(-1,opencv_img.shape[-1]), axis=0, return_counts=True)
-            most_dominant_color = colors[count.argmax()]
-            # create the mask and use it to change the colors
-            bounds_size = 20
-            lower = most_dominant_color - [bounds_size, bounds_size, bounds_size]
-            upper = most_dominant_color + [bounds_size, bounds_size, bounds_size]
-            mask = cv2.inRange(opencv_img, lower, upper)
-            opencv_img[mask != 0] = [0,0,0]
-        # dilation 
-        if self.dilation:
-            kernel = np.ones((3,3), np.uint8)
-            opencv_img = cv2.dilate(opencv_img, kernel, iterations=1)
-        # convert to tensor
-        image_t = torch.from_numpy(opencv_img / 255).permute(2, 0, 1).float()
-
-        return image_t
+    def __getitem__(self, stack_idx):
+        imgs = torch.stack([self.transform(self.read_img(stack_idx, i)) for i in range(4)])
+        # fn = self.image_fn[index:index + 4]
+        motion = torch.stack([self.read_tensor(stack_idx, i, postfix=f'{self.arch.img_shape[0]}') for i in range(4)])
+        motion_z_pres = torch.stack([self.read_tensor(stack_idx, i, postfix="z_pres") for i in range(4)])
+        motion_z_where = torch.stack([self.read_tensor(stack_idx, i, postfix="z_where") for i in range(4)])
+        return imgs, (motion > motion.mean() * 0.1).float(), motion_z_pres, motion_z_where
 
     def __len__(self):
-        return len(self.image_fn)
+        return len(self.image_fn) // 4
+
+    def read_img(self, stack_idx, i):
+        path = os.path.join(self.image_path, self.game, self.mode, f'{stack_idx:05}_{i}.png')
+        return np.array(Image.open(path).convert('RGB'))
+
+    def read_tensor(self, stack_idx, i, postfix=None):
+        path = os.path.join(self.motion_path, self.game, self.mode,
+                            f'{stack_idx:05}_{i}_{postfix}.pt'
+                            if postfix else f'{stack_idx:05}_{i}.pt')
+        return torch.load(path)
+
+    @property
+    def bb_path(self):
+        path = osp.join(self.bb_base_path, self.game, self.mode)
+        assert osp.exists(path), f'Bounding box path {path} does not exist.'
+        return path
+
+    def get_labels_impl(self, batch_start, batch_end, boxes_batch, extractor):
+        labels = []
+        bbs = []
+        for stack_idx in range(batch_start, batch_end):
+            for img_idx in range(4):
+                bbs.append(pd.read_csv(os.path.join(self.bb_path, f"{stack_idx:05}_{img_idx}.csv"), header=None))
+        idx = 0
+        sub_labels = []
+        for gt_bbs, boxes in zip(bbs, boxes_batch):
+            sub_labels.append(extractor(gt_bbs, self.game, boxes))
+            idx += 1
+            if idx == 4:
+                labels.append(sub_labels)
+                sub_labels = []
+                idx = 0
+        return labels
+
+    def get_labels(self, batch_start, batch_end, boxes_batch):
+        return self.get_labels_impl(batch_start, batch_end, boxes_batch, get_labels)
+
+    def get_labels_moving(self, batch_start, batch_end, boxes_batch):
+        return self.get_labels_impl(batch_start, batch_end, boxes_batch, get_labels_moving)
+
+    def to_relevant(self, labels_moving):
+        return to_relevant(self.game, labels_moving)
+
+    def filter_relevant_boxes(self, boxes_batch, boxes_gt):
+        return filter_relevant_boxes(self.game, boxes_batch, boxes_gt)

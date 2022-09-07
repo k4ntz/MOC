@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 import numpy as np
 from torch import nn
 from torch.nn import functional as F
-from model.space.utils import spatial_transform
+from model.space.utils import spatial_transform, inverse_spatial_transform
 from PIL import Image
 import torchvision.transforms.functional as TF
 from torchvision.utils import save_image as Simage
@@ -29,11 +29,12 @@ base_objects_colors = {"sue": (180, 122, 48), "inky": (84, 184, 153),
                        "white_ghost": (214, 214, 214),
                        "blue_ghost": (66, 114, 194), "score0": (200, 50, 200),
                        "life": (70, 210, 70), "life2": (20, 150, 20)
-                      } #
+                       }  #
 
 RESTORE_COLORS = True
 
 turned = False
+
 
 def draw_bounding_boxes(image, boxes_batch, labels=None):
     if len(image.shape) == 4:
@@ -43,12 +44,17 @@ def draw_bounding_boxes(image, boxes_batch, labels=None):
     _, imW, imH = image.shape
     if not torch.is_tensor(image):
         image = torch.tensor(image)
-    bb = (boxes_batch[0][:,:4] * (imW, imW, imH, imH)).round()
-    bb[:,[0, 1, 2, 3]] = bb[:,[2, 0, 3, 1]] # swapping xmin <-> ymax ... etc
+    boxes_batch = np.array(boxes_batch)
+    if boxes_batch.min() < -0.5:
+        boxes_batch = (boxes_batch + 1)/2
+    # bb = (boxes_batch[0][:, :4] * (imW, imW, imH, imH)).round()
+    bb = (np.array(boxes_batch)[:, :4] * (imW, imW, imH, imH)).round()
+    bb[:, [0, 1, 2, 3]] = bb[:, [2, 0, 3, 1]]  # swapping xmin <-> ymax ... etc
     if imW == 128 and imH == 128 and RESTORE_COLORS:
         image = torch.tensor(np.flip(image.to("cpu").numpy(), axis=0).copy())
     else:
         image = image.to("cpu")
+    colors = ["red"] * 200
     if labels is not None:
         labels = label_names(labels)
         # colors = [base_objects_colors[lab] for lab in labels]
@@ -58,13 +64,15 @@ def draw_bounding_boxes(image, boxes_batch, labels=None):
 
 
 class Checkpointer:
-    def __init__(self, checkpointdir, max_num):
+    def __init__(self, checkpointdir, max_num, load_time_consistency=False, add_flow=False):
         self.max_num = max_num
+        self.load_time_consistency = load_time_consistency
+        self.add_flow = add_flow
         self.checkpointdir = checkpointdir
         if not osp.exists(checkpointdir):
             os.makedirs(checkpointdir)
         self.listfile = osp.join(checkpointdir, 'model_list.pkl')
-
+        print(f'Listfile: {self.listfile}')
         if not osp.exists(self.listfile):
             with open(self.listfile, 'wb') as f:
                 model_list = []
@@ -101,34 +109,36 @@ class Checkpointer:
             pickle.dump(model_list, f)
         self.save(path, model, optimizer_fg, optimizer_bg, epoch, global_step)
 
-    def load(self, path, model, optimizer_fg, optimizer_bg, use_cpu=False):
+    def load(self, path, model, optimizer_fg=None, optimizer_bg=None, device=None):
         """
         Return starting epoch and global step
         """
 
         assert osp.exists(path), f'Checkpoint {path} does not exist.'
-        print('Loading checkpoint from {}...'.format(path))
-        if not use_cpu:
-            if torch.cuda.device_count() == 1:
-                checkpoint = torch.load(path, map_location="cuda:0")
-            else:
-                checkpoint = torch.load(path)
-        else:
-            checkpoint = torch.load(path, map_location='cpu')
-        model.load_state_dict(checkpoint.pop('model'))
-        if optimizer_fg:
+        checkpoint = torch.load(path, map_location=device)
+        checkpoint_model = checkpoint.pop('model')
+        # if self.add_flow:
+        #     for key in checkpoint_model:
+        #         if model.state_dict()[key].shape != checkpoint_model[key].shape:
+        #             print(key)
+        #             B, C, H, W = checkpoint_model[key].size()
+        #             flow_weights = torch.randn((B, 1, H, W)).to(checkpoint_model[key].device)
+        #             checkpoint_model[key] = torch.cat((checkpoint_model[key], flow_weights), dim=1)
+        try:
+            model.load_state_dict(checkpoint_model)
+        except RuntimeError as rterr:
+            model.space.load_state_dict(checkpoint_model)
+        if optimizer_fg and not self.add_flow:
             optimizer_fg.load_state_dict(checkpoint.pop('optimizer_fg'))
-        if optimizer_bg:
+        if optimizer_bg and not self.add_flow:
             optimizer_bg.load_state_dict(checkpoint.pop('optimizer_bg'))
         print('Checkpoint loaded.')
         return checkpoint
 
-
-    def load_last(self, path, model, optimizer_fg, optimizer_bg, use_cpu=False):
+    def load_last(self, path, model, optimizer_fg=None, optimizer_bg=None, device=None):
         """
         If path is '', we load the last checkpoint
         """
-
         if path == '':
             with open(self.listfile, 'rb') as f:
                 model_list = pickle.load(f)
@@ -137,10 +147,11 @@ class Checkpointer:
                     return None
                 else:
                     path = model_list[-1]
+        if not path.startswith('../'):
+            path = '../' + path
+        return self.load(path, model, optimizer_fg, optimizer_bg, device)
 
-        return self.load(path, model, optimizer_fg, optimizer_bg, use_cpu)
-
-    def save_best(self, metric_name, value, checkpoint,  min_is_better):
+    def save_best(self, metric_name, value, checkpoint, min_is_better):
         metric_file = os.path.join(self.checkpointdir, f'best_{metric_name}.json')
         checkpoint_file = os.path.join(self.checkpointdir, f'best_{metric_name}.pth')
 
@@ -169,14 +180,14 @@ class Checkpointer:
                 json.dump(log, f)
             self.save(checkpoint_file, *checkpoint)
 
-    def load_best(self, metric_name, model, fg_optimizer, bg_optimizer, use_cpu=False):
+    def load_best(self, metric_name, model, fg_optimizer, bg_optimizer, device):
         metric_file = os.path.join(self.checkpointdir, f'best_{metric_name}.json')
         checkpoint_file = os.path.join(self.checkpointdir, f'best_{metric_name}.pth')
 
         assert osp.exists(metric_file), 'Metric file does not exist'
         assert osp.exists(checkpoint_file), 'checkpoint file does not exist'
 
-        return self.load(checkpoint_file, model, fg_optimizer, bg_optimizer, use_cpu)
+        return self.load(checkpoint_file, model, fg_optimizer, bg_optimizer, device)
 
 
 class SmoothedValue:
@@ -244,9 +255,9 @@ def save_image(image, path, number=None):
     image_name = path.split("/")[-1]
     name, ext = image_name.split(".")
     if number is not None:
-        new_name = name + f"_{number}.png" # saved as png to avoid loosing
+        new_name = name + f"_{number}.png"  # saved as png to avoid loosing
     try:
-        Simage(image/255, f"{folder}/{new_name}")
+        Simage(image / 255, f"{folder}/{new_name}")
     except ValueError:
         print(f"Couldn't save {new_name}, continuing...")
 
@@ -257,7 +268,8 @@ def corners_to_wh(bbox):
     xmin, ymin, xmax, ymax -> top, left, height, width
     """
     xmin, ymin, xmax, ymax = bbox.to(torch.int)
-    xmin += 1; ymin += 1
+    xmin += 1
+    ymin += 1
     height, width = (ymax - ymin), (xmax - xmin)
     return ymin, xmin, height, width
 
@@ -270,7 +282,7 @@ def image_pca(image, bbox, z_what, row_color=True):
     pca = PCA(n_components=2)
     z_what_emb = pca.fit_transform(z_what.detach().cpu().numpy())
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    selected_colors = np.array(colors[:len(z_what)])/255
+    selected_colors = np.array(colors[:len(z_what)]) / 255
     if row_color:
         for b, box in enumerate(bbox):
             row_group = int(box[1] / 10)
@@ -299,7 +311,7 @@ def place_labels(labels, boxes_batch, image):
     if len(image) == 3:
         turned = True
         image = np.moveaxis(image, 0, 2)
-    bb = (boxes_batch[0][:,:4] * (210, 210, 160, 160)).round().astype(int)
+    bb = (boxes_batch[0][:, :4] * (210, 210, 160, 160)).round().astype(int)
     for bbx, label in zip(bb, labels):
         image = draw_name(image, label, bbx)
     if turned:
@@ -357,9 +369,13 @@ def get_labels(serie, boxes_batch, game, return_form="int"):
 
 def _get_label_mspacman(serie, boxes_batch, return_form="labels_n"):
     enemy_list = ['sue', 'inky', 'pinky', 'blinky']
-    pieces = {"save_fruit": (170, 136), "life": (169, 21), \
-              "life2": (169, 38), "score0": (183, 81)}
-    bb = (boxes_batch[0][:,:4] * (210, 210, 160, 160)).round().astype(int)
+    pieces = {
+        "save_fruit": (170, 136),
+        "life": (169, 21),
+        "life2": (169, 38),
+        "score0": (183, 81)
+    }
+    bb = (boxes_batch[:, :4] * (210, 210, 160, 160)).round().astype(int)
     pieces["pacman"] = (serie['player_y'].item(), serie['player_x'].item())
     pieces["fruit"] = (serie['fruit_y'].item(), serie['fruit_x'].item())
     for en in enemy_list:
@@ -402,7 +418,6 @@ def draw_name(image, name, bbox):
     font = ImageFont.truetype("../fonts/arial.ttf", 10)
     draw.text((bbox[3], bbox[0]), name, (255, 255, 255), font=font)
     return np.array(img)
-
 
 
 def mark_point(image_array, x, y, color=(255, 0, 0), size=2, show=True):

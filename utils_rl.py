@@ -1,7 +1,7 @@
 from mushroom_rl.utils.dataset import compute_metrics, compute_J
 from os import listdir, makedirs, remove
 from os.path import isfile, join
-from rational.torch import Rational
+from activations.torch import Rational
 import torch
 import numpy as np
 import re
@@ -224,3 +224,143 @@ def extract_game_name(path): # DQN_lrelu_SpaceInvaders_s1_e500.zip
             return pgn
     print("Couldn't find a corresponding game name, check the configs folder")
     exit(1)
+
+
+from copy import deepcopy
+from collections import deque
+
+import gym
+
+from mushroom_rl.environments import Environment, MDPInfo
+from mushroom_rl.utils.spaces import *
+from mushroom_rl.utils.frames import LazyFrames, preprocess_frame
+try:
+    from atariari.benchmark.wrapper import AtariARIWrapper, atari_dict
+    ATARI_ARI_INSTALLED = True
+except ImportError:
+    from termcolor import colored
+    print(colored("AtariARI Not found, please install it:", "red"))
+    print(colored("https://github.com/mila-iqia/atari-representation-learning:", "blue"))
+    ATARI_ARI_INSTALLED = False
+
+class Atari(Environment):
+    """
+    The Atari environment as presented in:
+    "Human-level control through deep reinforcement learning". Mnih et. al..
+    2015.
+
+    """
+    def __init__(self, name, width=84, height=84, ends_at_life=False,
+                 max_pooling=True, history_length=4, max_no_op_actions=30):
+        """
+        Constructor.
+
+        Args:
+            name (str): id name of the Atari game in Gym;
+            width (int, 84): width of the screen;
+            height (int, 84): height of the screen;
+            ends_at_life (bool, False): whether the episode ends when a life is
+               lost or not;
+            max_pooling (bool, True): whether to do max-pooling or
+                average-pooling of the last two frames when using NoFrameskip;
+            history_length (int, 4): number of frames to form a state;
+            max_no_op_actions (int, 30): maximum number of no-op action to
+                execute at the beginning of an episode.
+
+        """
+        # MPD creation
+        if 'NoFrameskip' in name:
+            self.env = MaxAndSkip(gym.make(name), history_length, max_pooling)
+            self.augmented = False
+        elif '-Augmented' in name:
+            name = name.replace('-Augmented', '')
+            if name.lower()[:4] in [name.lower()[:4] for name in atari_dict.keys()]:
+                self.env = AtariARIWrapper(gym.make(name))
+            else:
+                self.env = gym.make(name)
+            self.augmented = True
+        else:
+            self.env = gym.make(name)
+            self.augmented = False
+
+        # MDP parameters
+        self._img_size = (width, height)
+        self._episode_ends_at_life = ends_at_life
+        self._max_lives = self.env.unwrapped.ale.lives()
+        self._lives = self._max_lives
+        self._force_fire = None
+        self._real_reset = True
+        self._max_no_op_actions = max_no_op_actions
+        self._history_length = history_length
+        self._current_no_op = None
+        self.action_space = self.env.action_space
+
+        assert self.env.unwrapped.get_action_meanings()[0] == 'NOOP'
+
+        # MDP properties
+        action_space = Discrete(self.env.action_space.n)
+        observation_space = Box(
+            low=0., high=255., shape=(history_length, self._img_size[1], self._img_size[0]))
+        horizon = np.inf  # the gym time limit is used.
+        gamma = .99
+        mdp_info = MDPInfo(observation_space, action_space, gamma, horizon)
+
+        super().__init__(mdp_info)
+
+    def reset(self, state=None):
+        if self._real_reset:
+            self._state = preprocess_frame(self.env.reset(), self._img_size)
+            self._state = deque([deepcopy(
+                self._state) for _ in range(self._history_length)],
+                maxlen=self._history_length
+            )
+            self._lives = self._max_lives
+
+        self._force_fire = self.env.unwrapped.get_action_meanings()[1] == 'FIRE'
+
+        self._current_no_op = np.random.randint(self._max_no_op_actions + 1)
+
+        return LazyFrames(list(self._state), self._history_length)
+
+    def step(self, action):
+        # Force FIRE action to start episodes in games with lives
+        if self._force_fire:
+            obs, _, _, _ = self.env.env.step(1)
+            self._force_fire = False
+        while self._current_no_op > 0:
+            obs, _, _, _ = self.env.env.step(0)
+            self._current_no_op -= 1
+
+        obs, reward, absorbing, info = self.env.step(action)
+        self._real_reset = absorbing
+        if info['ale.lives'] != self._lives:
+            if self._episode_ends_at_life:
+                absorbing = True
+            self._lives = info['ale.lives']
+            self._force_fire = self.env.unwrapped.get_action_meanings()[
+                1] == 'FIRE'
+
+        self._state.append(preprocess_frame(obs, self._img_size))
+        if self.augmented:
+            return LazyFrames(list(self._state),
+                              self._history_length), reward, absorbing, info, obs
+        return LazyFrames(list(self._state),
+                          self._history_length), reward, absorbing, info
+
+    def render(self, mode='human'):
+        return self.env.render(mode=mode)
+
+    def stop(self):
+        self.env.close()
+        self._real_reset = True
+
+    def set_episode_end(self, ends_at_life):
+        """
+        Setter.
+
+        Args:
+            ends_at_life (bool): whether the episode ends when a life is
+                lost or not.
+
+        """
+        self._episode_ends_at_life = ends_at_life
