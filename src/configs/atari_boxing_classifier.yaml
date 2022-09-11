@@ -1,0 +1,85 @@
+seed: 1
+model: 'TcSpace'
+exp_name: boxing
+resume: true
+load_time_consistency: true
+add_flow: true
+save_relevant_objects: false
+resume_ckpt: 'trained_models/boxing_seed0_aow10.0/model_000005001.pth' # bring SpaceTime
+parallel: true
+device_ids: [0]
+device: 'cuda:0'
+
+logdir: '../output/logs/final'
+checkpointdir: '../output/checkpoints/final'
+evaldir: '../output/eval'
+
+dataset: 'ATARI'
+dataset_style: ''
+dataset_roots:
+  OBJ3D_SMALL: '../data/OBJ3D_SMALL'
+  OBJ3D_LARGE: '../data/OBJ3D_LARGE'
+  ATARI: '../aiml_atari_data/space_like'
+
+train:
+  log: true
+  batch_size: 1
+  max_epochs: 10000
+  max_steps: 5001
+  print_every: 200
+  save_every: 200
+  num_workers: 8
+  clip_norm: 1.0
+  max_ckpt: 4
+  eval_on: true
+  eval_every: 200
+  solver:
+    fg:
+      optim: 'RMSprop'
+      lr: 3e-5
+    bg:
+      optim: 'Adam'
+      lr: 1e-3
+
+arch:
+  motion_input: false
+  motion: true
+  motion_kind: 'mode'
+  G: 16
+  fg_sigma: 0.20
+  z_pres_start_step: 1000
+  z_pres_end_step: 5000
+  z_pres_start_value: 0.1
+  z_pres_end_value: 1e-10
+
+  z_scale_mean_start_step: 0
+  z_scale_mean_end_step: 5000
+  z_scale_mean_start_value: -2.0
+  z_scale_mean_end_value: -2.5
+
+  tau_start_step: 0
+  tau_end_step: 10000
+  tau_start_value: 2.5
+  tau_end_value: 2.5
+
+  fix_alpha_steps: -1
+  fix_alpha_value: 0.1
+
+  motion_underestimating: 1.5
+  motion_object_found_lambda: 0.025
+
+  K: 3
+  bg_sigma: 0.10
+
+gamelist: [
+    # 'Atlantis-v0',
+    # 'Asterix-v0',
+    # 'Carnival-v0',
+    # 'DoubleDunk-v0',
+    # 'Kangaroo-v0',
+    # 'MontezumaRevenge-v0',
+    'Boxing-v0',
+    # 'Pooyan-v0',
+    # 'Qbert-v0',
+    # 'SpaceInvaders-v0',
+    ]
