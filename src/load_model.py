@@ -10,8 +10,9 @@ import torch
 import matplotlib.pyplot as plt
 from PIL import Image
 from torchvision import transforms
-from vis.utils import fill_image_with_scene
+from vis.utils import fill_image_with_scene, place_point
 import gym
+from pprint import pprint
 
 cfg, task = get_config()
 
@@ -28,27 +29,34 @@ def show_scene(image, scene):
     plt.show()
 
 
-def clean_scene(scene):
-    empty_keys = []
-    for key, val in scene.items():
-        for i, z_where in reversed(list(enumerate(val))):
-            if z_where[3] < -0.75:
-                scene[key].pop(i)
-        if len(val) == 0:
-            empty_keys.append(key)
-    for key in empty_keys:
-        scene.pop(key)
-    scene_list = []
-    for el in [1, 2, 3]:
-        if el in scene:
-            scene_list.append(scene[el][0][2:])
-        else:
-            scene_list.append([0, 0]) # object not found
-    return scene_list
+relevant_labels_per_game = {"pong": [1, 2, 3], "boxing": [1, 4]}
+
+
+class SceneCleaner():
+    def __init__(self, game):
+        self.game = game
+        self.relevant_labels = relevant_labels_per_game[game]
+        self.last_known = [[0, 0] for _ in self.relevant_labels]
+
+    def clean_scene(self, scene):
+        empty_keys = []
+        for key, val in scene.items():
+            for i, z_where in reversed(list(enumerate(val))):
+                if z_where[3] < -0.75:
+                    scene[key].pop(i)
+            if len(val) == 0:
+                empty_keys.append(key)
+        for key in empty_keys:
+            scene.pop(key)
+        for i, el in enumerate(self.relevant_labels):
+            if el in scene: #object found
+                self.last_known[i] = scene[el][0][2:]
+        return self.last_known
 
 
 model = get_model(cfg)
 model = model.to('cuda:0')
+model.eval()
 # state_dicts = torch.load(cfg.resume_ckpt, map_location="cuda:0")
 #
 # model.space.load_state_dict(state_dicts['model'])
@@ -74,23 +82,27 @@ z_classifier = joblib.load(z_classifier_path)
 # only_z_what control if only the z_what latent should be used (see docstring)
 
 transformation = transforms.ToTensor()
-import matplotlib; matplotlib.use("Tkagg")
+# import matplotlib; matplotlib.use("Tkagg")
 
 env_name = cfg.gamelist[0]
+sc = SceneCleaner(cfg.exp_name)
 # env = Atari(env_name)
 env = gym.make(env_name)
 env.reset()
 nb_action = env.action_space.n
 for i in range(5000):
     observation, reward, done, info = env.step(np.random.randint(nb_action))
+    img = Image.fromarray(observation[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
+    x = torch.moveaxis(torch.tensor(np.array(img)).cuda(), 2, 0)
+    x = transformation(img).cuda()
+    scene = space.scene_description(x, z_classifier=z_classifier,
+                                    only_z_what=True)  # class:[(w, h, x, y)]
+    scene_list = sc.clean_scene(scene)
     if i % 100 == 0:
-        img = Image.fromarray(observation[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
-        x = torch.moveaxis(torch.tensor(np.array(img)).cuda(), 2, 0)
-        x = transformation(img).cuda()
-        scene = space.scene_description(x, z_classifier=z_classifier,
-                                        only_z_what=True)  # class:[(w, h, x, y)]
-        scene_list = clean_scene(scene)
+        pprint(scene)
         sprint(scene_list)
+        for el in scene_list:
+            place_point(x, *el)
         show_scene(x, scene)
     if done:
         env.reset()

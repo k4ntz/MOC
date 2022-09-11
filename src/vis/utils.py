@@ -104,3 +104,23 @@ def fill_image_with_scene(image, scene):
         image = (bbox.reshape(N, 3, *img_shape)
                  .sum(dim=0).clamp(0.0, 1.0) + image).clamp(0.0, 1.0)
     return image
+
+
+def place_point(image_array, x, y, color=(255, 0, 0), size=2):
+    """
+    marks a point on the image at the (x,y) position and displays it
+    """
+    if x < 1:
+        x = int((x + 1)/2*image_array.shape[1])
+        y = int((y + 1)/2*image_array.shape[2])
+    x, y = y, x
+    ran = list(range(-size, size + 1))
+    print("Placing point at ", x, y)
+    for i in ran:
+        for j in ran:
+            try:
+                image_array[0][x + i][y + j] = 1
+                image_array[1][x + i][y + j] = 0
+                image_array[2][x + i][y + j] = 0
+            except IndexError:
+                continue
