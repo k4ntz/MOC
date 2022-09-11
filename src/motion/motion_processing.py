@@ -91,11 +91,7 @@ def ring_kernel(lst):
 def save_motion(img, motion, output_path):
     _, _, z_pres, z_where = process_motion_to_latents(img, motion)
     torch.save(resize(motion, size=128),
-               output_path.replace(".pt", ".pt"))
-    torch.save(resize(motion, size=84),
-               output_path.replace(".pt", "_84.pt"))
-    torch.save(resize(motion, size=64),
-               output_path.replace(".pt", "_64.pt"))
+               output_path.replace(".pt", "_128.pt"))
     torch.save(z_pres.float(), output_path.replace(".pt", "_z_pres.pt"))
     torch.save(z_where.float(), output_path.replace(".pt", "_z_where.pt"))
 

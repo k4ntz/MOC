@@ -20,8 +20,8 @@ class Atari(Dataset):
     def __init__(self, cfg, mode):
         assert mode in ['train', 'val', 'test'], f'Invalid dataset mode "{mode}"'
         mode = 'validation' if mode == 'val' else mode
-        self.image_path = cfg.dataset_roots.ATARI + cfg.dataset_style
-        img_folder = "space_like" + cfg.dataset_style
+        img_folder = "space_like"
+        self.image_path = osp.join(cfg.dataset_roots.ATARI, cfg.gamelist[0], img_folder)
         self.motion_path = self.image_path.replace(img_folder, cfg.arch.motion_kind)
         self.bb_base_path = self.image_path.replace(img_folder, 'bb')
         self.mode = mode

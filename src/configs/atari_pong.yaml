@@ -16,8 +16,8 @@ resume_ckpt: '../output/checkpoints/tmp/model_pretrained.pth'
 # 'output/checkpoints/atari_mspacman/model_000079001.pth'
 # '../pretrained/atari_joint.pth'
 parallel: true
-device_ids: [7, 8, 9, 0]
-device: 'cuda:7'
+device_ids: [0, 1, 2, 3]
+device: 'cuda:0'
 
 logdir: '../output/logs/final'
 checkpointdir: '../output/checkpoints/final'
@@ -28,7 +28,7 @@ dataset_style: ''
 dataset_roots:
   OBJ3D_SMALL: '../data/OBJ3D_SMALL'
   OBJ3D_LARGE: '../data/OBJ3D_LARGE'
-  ATARI: '../aiml_atari_data/space_like'
+  ATARI: '../aiml_atari_data'
 
 train:
   log: true
@@ -83,4 +83,3 @@ arch:
 gamelist: [
     'Pong-v0',
     ]
-

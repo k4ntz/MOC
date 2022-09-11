@@ -80,9 +80,10 @@ vis_folder = None
 env = None
 
 
-def compute_root_median(args, data_base_folder):
-    imgs = [np.array(Image.open(f), dtype=np.uint8) for f in glob(f"{rgb_folder}/*") if ".png" in f]
-    print(len(imgs))
+# def compute_root_images(args, data_base_folder):
+#     imgs = [np.array(Image.open(f), dtype=np.uint8) for f in glob(f"{rgb_folder}/*") if ".png" in f]
+
+def compute_root_images(imgs, data_base_folder, game):
     img_arr = np.stack(imgs)
     # Ensures median exists in any image at least, even images lead to averaging
     if len(img_arr) % 2:
@@ -91,11 +92,11 @@ def compute_root_median(args, data_base_folder):
     median = np.median(img_arr, axis=0).astype(np.uint8)
     mode = np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=img_arr).astype(np.uint8)
     frame = Image.fromarray(median)
-    os.makedirs(f"{data_base_folder}/background/{args.game}-v0", exists_ok=True)
-    frame.save(f"{data_base_folder}/background/{args.game}-v0/median.png")
+    os.makedirs(f"{data_base_folder}/{game}-v0/background", exist_ok=True)
+    frame.save(f"{data_base_folder}/{game}-v0/background/median.png")
     frame = Image.fromarray(mode)
-    frame.save(f"{data_base_folder}/background/{args.game}-v0/mode.png")
-    print("blue", f"Saved mode.png and median.png {data_base_folder}/background/{args.game}-v0/")
+    frame.save(f"{data_base_folder}/{game}-v0/background/mode.png")
+    print("blue", f"Saved mode.png and median.png in {data_base_folder}/{game}-v0/background/")
 
 
 def main():
@@ -106,10 +107,10 @@ def main():
                         # default='MsPacman')
                         # default='Tennis')
                         default='SpaceInvaders')
-    parser.add_argument('--rootmedian', default=False, action="store_true",
-                        help='instead compute the root-median of all found images')
-    parser.add_argument('--root', default=False, action="store_true",
-                        help='use the root-median instead of the trail')
+    parser.add_argument('--compute_root_images', default=False, action="store_true",
+                        help='instead compute the median and mode of images found images')
+    # parser.add_argument('--root', default=True, action="store_true",
+    #                     help='use the root-mode (or root-median --median) instead of the trail')
     parser.add_argument('--no_color_hist', default=False, action="store_true",
                         help='use the color_hist to filter')
     parser.add_argument('--render', default=False, action="store_true",
@@ -117,15 +118,15 @@ def main():
     parser.add_argument('-s', '--stacks', default=True, action="store_false",
                         help='should render in correlated stacks of 4')
     parser.add_argument('--median', default=False, action="store_true",
-                        help='should compute median-delta')
-    parser.add_argument('--mode', default=True, action="store_false",
-                        help='should compute mode-delta')
+                        help='should compute median-delta instead of mode')
+    parser.add_argument('--trail', default=False, action="store_true",
+                        help='Use the trail to compute the delta instead of root image (default False)')
     parser.add_argument('--bb', default=True, action="store_false",
                         help='should compute bounding_boxes')
     parser.add_argument('--plot_bb', default=False, action="store_true",
                         help='should plot bounding_boxes')
-    parser.add_argument('--flow', default=True, action="store_false",
-                        help='should compute flow with default settings')
+    parser.add_argument('--no_flow', action="store_true",
+                        help='should not compute flow information (default False)')
     parser.add_argument('--vis', default=True, action="store_false",
                         help='visualizes 100 images with different processing methods specified in motion_processing')
     parser.add_argument('-r', '--random', default=False, action="store_true",
@@ -136,14 +137,14 @@ def main():
     parser.add_argument('-fs', '--folder_size', type=str, choices=["train", "test", "validation"],
                         help='nb of image in the folder\n \
                         default train: 8192, test: 1024, validation: 1024',
-                        default= None)
+                        default=None)
     args = parser.parse_args()
     print("box", "Settings:", args)
     folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
-    # folder_sizes = {"train": 20, "test": 20, "validation": 20}
+    limit = args.folder_size if args.folder_size else folder_sizes[args.folder]
     data_base_folder = "aiml_atari_data"
     mode_base_folder = "aiml_atari_data"
-    REQ_CONSECUTIVE_IMAGE = 20 if args.root else 30
+    REQ_CONSECUTIVE_IMAGE = 30 if args.trail else 20
     create_folders(args, data_base_folder)
     visualizations_flow = [
         Identity(vis_folder, "Flow", max_vis=50, every_n=1),
@@ -156,8 +157,24 @@ def main():
     ]
     visualizations_bb = [BoundingBoxes(vis_folder, '', max_vis=20, every_n=1)]
 
-    if args.rootmedian:
-        compute_root_median(args, data_base_folder)
+    agent, augmented, state = configure(args)
+    print("configuration done")
+
+    if args.compute_root_images:
+        limit = 1000
+        imgs = []
+        pbar = tqdm(total=limit)
+        while len(imgs) < limit:
+            state, reward, done, info, obs = draw_action(agent, state)
+            if np.random.rand() < 0.01:
+                imgs.append(obs)
+                pbar.update(1)
+            if done:
+                env.reset()
+                for _ in range(100):
+                    state, reward, done, info, obs = draw_action(agent, state)
+        pbar.close()
+        compute_root_images(imgs, data_base_folder, args.game)
         exit(0)
     set_plot_bb(args.plot_bb)
     # Trick for easier labeling
@@ -165,9 +182,6 @@ def main():
         image_offset(f"offsets/tennis.png")
     if "Riverraid" in args.game:
         image_offset(f"offsets/riverraid.png")
-    agent, augmented, state = configure(args)
-    print("configuration done")
-    limit = args.folder_size if args.folder_size else folder_sizes[args.folder]
     if args.random:
         np.random.shuffle(index)
     image_count = 0
@@ -179,13 +193,16 @@ def main():
     for _ in range(200):
         state, reward, done, info, obs = draw_action(agent, state)
 
-    pbar = tqdm(total=limit)
-
-    try:
-        print(f"{mode_base_folder}/background/{args.game}-v0/mode.png")
-        root_median = np.array(Image.open(f"{mode_base_folder}/background/{args.game}-v0/median.png"))[:, :, :3]
-        root_mode = np.array(Image.open(f"{mode_base_folder}/background/{args.game}-v0/mode.png"))[:, :, :3]
-        print(root_mode.shape)
+    mode_path = f"{mode_base_folder}/{args.game}-v0/background/"
+    if not args.trail:
+        if args.median and not os.path.exists(f"{mode_path}/median.png"):
+            print("red", f"Counldn't find {mode_path}/median.png, use --trail to use the trail instead")
+            exit()
+        elif not os.path.exists(f"{mode_path}/mode.png"):
+            print("red", f"Counldn't find {mode_path}/mode.png, use --trail to use the trail instead")
+            exit(1)
+        root_median = np.array(Image.open(f"{mode_base_folder}/{args.game}-v0/background/median.png"))[:, :, :3]
+        root_mode = np.array(Image.open(f"{mode_base_folder}/{args.game}-v0/background/mode.png"))[:, :, :3]
         print("Ensuring that global median (mode) is used.")
         if not args.no_color_hist:
             set_color_hist(root_mode)
@@ -198,14 +215,10 @@ def main():
                 set_special_color_weight(0, 20000)
             if "Riverraid" in args.game:
                 set_special_color_weight(3497752, 20000)
-    except Exception as e:
-        print(e)
+    else:
+        print("Ensuring that trail median or mode is used.")
         root_median, root_mode = None, None
-        if args.root:
-            print("No root_median (mode) was found. Taking median (mode) of trail instead.")
-    if not args.root:
-        print("Ensuring that trail median (mode) is used.")
-        root_median, root_mode = None, None
+    pbar = tqdm(total=limit)
     while True:
         state, reward, done, info, obs = draw_action(agent, state)
         if (not args.random) or np.random.rand() < 0.01:
@@ -232,18 +245,18 @@ def main():
                     #     Image.fromarray(fr, 'RGB').save(f'{vis_folder}/Mode/Stack_{image_count:05}_{i:03}.png')
                     resize_stack = np.stack(resize_stack)
                     space_stack = np.stack(space_stack)
-                    if args.mode:
+                    if not args.no_flow:
+                        flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.pt', visualizations_flow)
+                    if args.median:
+                        median.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.pt', visualizations_median,
+                                    median=root_median)
+                    else:
                         if args.game == "coinrun":
                             mode.save_coinrun(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt',
                                               visualizations_mode, space_frame=resize_stack)
                         else:
                             mode.save(space_stack, f'{mode_folder}/{image_count:05}_{{}}.pt', visualizations_mode,
                                       mode=root_mode, space_frame=resize_stack)
-                    if args.flow:
-                        flow.save(space_stack, f'{flow_folder}/{image_count:05}_{{}}.pt', visualizations_flow)
-                    if args.median:
-                        median.save(space_stack, f'{median_folder}/{image_count:05}_{{}}.pt', visualizations_median,
-                                    median=root_median)
                     while done:
                         state, reward, done, info, obs = some_steps(agent, state)
                     consecutive_images, consecutive_images_info = [], []
@@ -272,7 +285,7 @@ def main():
         shuffle_indices = np.random.permutation(limit)
         mapping = dict(zip(np.arange(limit), shuffle_indices))
         folders = [bgr_folder, rgb_folder] + ([median_folder] if args.median else []) \
-                  + ([flow_folder] if args.flow else []) + ([bb_folder] if args.bb else [])
+                  + ([] if args.no_flow else [flow_folder]) + ([bb_folder] if args.bb else [])
         endings = ['.png', '.png', '.npy', '.npy', 'txt']
         for dataset_folder, ending in zip(folders, endings):
             for i, j in mapping.items():
@@ -311,13 +324,13 @@ def configure(args):
 
 def create_folders(args, data_base_folder):
     global rgb_folder, bgr_folder, flow_folder, median_folder, bb_folder, vis_folder, mode_folder
-    rgb_folder = f"{data_base_folder}/rgb/{args.game}-v0/{args.folder}"
-    bgr_folder = f"{data_base_folder}/space_like/{args.game}-v0/{args.folder}"
-    bb_folder = f"{data_base_folder}/bb/{args.game}-v0/{args.folder}"
-    flow_folder = f"{data_base_folder}/flow/{args.game}-v0/{args.folder}"
-    median_folder = f"{data_base_folder}/median/{args.game}-v0/{args.folder}"
-    mode_folder = f"{data_base_folder}/mode/{args.game}-v0/{args.folder}"
-    vis_folder = f"{data_base_folder}/vis/{args.game}-v0/{args.folder}"
+    rgb_folder = f"{data_base_folder}/{args.game}-v0/rgb/{args.folder}"
+    bgr_folder = f"{data_base_folder}/{args.game}-v0/space_like/{args.folder}"
+    bb_folder = f"{data_base_folder}/{args.game}-v0/bb/{args.folder}"
+    flow_folder = f"{data_base_folder}/{args.game}-v0/flow/{args.folder}"
+    median_folder = f"{data_base_folder}/{args.game}-v0/median/{args.folder}"
+    mode_folder = f"{data_base_folder}/{args.game}-v0/mode/{args.folder}"
+    vis_folder = f"{data_base_folder}/{args.game}-v0/vis/{args.folder}"
     os.makedirs(bgr_folder, exist_ok=True)
     os.makedirs(rgb_folder, exist_ok=True)
     os.makedirs(flow_folder, exist_ok=True)

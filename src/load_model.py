@@ -98,6 +98,7 @@ for i in range(5000):
     scene = space.scene_description(x, z_classifier=z_classifier,
                                     only_z_what=True)  # class:[(w, h, x, y)]
     scene_list = sc.clean_scene(scene)
+    env.render()
     if i % 100 == 0:
         pprint(scene)
         sprint(scene_list)
@@ -105,4 +106,5 @@ for i in range(5000):
             place_point(x, *el)
         show_scene(x, scene)
     if done:
+        print("Done")
         env.reset()
