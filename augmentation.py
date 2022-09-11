@@ -8,6 +8,7 @@ from skimage.morphology import (disk, square)
 from skimage.morphology import (erosion, dilation, opening, closing, white_tophat, skeletonize)
 from mushroom_rl.algorithms.agent import Agent
 from glob import glob
+from src.niceprint import pprint as print
 
 PLOT_BB = False
 IMAGE_OFFSET = None
@@ -550,9 +551,9 @@ def load_agent(args, env):
         agent.policy._predict_params = {}  # mushroom_rl compatibility
     except Exception as e:
         print(e)
-        print("\n================================\nWARNING: Random Agent was selected, as no suitable a"
-              "gent with the name of the game was found in folder 'agents'"
-              " or the agent could not be loaded.\n===========================\n")
+        print("yellow", "bbox", "WARNING: Random Agent was selected, as no suitable a"
+              f"gent with the name of the game ({args.game}) was found in folder 'agents'"
+              " or the agent could not be loaded.")
         agent = RandomAgent(env, args.game)
     return agent
 

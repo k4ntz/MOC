@@ -1,5 +1,16 @@
 from NicePrinter import *
 from pprint import pformat
+from argparse import Namespace
+
+def box(string):
+    nb_line = string.count("\n")
+    string = string.replace('\t', '')
+    max_length = max([len(line) for line in string.split("\n")])
+    boxed = "-" * (max_length + 2) + "\n"
+    for line in string.split("\n"):
+        boxed += '|' + line + ' '*(max_length-len(line)) +  '|\n'
+    return boxed + "-" * (max_length + 2)
+
 
 nicep_availables = {"bbox": bbox, "blue": blue, "bold": bold, "box": box,
                     "cbbox": cbbox, "cbox": cbox, "center": center, "cyan": cyan,
@@ -9,11 +20,26 @@ nicep_availables = {"bbox": bbox, "blue": blue, "bold": bold, "box": box,
 
 
 def pprint(*args):
-    if args[0] in nicep_availables:
-        formated_content = ""
-        for elem in args[1:]:
-            import ipdb; ipdb.set_trace()
-            formated_content += pformat(elem)
-        print(nicep_availables[args[0]](formated_content))
-    else:
-        print(*args)
+    try:
+        if args[0] in nicep_availables:
+            formating_funcs = []
+            while args[0] in nicep_availables:
+                formating_funcs.append(nicep_availables[args[0]])
+                args = args[1:]
+            formated_content = ""
+            for elem in args:
+                if isinstance(elem, Namespace):
+                    formated_content += "\n"
+                    for key, attr in elem._get_kwargs():
+                        formated_content += f"\t{key}: {attr}\n"
+                elif isinstance(elem, str):
+                    formated_content += elem
+                else:
+                    formated_content += pformat(elem)
+            for formfunc in reversed(formating_funcs):
+                formated_content = formfunc(formated_content)
+            print(formated_content)
+        else:
+            print(*args)
+    except TypeError:
+        print(args)

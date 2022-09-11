@@ -292,7 +292,7 @@ def configure(args):
         data = f'{json.load(f)}'.replace("'", '"')
         config = json.loads(data, object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
     if "Augmented" not in config.game_name:
-        print("\n\n\t\tYou are not using an Augmented environment\n\n")
+        print("blue", "box", "You are not using an Augmented environment")
     augmented = "Augmented" in config.game_name
     print(f"Playing {config.game_name}...")
     if config.game_name.lower() == 'coinrun':

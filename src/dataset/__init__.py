@@ -3,6 +3,9 @@ from .obj3d import Obj3D
 from torch.utils.data import DataLoader
 from .labels import label_list_pacman, label_list_carnival, label_list_pong, label_list_space_invaders,\
     label_list_tennis, label_list_boxing, label_list_riverraid, label_list_air_raid
+import torch.utils.data as data_utils
+import torch
+
 
 __all__ = ['get_dataset', 'get_dataloader', 'get_label_list']
 
@@ -24,7 +27,9 @@ def get_dataloader(cfg, mode):
     shuffle = True if mode == 'train' else False
     num_workers = getattr(cfg, mode).num_workers
     dataset = get_dataset(cfg, mode)
+    dataset = data_utils.Subset(dataset, torch.arange(3000))
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
 
     return dataloader
 
