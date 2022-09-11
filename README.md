@@ -7,13 +7,20 @@
 We heavily modified the create_dataset.py described below for SPACE-Time:
 
 It tries to use an Agent from folder `agents` also in root directory'
-`python3 create_dataset.py -f train -g Pong`
+`python3 create_dataset.py -f train -g Pong` would create a dataset based on the trail images
 
 Important new options are:
 
-* `--plot_bb` adds bounding boxes to the generated images!
+* `--plot_bb` adds bounding boxes to the generated images! (helps debug)
 * `--root` use the global mode image instead of the mode of the trail
 * `--root-median` computes the mode and median images from all of those already generated.
+
+If one wants to create a SpaceTime dataset, use:
+`python3 create_dataset.py -f train -g Pong` for 100 e.g images
+then
+`python3 create_dataset.py -f train -g Pong --rootmedian` > generate root.png
+Check if the median is proper or redo with more images.
+`python3 create_dataset.py -f train -g Pong --root`.
 
 Some other frequently changed things are currently not settings yet, but set in the code...
 One such thing is the visualization; in `motion_processing.py` we define the class ProcessingVisualization

@@ -24,7 +24,7 @@ from src.motion.motion_processing import ProcessingVisualization, BoundingBoxes,
     set_color_hist, set_special_color_weight
 import contextlib
 from procgen import ProcgenGym3Env, ProcgenEnv
-
+from src.niceprint import pprint as print
 """
 If you look at the atari_env source code, essentially:
 
@@ -36,6 +36,8 @@ frameskip is sampled from (2,5)
 There is also NoFrameskip-v4 with no frame skip and no action repeat
 stochasticity.
 """
+
+
 
 
 def some_steps(agent, state):
@@ -89,9 +91,11 @@ def compute_root_median(args, data_base_folder):
     median = np.median(img_arr, axis=0).astype(np.uint8)
     mode = np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=img_arr).astype(np.uint8)
     frame = Image.fromarray(median)
-    frame.save(f"{data_base_folder}/vis/{args.game}-v0/median.png")
+    os.makedirs(f"{data_base_folder}/background/{args.game}-v0", exists_ok=True)
+    frame.save(f"{data_base_folder}/background/{args.game}-v0/median.png")
     frame = Image.fromarray(mode)
-    frame.save(f"{data_base_folder}/vis/{args.game}-v0/mode.png")
+    frame.save(f"{data_base_folder}/background/{args.game}-v0/mode.png")
+    print("blue", f"Saved mode.png and median.png {data_base_folder}/background/{args.game}-v0/")
 
 
 def main():
@@ -129,10 +133,12 @@ def main():
     parser.add_argument('-f', '--folder', type=str, choices=["train", "test", "validation"],
                         required=True,
                         help='folder to write to: train, test or validation')
+    parser.add_argument('-fs', '--folder_size', type=str, choices=["train", "test", "validation"],
+                        help='nb of image in the folder\n \
+                        default train: 8192, test: 1024, validation: 1024',
+                        default= None)
     args = parser.parse_args()
-    print("=============" * 5)
-    print("Settings:", args)
-    print("=============" * 5)
+    print("box", "Settings:", args)
     folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
     # folder_sizes = {"train": 20, "test": 20, "validation": 20}
     data_base_folder = "aiml_atari_data"
@@ -161,7 +167,7 @@ def main():
         image_offset(f"offsets/riverraid.png")
     agent, augmented, state = configure(args)
     print("configuration done")
-    limit = folder_sizes[args.folder]
+    limit = args.folder_size if args.folder_size else folder_sizes[args.folder]
     if args.random:
         np.random.shuffle(index)
     image_count = 0
@@ -176,9 +182,9 @@ def main():
     pbar = tqdm(total=limit)
 
     try:
-        print(f"{mode_base_folder}/vis/{args.game}-v0/mode.png")
-        root_median = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/median.png"))[:, :, :3]
-        root_mode = np.array(Image.open(f"{mode_base_folder}/vis/{args.game}-v0/mode.png"))[:, :, :3]
+        print(f"{mode_base_folder}/background/{args.game}-v0/mode.png")
+        root_median = np.array(Image.open(f"{mode_base_folder}/background/{args.game}-v0/median.png"))[:, :, :3]
+        root_mode = np.array(Image.open(f"{mode_base_folder}/background/{args.game}-v0/mode.png"))[:, :, :3]
         print(root_mode.shape)
         print("Ensuring that global median (mode) is used.")
         if not args.no_color_hist:
