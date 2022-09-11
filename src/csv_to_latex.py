@@ -8,6 +8,19 @@ import re
 import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from mpl_toolkits.mplot3d import proj3d
+import argparse
+from termcolor import colored
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--save', '-s', default=False, action="store_true",
+                    help='Save the image(s) instead of showing them')
+parser.add_argument('--splitted', default=False, action="store_true",
+                    help='Save individual image(s) instead of one and generate associated tex')
+# parser.add_argument('--num-frame-stack', type=int, default=1,
+#                     help='Number of frames to stack for a state')
+
+args = parser.parse_args()
+
 
 label_list_pacman = ["no_label", "pacman", 'sue', 'inky', 'pinky', 'blinky', "blue_ghost", "eyes",
                      "white_ghost", "fruit", "save_fruit", "life1", "life2", "score", "corner_block"]
@@ -33,11 +46,13 @@ label_list_riverraid = ["no_label", "player", 'fuel_gauge', 'fuel', 'lives', 'lo
 
 label_list_air_raid = ["no_label", "player", 'score', 'building', 'shot', 'enemy']
 
-RESULT_TEX = os.path.join("D:", "results", "final", "result.tex")
+RESULT_TEX = os.path.join("..", "results_img", "result.tex")
 
 sns.set_theme()
-data_path = os.path.join("D:", "final")
-result_path = os.path.join("D:", "results", "final")
+# data_path = os.path.join("D:", "final")
+data_path = "../results"
+# result_path = os.path.join("D:", "results", "final")
+result_path = '../results_img'
 
 metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI',
@@ -45,8 +60,10 @@ metric_name_translator = {
     'ap_avg': "Average AP",
     'accuracy_': "Accuracy",
     'accuracy': "Accuracy",
-    'aow0.0': "SPACE-Flow",
-    'aow10.0': "SPACE-Time",
+    # 'aow0.0': "SPACE-Flow",
+    # 'aow10.0': "SPACE-Time",
+    'aow0.0': "SPACE+M",
+    'aow10.0': "SPACE+MOC",
     'baseline': "SPACE",
     'relevant_': "Relevant ",
     'space_invaders': "Space Invaders",
@@ -62,11 +79,32 @@ metric_name_translator = {
     'with_': "",
 }
 
+colors_conversion = {
+    'SPACE': 'orange',
+    'SPACE+M': 'green',
+    'SPACE+MOC': 'blue'
+}
+
+
+def make_legend(ax):
+    handles, labels = ax.get_legend_handles_labels()
+    hl = sorted(zip(handles, labels),
+                key=lambda el: el[1])
+    ax.legend(*zip(*hl), prop={'size': 16})
+
+
+def make_fig(experiment_groups):
+    if len(experiment_groups) % 2:
+        plots_rowcol = (2, len(experiment_groups)//2+1)
+    else:
+        plots_rowcol = (2, len(experiment_groups)//2)
+    return plt.subplots(*plots_rowcol, figsize=(24, 8))
+
 
 def translate(name):
     for k, v in metric_name_translator.items():
         name = re.sub(k, v, name)
-    return name.replace("_", "\\_")
+    return name.replace("_", "\\_").replace("\_metrics.csv", "")
 
 
 def group_by(col, key_extractor):
@@ -88,7 +126,7 @@ def prepare_mean_std(experiments):
     columns = []
     first = True
     for k, directories in experiments.items():
-        sub_dfs = [pd.read_csv(os.path.join(data_path, d, "metrics.csv"), sep=";") for d in directories]
+        sub_dfs = [pd.read_csv(os.path.join(data_path, d), sep=";") for d in directories]
 
         for sub_df in sub_dfs:
             add_contrived_columns(sub_df)
@@ -112,7 +150,7 @@ def prepare_mean_std(experiments):
 
 
 figure = """
-\\begin{{subfigure}}{{.53\\textwidth}}\\captionsetup{{aboveskip=-0.17em}}  
+\\begin{{subfigure}}{{.53\\textwidth}}\\captionsetup{{aboveskip=-0.17em}}
   \\centering
   \\includegraphics[width=\\textwidth]{{{1}}}
   \\caption{{{0}}}
@@ -153,54 +191,122 @@ def save_and_tex(caption, key, kind="line"):
     if os.path.exists(img_path):
         os.remove(img_path)
     plt.savefig(img_path, bbox_inches="tight")
+    print(colored(f"Saved image in {img_path}", "blue"))
     plt.clf()
     with open(RESULT_TEX, "a") as tex:
         tex.write(figure.format(caption, f"img/{caption}_{kind}_{key}", key))
         tex.write("\n")
+    print(colored(f"Added tex in {RESULT_TEX}", "blue"))
 
 
 def line_plot(experiment_groups, key, joined_df, title=None, caption="A plot of ..."):
-    plt.clf()
-    for game in experiment_groups:
-        plt.figure(figsize=(14, 7))
-        plt.ylim((-0.1, 1.1))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
-        plt.xticks(fontsize=24)
-        for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
-            plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c,
-                     label=f"{translate(expis)}")
-            plt.fill_between(joined_df['global_step'],
-                             joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
-                             joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'],
-                             alpha=0.5, color=c)
-        plt.legend(loc="lower right", fontsize=28)
-        plt.ylabel(translate(key), fontsize=28)
-        plt.xlabel("Step", fontsize=28)
-        save_and_tex(translate(game), key)
+    if args.splitted:
+        plt.clf()
+        for game in experiment_groups:
+            plt.figure(figsize=(14, 7))
+            plt.ylim((-0.1, 1.1))
+            plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+            plt.xticks(fontsize=24)
+            for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
+                plt.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c,
+                         label=f"{translate(expis)}")
+                plt.fill_between(joined_df['global_step'],
+                                 joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
+                                 joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'],
+                                 alpha=0.5, color=c)
+            plt.legend(loc="lower right", fontsize=28)
+            plt.ylabel(translate(key), fontsize=28)
+            plt.xlabel("Step", fontsize=28)
+            save_and_tex(translate(game), key)
+    else:
+        fig, axes = make_fig(experiment_groups)
+        for game, ax in zip(experiment_groups, axes.flatten()):
+            ax.set_ylim((-0.02, 1.02))
+            ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=14)
+            for expis in experiment_groups[game]:
+                c = f"tab:{colors_conversion[translate(expis)]}"
+                ax.plot(joined_df['global_step'], joined_df[f'{game}_{expis}_{key}_mean'], color=c,
+                        label=f"{translate(expis)}")
+                ax.fill_between(joined_df['global_step'],
+                                joined_df[f'{game}_{expis}_{key}_mean'] - joined_df[f'{game}_{expis}_{key}_std'],
+                                joined_df[f'{game}_{expis}_{key}_mean'] + joined_df[f'{game}_{expis}_{key}_std'],
+                                alpha=0.5, color=c)
+            ax.set_title(translate(game), fontsize=18)
+            # ax.set(xlabel='Step', ylabel=translate(key))
+            ax.set_xlabel('Step', fontsize=14)
+            ax.set_ylabel(translate(key), fontsize=14)
+        make_legend(ax)
+
+        # Hide x labels and tick labels for top plots and y ticks for right plots.
+        for ax in axes.flat:
+            ax.label_outer()
+        plt.tight_layout()
+        # plt.legend()
+        if args.save:
+            figpath = os.path.join(result_path, f"{key}_all_games.pdf")
+            plt.savefig(figpath)
+            print(colored(f"Saved graph in {figpath}", "blue"))
+        else:
+            plt.show()
+
 
 def line_plot_samples(experiment_groups, key, joined_df, title=None, caption="A plot of ..."):
-    plt.clf()
-    for game in experiment_groups:
-        plt.figure(figsize=(14, 7))
-        plt.ylim((-0.1, 1.1))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
-        plt.xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=24)
-        for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
-            means = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_mean"].item()
-                     for samples in [1, 4, 16, 64]])
-            stds = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_std"].item()
-                     for samples in [1, 4, 16, 64]])
-            plt.plot([0, 1, 2, 3], means, color=c, marker="x",
-                     label=f"{translate(expis)}")
-            plt.fill_between([0, 1, 2, 3],
-                             means - stds,
-                             means + stds,
-                             alpha=0.3, color=c)
+    if args.splitted:
+        plt.clf()
+        for game in experiment_groups:
+            plt.figure(figsize=(14, 7))
+            plt.ylim((-0.02, 1.02))
+            plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+            plt.xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=24)
+            for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
+                means = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_mean"].item()
+                         for samples in [1, 4, 16, 64]])
+                stds = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_std"].item()
+                         for samples in [1, 4, 16, 64]])
+                plt.plot([0, 1, 2, 3], means, color=c, marker="x",
+                         label=f"{translate(expis)}")
+                plt.fill_between([0, 1, 2, 3],
+                                 means - stds,
+                                 means + stds,
+                                 alpha=0.3, color=c)
 
-        plt.legend(loc="lower right", fontsize=28)
-        plt.ylabel(translate(key), fontsize=28)
-        plt.xlabel("Samples per Class", fontsize=28)
-        save_and_tex(translate(game), "oversamples")
+            plt.legend(loc="lower right", fontsize=28)
+            plt.ylabel(translate(key), fontsize=28)
+            plt.xlabel("Samples per Class", fontsize=28)
+            save_and_tex(translate(game), "oversamples")
+    else:
+        fig, axes = make_fig(experiment_groups)
+        for game, ax in zip(experiment_groups, axes.flatten()):
+            ax.set_ylim((-0.1, 1.1))
+            ax.set_xticks([0, 1, 2, 3], labels=["1", "4", "16", "64"], fontsize=14)
+            ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=14)
+            for expis in experiment_groups[game]:
+                c = f"tab:{colors_conversion[translate(expis)]}"
+                means = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_mean"].item()
+                         for samples in [1, 4, 16, 64]])
+                stds = np.array([joined_df.loc[joined_df["global_step"] == 5000][game + "_" + expis + "_" + key + f"{samples}_std"].item()
+                         for samples in [1, 4, 16, 64]])
+                ax.plot([0, 1, 2, 3], means, color=c, marker="x",
+                         label=f"{translate(expis)}")
+                ax.fill_between([0, 1, 2, 3],
+                                 means - stds,
+                                 means + stds,
+                                 alpha=0.3, color=c)
+                ax.set_title(translate(game), fontsize=18)
+            ax.set_xlabel('Samples per Class', fontsize=14)
+            ax.set_ylabel(translate(key), fontsize=14)
+        make_legend(ax)
+        # Hide x labels and tick labels for top plots and y ticks for right plots.
+        for ax in axes.flat:
+            ax.label_outer()
+        plt.tight_layout()
+        # plt.legend()
+        if args.save:
+            figpath = os.path.join(result_path, f"{key}_all_games.pdf")
+            plt.savefig(figpath)
+            print(colored(f"Saved graph in {figpath}", "blue"))
+        else:
+            plt.show()
 
 
 from matplotlib.colors import LinearSegmentedColormap
@@ -213,56 +319,91 @@ def my_cmap(colors):
 
 
 def pr_plot(experiment_groups, joined_df):
-    plt.clf()
-    dth = 0.1
-    for game in experiment_groups:
-        plt.figure(figsize=(12, 7))
+    if args.splitted:
+        plt.clf()
+        dth = 0.1
+        for game in experiment_groups:
+            plt.figure(figsize=(12, 7))
 
-        plt.ylim((-0.05, 1.05))
-        plt.xlim((-0.05, 1.05))
-        plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
-        plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
-        plt.ylabel("Precision", fontsize=28)
-        plt.xlabel("Recall", fontsize=28)
+            plt.ylim((-0.05, 1.05))
+            plt.xlim((-0.05, 1.05))
+            plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+            plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=24)
+            plt.ylabel("Precision", fontsize=28)
+            plt.xlabel("Recall", fontsize=28)
+            for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
+                if "aow10.0" in expis:
+                    continue
+                elif "baseline" in expis:
+                    x = np.concatenate(
+                        [joined_df[f'{game}_baseline_seed{idx}_metrics.csv_relevant_recall'].to_numpy() for idx in range(5)])
+                    y = np.concatenate(
+                        [joined_df[f'{game}_baseline_seed{idx}_metrics.csv_relevant_precision'].to_numpy() for idx in range(5)])
+                else:
+                    x = np.concatenate(
+                        [joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
+                    y = np.concatenate(
+                        [joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
+                high = np.array(mcolors.to_rgb(c))
+                red = my_cmap((high * 0.5, high))
+                colors = red(np.concatenate([np.linspace(0, 1, 26) for _ in range(5)]))
+                prs = np.stack((x, y), axis=1)
+                bounds = np.array([pr for pr in prs if all(not all(pr2 > pr) for pr2 in prs)])
+                bounds_ind = np.argsort(bounds[:, 0])
+                bounds = bounds[bounds_ind]
+                plt.scatter(x, y, alpha=0.5, c=colors, s=35, marker='x')
+                bounds = np.insert(bounds, 0, [0.0, bounds[0, 1]], axis=0)
+                bounds = np.append(bounds, [[bounds[-1, 0], 0.0]], axis=0)
+                plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), linewidth=3)
+            plt.legend(loc="lower left", fontsize=22)
+            save_and_tex(translate(game), "Precision-Recall Curve", kind="Quiver")
+    else:
+        dth = 0.1
+        fig, axes = make_fig(experiment_groups)
+        for game, ax in zip(experiment_groups, axes.flatten()):
+            ax.set_ylim((-0.02, 1.02))
+            ax.set_xlim((-0.02, 1.02))
+            ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=14)
+            ax.set_xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=14)
+            for expis in experiment_groups[game]:
+                # if "aow10.0" in expis:
+                #     continue
+                c = f"tab:{colors_conversion[translate(expis)]}"
+                if "baseline" in expis:
+                    x = np.concatenate(
+                        [joined_df[f'{game}_baseline_seed{idx}_metrics.csv_relevant_recall'].to_numpy() for idx in range(5)])
+                    y = np.concatenate(
+                        [joined_df[f'{game}_baseline_seed{idx}_metrics.csv_relevant_precision'].to_numpy() for idx in range(5)])
+                else:
+                    x = np.concatenate(
+                        [joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
+                    y = np.concatenate(
+                        [joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
+                high = np.array(mcolors.to_rgb(c))
+                red = my_cmap((high * 0.5, high))
+                colors = red(np.concatenate([np.linspace(0, 1, 26) for _ in range(5)]))
+                prs = np.stack((x, y), axis=1)
+                bounds = np.array([pr for pr in prs if all(not all(pr2 > pr) for pr2 in prs)])
+                bounds_ind = np.argsort(bounds[:, 0])
+                bounds = bounds[bounds_ind]
+                ax.scatter(x, y, alpha=0.5, c=colors, s=35, marker='x')
+                bounds = np.insert(bounds, 0, [0.0, bounds[0, 1]], axis=0)
+                bounds = np.append(bounds, [[bounds[-1, 0], 0.0]], axis=0)
+                ax.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), linewidth=3)
+                ax.set_title(translate(game), fontsize=18)
+            ax.set_xlabel("Recall", fontsize=14)
+            ax.set_ylabel("Precision", fontsize=14)
 
-        for c, expis in zip(mcolors.TABLEAU_COLORS, experiment_groups[game]):
-            if expis == "aow10.0":
-                continue
-            if expis == "baseline":
-                x = np.concatenate(
-                    [joined_df[f'{game}_{expis}_seed{idx}_relevant_recall'].to_numpy() for idx in range(5)])
-                y = np.concatenate(
-                    [joined_df[f'{game}_{expis}_seed{idx}_relevant_precision'].to_numpy() for idx in range(5)])
-            else:
-                x = np.concatenate(
-                    [joined_df[f'{game}_seed{idx}_{expis}_relevant_recall'].to_numpy() for idx in range(5)])
-                y = np.concatenate(
-                    [joined_df[f'{game}_seed{idx}_{expis}_relevant_precision'].to_numpy() for idx in range(5)])
-            # x_err = joined_df[f'{game}_{expis}_relevant_recall_std'].to_numpy()
-            # y_err = joined_df[f'{game}_{expis}_relevant_precision_std'].to_numpy()
-            # dist = np.sqrt(x_**2 + y_**2)
-            #
-            high = np.array(mcolors.to_rgb(c))
-            red = my_cmap((high * 0.5, high))
-            colors = red(np.concatenate([np.linspace(0, 1, 26) for _ in range(5)]))
-            # plt.scatter(x[4::5], y[4::5], c=colors2, zorder=3, edgecolors='black', alpha=0.8)
-            # plt.scatter(x, y, c=colors, zorder=3, edgecolors='black', alpha=0.8)
-            # for xe, ye, ex, ey, ec in zip(x[4::5], y[4::5], x_err[4::5], y_err[4::5], colors):
-            #     plt.errorbar(xe, ye, xerr=ex, yerr=ey, fmt='none', ecolor=ec, capsize=4)
-            # plt.quiver(x[:-1][dist > dth], y[:-1][dist > dth], x_[dist > dth],
-            #            y_[dist > dth], np.linspace(0, 1, len(x) - 1)[dist > dth],
-            #            angles='xy', width=0.003, scale_units='xy', scale=1,
-            #            linewidth=1, edgecolor='#00000080', cmap=red, zorder=4)
-            prs = np.stack((x, y), axis=1)
-            bounds = np.array([pr for pr in prs if all(not all(pr2 > pr) for pr2 in prs)])
-            bounds_ind = np.argsort(bounds[:, 0])
-            bounds = bounds[bounds_ind]
-            plt.scatter(x, y, alpha=0.5, c=colors, s=35, marker='x')
-            bounds = np.insert(bounds, 0, [0.0, bounds[0, 1]], axis=0)
-            bounds = np.append(bounds, [[bounds[-1, 0], 0.0]], axis=0)
-            plt.plot(bounds[:, 0], bounds[:, 1], linestyle='dotted', c=c, zorder=5, label=translate(expis), linewidth=3)
-        plt.legend(loc="lower left", fontsize=22)
-        save_and_tex(translate(game), "Precision-Recall Curve", kind="Quiver")
+        make_legend(ax)
+        for ax in axes.flat:
+            ax.label_outer()
+        plt.tight_layout()
+        if args.save:
+            figpath = os.path.join(result_path, f"precision_recall_curve_all_games.pdf")
+            plt.savefig(figpath)
+            print(colored(f"Saved graph in {figpath}", "blue"))
+        else:
+            plt.show()
 
 
 table_tex = """
@@ -282,6 +423,7 @@ table_tex = """
 
 
 def table(experiment_groups, columns, joined_df, at=None, caption=None):
+    import ipdb; ipdb.set_trace()
     if at is None:
         at = [int(joined_df.loc[len(joined_df) - 1]["global_step"].item())]
     if caption is None:
@@ -325,39 +467,61 @@ def bf(name):
     return f'\\textbf{{{name}}}'
 
 
-def table_entry(joined_df, idx, game, c, metric, variants):
+def table_entry(joined_df, idx, game, c, metric, variants, tex=True):
     all_mean = [joined_df.loc[joined_df["global_step"] == idx][game + "_" + v + "_" + metric + "_mean"].item() for v in
                 variants]
 
     mean = joined_df.loc[joined_df["global_step"] == idx][game + "_" + c + "_" + metric + "_mean"].item()
     std = joined_df.loc[joined_df["global_step"] == idx][game + "_" + c + "_" + metric + "_std"].item()
-    if mean > 0.99 * np.max(all_mean):
-        return f'\\textbf{{{mean :.3f} $\\pm$ {std :.3f}}}'
-    return f'{mean :.3f} $\\pm$ {std :.3f}'
+    if tex:
+        if mean > 0.99 * np.max(all_mean):
+            return f'\\textbf{{{mean :.3f} $\\pm$ {std :.3f}}}'
+        return f'{mean :.3f} $\\pm$ {std :.3f}'
+    return f'{mean :.3f} ± {std :.3f}'
 
 
 def table_by_metric(experiment_groups, columns, joined_df, at=None, caption=None, group_key="space_invaders"):
+    no_caption = not bool(caption)
     if at is None:
         at = [int(joined_df.loc[len(joined_df) - 1]["global_step"].item())]
-    for metric in columns:
-        header = " & ".join([bf("Configuration")] + [bf(translate(c)) for c in experiment_groups[group_key]])
-        if caption is None:
-            caption = f"A table showcasing {metric}."
-            caption = translate(caption)
-        content = []
-        for game in experiment_groups:
-            content.append(" & ".join(
-                [bf(translate(game))] + [
-                    table_entry(joined_df, idx, game, c, metric, experiment_groups[group_key])
-                    for c in experiment_groups[group_key] for idx in at]))
-        with open(RESULT_TEX, "a") as tex:
-            tex.write(table_metric_tex.format(header, " \\\\ \n".join(content), caption, ";".join([metric]),
-                                              ("c".join(["|"] * (len(experiment_groups) + 2)).replace('|', '||',
-                                                                                                      2).replace('||',
-                                                                                                                 '|',
-                                                                                                                 1)),
-                                              translate(metric), 4))
-            tex.write("\n")
+    if args.save:
+        for metric in columns:
+            header = " & ".join([bf("Configuration")] + [bf(translate(c)) for c in experiment_groups[group_key]])
+            if no_caption:
+                caption = f"A table showcasing {metric}."
+                caption = translate(caption)
+            content = []
+            for game in experiment_groups:
+                content.append(" & ".join(
+                    [bf(translate(game))] + [
+                        table_entry(joined_df, idx, game, c, metric, experiment_groups[group_key])
+                        for c in experiment_groups[group_key] for idx in at]))
+            complete_path = os.path.join(result_path, f"{metric}.tex")
+            with open(complete_path, "w") as tex:
+                tex.write(table_metric_tex.format(header, " \\\\ \n".join(content), caption, ";".join([metric]),
+                                                  ("c".join(["|"] * (len(experiment_groups) + 2)).replace('|', '||',
+                                                                                                          2).replace('||',
+                                                                                                                     '|',
+                                                                                                                     1)),
+                                                  translate(metric), 4))
+                tex.write("\n")
+            print(colored(f"Saved table and figure in {complete_path}", "blue"))
+    else:
+        for metric in columns:
+            if no_caption:
+                caption = f"A table showcasing {metric}."
+            print(caption)
+            header = ["Configuration"] + [translate(c) for c in experiment_groups[group_key]]
+            content = []
+            for game in experiment_groups:
+                row = [translate(game)]
+                row += [table_entry(joined_df, idx, game, c, metric,
+                                    experiment_groups[group_key], tex=False)
+                        for c in experiment_groups[group_key] for idx in at]
+                content.append(row)
+            table = pd.DataFrame(content, columns=header).set_index(header[0])
+            print(table)
+            print("-"*40)
 
 
 def add_contrived_columns(df):
@@ -375,7 +539,7 @@ qual_page = """\\newpage
     \\begin{{sidewaysfigure}}[htbp]
     \\centering
     \\centerline{{\\includegraphics[width=1\\textwidth]{{img_qual/0-separations_{0}.png}}}}
-    \\caption{{{1}. The Columns from left to right: Input Image, Reconstruction, Foreground, 
+    \\caption{{{1}. The Columns from left to right: Input Image, Reconstruction, Foreground,
     Bounding Boxes, Background, K x Background Components, K x Background Masks, K x Background Color Maps, Alpha}}
     \\end{{sidewaysfigure}}
 \\restoregeometry
@@ -417,7 +581,7 @@ def select_game(expi):
 object_table = """\\begin{{subtable}}[b]{{\\textwidth}}\\centering
 \\begin{{tabular}}{{@{{}}lccrr@{{}}}}
 \\toprule
-\\textbf{{Object/Entity}} & \\textbf{{Method}} & \\textbf{{Relevant}} & \\textbf{{Precision}} & \\textbf{{Recall}} \\\\ 
+\\textbf{{Object/Entity}} & \\textbf{{Method}} & \\textbf{{Relevant}} & \\textbf{{Precision}} & \\textbf{{Recall}} \\\\
 \\midrule
 {0} \\\\
 \\bottomrule
@@ -543,7 +707,7 @@ def main():
     if os.path.exists(RESULT_TEX):
         os.remove(RESULT_TEX)
     os.makedirs(result_path, exist_ok=True)
-    os.makedirs(result_path + "\\img", exist_ok=True)
+    os.makedirs(os.path.join(result_path, "img"), exist_ok=True)
     files = os.listdir(data_path)
     experiments = group_by(files,
                            lambda f: f.split("_seed")[0] + ("_" if f.split("_seed")[1][2:] else "") + f.split("_seed")[
@@ -557,7 +721,7 @@ def main():
     #                        "relevant_few_shot_accuracy_cluster_nn"]
     #
     # mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
-    mutual_info_columns = ["relevant_bayes_accuracy"]
+    mutual_info_columns = ["relevant_bayes_accuracy", "all_f_score", "relevant_f_score", "relevant_few_shot_accuracy_with_64"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
     # desired_experiment_order = ['riverraid', 'space_invaders']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}

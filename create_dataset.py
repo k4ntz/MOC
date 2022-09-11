@@ -58,12 +58,12 @@ def draw_images(obs, image_n):
 
 def draw_action(agent, state):
     action = agent.draw_action(state)
-    if agent.game == "coinrun":
-        action = np.array([action])
-        observation, reward, done, info = env.step(action)
-        image = np.array(Image.fromarray(observation['rgb'][0], 'RGB').resize((160, 210), Image.ANTIALIAS))
-
-        return observation, reward, done, {}, observation['rgb'][0][-210:, :500, :3]
+    # if agent.game == "coinrun":
+    #     action = np.array([action])
+    #     observation, reward, done, info = env.step(action)
+    #     image = np.array(Image.fromarray(observation['rgb'][0], 'RGB').resize((160, 210), Image.ANTIALIAS))
+    #
+    #     return observation, reward, done, {}, observation['rgb'][0][-210:, :500, :3]
     state, reward, done, info, obs = env.step(action)
     return state, reward, done, info, obs[:210, :160, :3]
 
@@ -134,7 +134,7 @@ def main():
     print("Settings:", args)
     print("=============" * 5)
     folder_sizes = {"train": 8192, "test": 1024, "validation": 1024}
-    folder_sizes = {"train": 20, "test": 20, "validation": 20}
+    # folder_sizes = {"train": 20, "test": 20, "validation": 20}
     data_base_folder = "aiml_atari_data"
     mode_base_folder = "aiml_atari_data"
     REQ_CONSECUTIVE_IMAGE = 20 if args.root else 30

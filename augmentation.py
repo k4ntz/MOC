@@ -42,6 +42,8 @@ def augment_dict(obs, info, game):
         return _augment_dict_air_raid(obs, info)
     elif game == "Riverraid":
         return _augment_dict_riverraid(obs, info)
+    elif game == "Skiing":
+        return _augment_dict_skiing(obs, info)
     else:
         raise ValueError(f"Game {game} not found for augmentation!")
 
@@ -180,6 +182,7 @@ def _augment_dict_space_invaders(obs, info):
         cur_y = max((bb[0] for bb in labels[f"enemy_{idx}"]), default=0) + 12
 
     plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    show_image(obs)
     return labels
 
 
@@ -282,6 +285,21 @@ def _augment_dict_pong(obs, info):
     labels['bbs'] = [bb if bb[5] != "enemy" or bb[0] > 30 else (*bb[:4], "S", "enemy_score") for bb in labels['bbs']]
     bb_by_color(labels, obs, objects_colors['ball'], "ball")
     labels['bbs'] = [bb for bb in labels['bbs'] if bb[5] != "ball" or bb[3] < 20]
+    plot_bounding_boxes(obs, labels["bbs"], objects_colors)
+    return labels
+
+def _augment_dict_skiing(obs, info):
+    labels = info['labels']
+    objects_colors = {
+        "tree1": [158, 208, 101], "tree2": [82, 126, 45],
+        "tree3": [110, 156, 66], "rock": [192, 192, 192],
+        "tree4": [72, 160, 72],
+        "rock2": [214, 214, 214], "flag": [66, 72, 200],
+        "player": [214, 92, 92]
+    }
+    labels['bbs'] = []
+    for obj_name in objects_colors:
+        bb_by_color(labels, obs, objects_colors[obj_name], obj_name)
     plot_bounding_boxes(obs, labels["bbs"], objects_colors)
     return labels
 
