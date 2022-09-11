@@ -16,6 +16,7 @@ from tqdm import tqdm
 import shutil
 from torch.utils.data import Subset, DataLoader
 
+
 def train(cfg, rtpt_active=True):
     print('Experiment name:', cfg.exp_name)
     print('Dataset:', cfg.dataset)
