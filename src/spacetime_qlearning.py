@@ -39,9 +39,7 @@ env.reset()
 n_actions = env.action_space.n
 
 # get models
-# TODO: make dynamic feature length
 spacetime_model = get_model(cfg)
-i_episode = 0
 # move to cuda when possible
 use_cuda = 'cuda' in cfg.device
 if use_cuda:
@@ -111,9 +109,10 @@ eps_end = 0.01
 eps_decay = 10000
 learning_rate = 0.001
 # calc len of all possible states = all possible position combinations
-state_len = env.observation_space.shape[0] * 2 \
-        + env.observation_space.shape[1] \
-        + env.observation_space.shape[0]
+# TODO: Really needed??
+#state_len = env.observation_space.shape[0] * 2 \
+#        + env.observation_space.shape[1] \
+#        + env.observation_space.shape[0]
 
 
 # function to save qtable
@@ -145,6 +144,9 @@ def load_qtable(training_name):
     qfile = bz2.BZ2File(checkpoint_path,'r')
     loading_dict = pickle.load(qfile)
     qfile.close()
+    print("Successfully loaded")
+    print("Loaded episode:", loading_dict["i_episode"])
+    print("Q-Table Length:", len(loading_dict["q_table"]))
     return loading_dict["q_table"], loading_dict["i_episode"]
 
 
@@ -159,7 +161,8 @@ def select_action(state, episode):
             return np.argmax(Q[state]), eps_threshold
     return random.randrange(n_actions), eps_threshold
 
- 
+
+i_episode = 0
 exp_name = cfg.exp_name + "-qlearning"
 # check if q table loading is not null
 tmp_Q, tmp_i_episode = load_qtable(exp_name)
@@ -188,8 +191,9 @@ while i_episode < max_episode:
         # do action and observe
         observation, reward, done, info = env.step(action)
         ep_reward += reward
+        # use spacetime to get scene_list
         scene_list = get_scene(observation, space)
-        # flatten scene list
+        # flatten scene list and discretize
         object_list = np.asarray([item for sublist in scene_list for item in sublist])
         next_state = discretize(object_list)
         # update qtable
