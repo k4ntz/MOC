@@ -40,6 +40,7 @@ n_actions = env.action_space.n
 
 # get models
 spacetime_model = get_model(cfg)
+spacetime_model.eval()
 # move to cuda when possible
 use_cuda = 'cuda' in cfg.device
 if use_cuda:
@@ -61,25 +62,32 @@ z_classifier = joblib.load(z_classifier_path)
 transformation = transforms.ToTensor()
 
 
-# helper function to filter extracted scene from spacetime
-def clean_scene(scene):
-    empty_keys = []
-    for key, val in scene.items():
-        for i, z_where in reversed(list(enumerate(val))):
-            if z_where[3] < -0.75:
-                scene[key].pop(i)
-        if len(val) == 0:
-            empty_keys.append(key)
-    for key in empty_keys:
-        scene.pop(key)
-    scene_list = []
-    for el in [1, 2, 3]:
-        if el in scene:
-            scene_list.append(scene[el][0][2:])
-        else:
-            scene_list.append([0, 0]) # object not found
-    return scene_list
+relevant_labels_per_game = {"pong": [1, 2, 3], "boxing": [1, 4]}
 
+
+# helper class to clean scene from space scene representation
+class SceneCleaner():
+    def __init__(self, game):
+        self.game = game
+        self.relevant_labels = relevant_labels_per_game[game]
+        self.last_known = [[0, 0] for _ in self.relevant_labels]
+
+    def clean_scene(self, scene):
+        empty_keys = []
+        for key, val in scene.items():
+            for i, z_where in reversed(list(enumerate(val))):
+                if z_where[3] < -0.75:
+                    scene[key].pop(i)
+            if len(val) == 0:
+                empty_keys.append(key)
+        for key in empty_keys:
+            scene.pop(key)
+        for i, el in enumerate(self.relevant_labels):
+            if el in scene: #object found
+                self.last_known[i] = scene[el][0][2:]
+        return self.last_known
+
+sc = SceneCleaner(cfg.exp_name)
 
 # helper function to discretize
 def discretize(state):
@@ -97,7 +105,7 @@ def get_scene(observation, space):
         x = x.cuda()
     scene = space.scene_description(x, z_classifier=z_classifier,
                                     only_z_what=True)  # class:[(w, h, x, y)]
-    scene_list = clean_scene(scene)
+    scene_list = sc.clean_scene(scene)
     return scene_list
 
 
@@ -174,7 +182,7 @@ max_episode = 50000
 # episode loop
 running_reward = -999
 # training loop
-rtpt = RTPT(name_initials='DV/QT/TR', experiment_name=cfg.exp_name + "-QL",
+rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name + "-QL",
                 max_iterations=max_episode)
 rtpt.start()
 while i_episode < max_episode:
