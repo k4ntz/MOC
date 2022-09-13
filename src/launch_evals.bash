@@ -1,6 +1,6 @@
 i=0
 dev=0
-for game in air_raid boxing carnival pong mspacam spaceinvaders riverraid
+for game in air_raid boxing carnival pong mspacman spaceinvaders riverraid
 do
   for seed in 0 1 2 3 4
   do
