@@ -1,8 +1,8 @@
 i=0
 dev=0
-for game in airraid boxing carnival pong mspacam spaceinvaders riverraid
+for game in air_raid boxing carnival pong mspacam spaceinvaders riverraid
 do
-  for folder in train test validation
+  for seed in 0 1 2 3 4
   do
     if nvidia-smi | grep "Processes" > /dev/null ; then
       # No running processes found
