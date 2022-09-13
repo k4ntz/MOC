@@ -38,8 +38,6 @@ stochasticity.
 """
 
 
-
-
 def some_steps(agent, state):
     env.reset()
     action = None

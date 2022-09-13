@@ -15,6 +15,7 @@ class Space(nn.Module):
 
         self.fg_module = SpaceFg()
         self.bg_module = SpaceBg()
+        self.arch_type = "space"
 
     # @profile
     def forward(self, x, motion=None, motion_z_pres=None, motion_z_where=None, global_step=100000000):
@@ -115,3 +116,16 @@ class Space(nn.Module):
         for label, p in zip(labels, pos):
             result[label].append(tuple(coordinate.item() for coordinate in p))
         return result
+
+    def __repr__(self):
+        return f"{self.arch_type} unsupervised object detection model"
+
+    def state_dict(self, destination=None, *args, **kwargs):
+        _state_dict = super().state_dict(destination, *args, **kwargs)
+        _state_dict["arch_type"] = self.arch_type
+        return _state_dict
+
+    def load_state_dict(self, state_dict, *args, **kwargs):
+        if "arch_type" in state_dict.keys():
+            self.arch_type = state_dict.pop("arch_type")
+        return super().load_state_dict(state_dict, *args, **kwargs)

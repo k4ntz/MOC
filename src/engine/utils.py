@@ -22,6 +22,19 @@ def get_config():
     )
 
     parser.add_argument(
+        '--resume_ckpt',
+        help='Provide a checkpoint to restart training from',
+        default=''
+    )
+
+    parser.add_argument(
+        '--arch-type',
+        help='architecture type',
+        choices=['baseline', '+m', '+moc'],
+        default=None
+    )
+
+    parser.add_argument(
         'opts',
         help='Modify config options using the command line',
         default=None,
@@ -41,8 +54,22 @@ def get_config():
             cfg.exp_name = os.path.splitext(os.path.basename(args.config_file))[0]
         else:
             raise ValueError('exp_name cannot be empty without specifying a config file')
+    if args.arch_type is None or args.arch_type == 'baseline':
+        cfg.model = 'TcSpace'
+        cfg.arch.area_object_weight = 0.0
+    elif args.arch_type == "m": #
+        cfg.model = 'TcSpace'
+        cfg.arch.area_object_weight = 0.0
+    elif args.arch_type == "moc": #
+        cfg.model = 'TcSpace'
+        cfg.arch.area_object_weight = 10.0
+    cfg.resume_ckpt = args.resume_ckpt
+    arch_type = '' if args.arch_type == "baseline" else args.arch_type
 
-    # Seed
+    if args.resume_ckpt == '':
+        cfg.resume_ckpt = f"../trained_models/{cfg.exp_name}_space{arch_type}_seed{cfg.seed}.pth"
+        print(f"Using checkpoint from {cfg.resume_ckpt}")
+
     import torch
     torch.manual_seed(cfg.seed)
     torch.backends.cudnn.deterministic = True

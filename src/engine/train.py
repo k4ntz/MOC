@@ -149,6 +149,13 @@ def train(cfg, rtpt_active=True):
                 break
         if rtpt_active:
             rtpt.step()
+    if True:
+        print('Final evaluation on test set...')
+        start = time.perf_counter()
+        eval_checkpoint = [model, optimizer_fg, optimizer_bg, epoch, global_step]
+        evaluator.validation_eval(model, valset, valset.bb_path, writer, global_step,
+                                  cfg.device, eval_checkpoint, checkpointer, cfg)
+        print('Validation takes {:.4f}s.'.format(time.perf_counter() - start))
 
 
 def log_state(cfg, epoch, global_step, log, metric_logger):

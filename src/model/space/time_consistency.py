@@ -22,6 +22,11 @@ class TcSpace(nn.Module):
         self.space = Space()
         self.zero = nn.Parameter(torch.tensor(0.0))
         self.count_difference_variance = RunningVariance()
+        self.area_object_weight = arch.area_object_weight
+        if self.area_object_weight == 0.0:
+            self.arch_type = "space+m"
+        else:
+            self.arch_type = "space+moc"
 
     # @profile
     def forward(self, x, motion, motion_z_pres, motion_z_where, global_step):
@@ -41,9 +46,10 @@ class TcSpace(nn.Module):
         """
         B, T, C, H, W = x.shape
         x = x.reshape(T * B, C, H, W)
-        motion = motion.reshape(T * B, 1, H, W)
-        motion_z_pres = motion_z_pres.reshape(T * B, arch.G * arch.G, 1)
-        motion_z_where = motion_z_where.reshape(T * B, arch.G * arch.G, 4)
+        if motion is not None:
+            motion = motion.reshape(T * B, 1, H, W)
+            motion_z_pres = motion_z_pres.reshape(T * B, arch.G * arch.G, 1)
+            motion_z_where = motion_z_where.reshape(T * B, arch.G * arch.G, 4)
         loss, responses = self.space(x, motion, motion_z_pres, motion_z_where, global_step)
         # Further losses
         if not self.training:
@@ -128,6 +134,22 @@ class TcSpace(nn.Module):
         self.count_difference_variance += pred_z_pres - motion_z_pres
         return (value + self.count_difference_variance.value() * arch.use_variance)\
                * responses['motion_z_pres'][0].nelement()
+
+    def __repr__(self):
+        return f"{self.arch_type} unsupervised object detection model"
+
+    def state_dict(self, destination=None, *args, **kwargs):
+        _state_dict = super().state_dict(destination, *args, **kwargs)
+        _state_dict["arch_type"] = self.arch_type
+        _state_dict["area_object_weight"] = self.area_object_weight
+        return _state_dict
+
+    def load_state_dict(self, state_dict, *args, **kwargs):
+        if "arch_type" in state_dict.keys():
+            self.arch_type = state_dict.pop("arch_type")
+        if "area_object_weight" in state_dict.keys():
+            self.area_object_weight = state_dict.pop("area_object_weight")
+        return super().load_state_dict(state_dict, *args, **kwargs)
 
 
 class RunningVariance:

@@ -50,18 +50,18 @@ class Atari(Dataset):
         return len(self.image_fn) // 4
 
     def read_img(self, stack_idx, i):
-        path = os.path.join(self.image_path, self.game, self.mode, f'{stack_idx:05}_{i}.png')
+        path = os.path.join(self.image_path, self.mode, f'{stack_idx:05}_{i}.png')
         return np.array(Image.open(path).convert('RGB'))
 
     def read_tensor(self, stack_idx, i, postfix=None):
-        path = os.path.join(self.motion_path, self.game, self.mode,
+        path = os.path.join(self.motion_path, self.mode,
                             f'{stack_idx:05}_{i}_{postfix}.pt'
                             if postfix else f'{stack_idx:05}_{i}.pt')
         return torch.load(path)
 
     @property
     def bb_path(self):
-        path = osp.join(self.bb_base_path, self.game, self.mode)
+        path = osp.join(self.bb_base_path, self.mode)
         assert osp.exists(path), f'Bounding box path {path} does not exist.'
         return path
 

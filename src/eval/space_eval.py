@@ -29,14 +29,14 @@ class SpaceEval:
         self.first_eval = True
 
     @torch.no_grad()
-    def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step, cfg):
-        losses, logs = self.apply_model(testset, device, model, global_step)
-        result_dict = self.eval_ap_and_acc(logs, testset, bb_path)
-        clustering_result_dict = self.eval_clustering(logs, testset, global_step, cfg)
-        os.makedirs(evaldir, exist_ok=True)
-        path = osp.join(evaldir, 'results_{}.json'.format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
-        self.save_to_json(result_dict, path, info)
-        self.print_result(result_dict, [sys.stdout, open('./results.txt', 'w')])
+    # def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step, cfg):
+    #     losses, logs = self.apply_model(testset, device, model, global_step)
+    #     result_dict = self.eval_ap_and_acc(logs, testset, bb_path)
+    #     clustering_result_dict = self.eval_clustering(logs, testset, global_step, cfg)
+    #     os.makedirs(evaldir, exist_ok=True)
+    #     path = osp.join(evaldir, 'results_{}.json'.format(datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+    #     self.save_to_json(result_dict, path, info)
+    #     self.print_result(result_dict, [sys.stdout, open('./results.txt', 'w')])
 
     def write_metric(self, writer, tb_label, value, global_step, use_writer=True, make_sep=True):
         if use_writer:
@@ -120,6 +120,60 @@ class SpaceEval:
             self.eval_file.write("\n")
 
     @torch.no_grad()
+    def test_eval(self, model, testset, bb_path, writer, global_step, device, checkpoint, checkpointer, cfg):
+        """
+        Evaluation during training. This includes:
+            - mse evaluated on validation set
+            - ap and accuracy evaluated on validation set
+            - cluster metrics evaluated on validation set
+        :return:
+        """
+        # make checkpoint test dir
+        chpt_dir_save = checkpointer.checkpointdir
+        checkpointer.checkpointdir = chpt_dir_save.replace("/eval/", "/test_eval/") + f"_{model.module.arch_type}"
+        os.makedirs(checkpointer.checkpointdir, exist_ok=True)
+        efp_save = self.eval_file_path
+        rohp_save = self.relevant_object_hover_path
+        self.eval_file_path = f'../final_test_results/{cfg.exp_name}_seed{cfg.seed}_metrics.csv'
+        self.relevant_object_hover_path = f'../final_test_results/{cfg.exp_name}/hover'
+        if os.path.exists(self.eval_file_path):
+            os.remove(self.eval_file_path)
+        os.makedirs(self.relevant_object_hover_path, exist_ok=True)
+        os.makedirs(f'../final_test_results/{cfg.exp_name}/hover', exist_ok=True)
+        os.makedirs(os.path.join(self.relevant_object_hover_path, "img"), exist_ok=True)
+        self.write_header()
+        losses, logs = self.apply_model(testset, device, model, global_step)
+        with open(self.eval_file_path, "a") as self.eval_file:
+            self.write_metric(None, None, global_step, global_step, use_writer=False)
+            if 'cluster' in eval_cfg.train.metrics:
+                results = self.train_eval_clustering(logs, testset, writer, global_step, cfg)
+                if cfg.train.log:
+                    pp = pprint.PrettyPrinter(depth=2)
+                    for res in results:
+                        print("Cluster Result:")
+                        pp.pprint(results[res])
+                # checkpointer.save_best('rand_score_relevant',
+                #                        results['relevant'][0]['adjusted_rand_score'],
+                #                        checkpoint, min_is_better=False)
+            if 'mse' in eval_cfg.train.metrics:
+                mse = self.train_eval_mse(logs, losses, writer, global_step)
+                print("MSE result: ", mse)
+            if 'ap' in eval_cfg.train.metrics:
+                results = self.train_eval_ap_and_acc(logs, testset, bb_path, writer, global_step)
+                # checkpointer.save_best('accuracy', results['accuracy_relevant'], checkpoint, min_is_better=False)
+                if cfg.train.log:
+                    results = {k2: v2[len(v2) // 4] if isinstance(v2, list) or isinstance(v2, np.ndarray) else v2 for
+                               k2, v2, in
+                               results.items()}
+                    pp = pprint.PrettyPrinter(depth=2)
+                    print("AP Result:")
+                    pp.pprint({k: v for k, v in results.items() if "iou" not in k})
+            self.eval_file.write("\n")
+        self.eval_file_path = efp_save
+        self.relevant_object_hover_path = rohp_save
+        checkpointer.checkpointdir = chpt_dir_save
+
+    @torch.no_grad()
     def apply_model(self, dataset, device, model, global_step, use_global_step=False):
         print('Applying the model for evaluation...')
         model.eval()
@@ -136,9 +190,12 @@ class SpaceEval:
         with torch.no_grad():
             for imgs, motion, motion_z_pres, motion_z_where in dataloader:
                 imgs = imgs.to(device)
-                motion = motion.to(device)
-                motion_z_pres = motion_z_pres.to(device)
-                motion_z_where = motion_z_where.to(device)
+                motion = None
+                motion_z_pres = None
+                motion_z_where = None
+                # motion = motion.to(device)
+                # motion_z_pres = motion_z_pres.to(device)
+                # motion_z_where = motion_z_where.to(device)
                 loss, log = model(imgs, motion, motion_z_pres, motion_z_where,
                                   global_step if use_global_step else 1000000000)
                 for key in ['imgs', 'y', 'log_like', 'loss', 'fg', 'z_pres_prob_pure',
@@ -270,10 +327,10 @@ class SpaceEval:
                               int(center_y + height * 128))
                         try:
                             cropped = image.crop(bb)
-                            cropped.save(f'{self.relevant_object_hover_path}Img/'
+                            cropped.save(f'{self.relevant_object_hover_path}/img/'
                                          f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png')
                         except:
-                            image.save(f'{self.relevant_object_hover_path}Img/'
+                            image.save(f'{self.relevant_object_hover_path}/img/'
                                        f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png')
                         new_image_path = f'gs{global_step:06}_{i * batch_size + idx // 4:05}_{idx % 4}_obj{obj_idx}.png'
                         image_refs.append(new_image_path)

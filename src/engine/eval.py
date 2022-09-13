@@ -5,9 +5,10 @@ from utils import Checkpointer
 import os
 import os.path as osp
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
+
 
 def eval(cfg):
-    assert cfg.resume
     assert cfg.eval.checkpoint in ['best', 'last']
     assert cfg.eval.metric in ['ap_dot5', 'ap_avg']
 
@@ -24,7 +25,7 @@ def eval(cfg):
         print('Device ids:', cfg.device_ids)
 
     print('Loading data')
-    testset = get_dataset(cfg, 'val')
+    testset = get_dataset(cfg, 'test')
     model = get_model(cfg)
     model = model.to(cfg.device)
     checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt)
@@ -45,5 +46,14 @@ def eval(cfg):
     info = {
         'exp_name': cfg.exp_name + str(cfg.seed)
     }
-    evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir,
-                        info, global_step=100000, cfg=cfg)
+    # evaluator.test_eval(model, testset, testset.bb_path, cfg.device, evaldir,
+    #                     info, , cfg=cfg)
+    log_path = os.path.join(cfg.logdir, cfg.exp_name)
+    global_step = 100000
+    writer = SummaryWriter(log_dir=log_path, flush_secs=30,
+                           purge_step=global_step)
+    eval_checkpoint = [model, None, None, "last", global_step]
+    checkpointer = Checkpointer(osp.join(cfg.checkpointdir, "eval", cfg.exp_name), max_num=cfg.train.max_ckpt,
+                                load_time_consistency=cfg.load_time_consistency, add_flow=cfg.add_flow)
+    evaluator.test_eval(model, testset, testset.bb_path, writer, global_step,
+                        cfg.device, eval_checkpoint, checkpointer, cfg)
