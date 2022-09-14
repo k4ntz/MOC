@@ -16,6 +16,8 @@ parser.add_argument('--save', '-s', default=False, action="store_true",
                     help='Save the image(s) instead of showing them')
 parser.add_argument('--splitted', default=False, action="store_true",
                     help='Save individual image(s) instead of one and generate associated tex')
+parser.add_argument('--final-test', default=False, action="store_true",
+                    help='Use final test evaluation')
 # parser.add_argument('--num-frame-stack', type=int, default=1,
 #                     help='Number of frames to stack for a state')
 
@@ -49,10 +51,13 @@ label_list_air_raid = ["no_label", "player", 'score', 'building', 'shot', 'enemy
 RESULT_TEX = os.path.join("..", "results_img", "result.tex")
 
 sns.set_theme()
-# data_path = os.path.join("D:", "final")
-data_path = "../results"
-# result_path = os.path.join("D:", "results", "final")
-result_path = '../results_img'
+
+if args.final_test:
+    data_path = "../final_test_results"
+    result_path = '../final_test_results_img'
+else:
+    data_path = "../results"
+    result_path = '../results_img'
 
 metric_name_translator = {
     'adjusted_mutual_info_score': 'AMI',
@@ -80,9 +85,9 @@ metric_name_translator = {
 }
 
 colors_conversion = {
-    'SPACE': 'orange',
-    'SPACE+M': 'green',
-    'SPACE+MOC': 'blue'
+    'space': 'orange',
+    'space+m': 'green',
+    'space+moc': 'blue'
 }
 
 

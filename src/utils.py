@@ -16,7 +16,7 @@ from torchvision.utils import save_image as Simage
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes as draw_bb
-from termcolor import colored
+from niceprint import pprint as print, makedirs
 
 
 colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
@@ -68,7 +68,7 @@ class Checkpointer:
         self.add_flow = add_flow
         self.checkpointdir = checkpointdir
         if not osp.exists(checkpointdir):
-            os.makedirs(checkpointdir)
+            makedirs(checkpointdir)
         self.listfile = osp.join(checkpointdir, 'model_list.pkl')
         print(f'Listfile: {self.listfile}')
         if not osp.exists(self.listfile):
@@ -78,7 +78,7 @@ class Checkpointer:
 
     def save(self, path: str, model, optimizer_fg, optimizer_bg, epoch, global_step):
         assert path.endswith('.pth')
-        os.makedirs(osp.dirname(path), exist_ok=True)
+        makedirs(osp.dirname(path), exist_ok=True)
 
         if isinstance(model, nn.DataParallel):
             model = model.module
@@ -91,7 +91,7 @@ class Checkpointer:
         }
         with open(path, 'wb') as f:
             torch.save(checkpoint, f)
-            print(f'Checkpoint has been saved to "{path}".')
+            print('blue', f'Checkpoint has been saved to "{path}".')
 
     def save_last(self, model, optimizer_fg, optimizer_bg, epoch, global_step):
         path = osp.join(self.checkpointdir, 'model_{:09}.pth'.format(global_step + 1))
@@ -130,7 +130,7 @@ class Checkpointer:
             optimizer_fg.load_state_dict(checkpoint.pop('optimizer_fg'))
         if optimizer_bg and not self.add_flow:
             optimizer_bg.load_state_dict(checkpoint.pop('optimizer_bg'))
-        print('Checkpoint loaded.')
+        print('blue', 'Checkpoint loaded.')
         return checkpoint
 
     def load_last(self, path, model, optimizer_fg=None, optimizer_bg=None, device=None):
@@ -141,7 +141,7 @@ class Checkpointer:
             with open(self.listfile, 'rb') as f:
                 model_list = pickle.load(f)
                 if len(model_list) == 0:
-                    print('No checkpoint found. Starting from scratch')
+                    print('yellow', 'No checkpoint found. Starting from scratch')
                     return None
                 else:
                     path = model_list[-1]
@@ -249,7 +249,7 @@ def show_image(image):
 def save_image(image, path, number=None):
     path = path.replace("data", "extracted_images")
     folder = "/".join(path.split("/")[:-1])
-    os.makedirs(folder, exist_ok=True)
+    makedirs(folder, exist_ok=True)
     image_name = path.split("/")[-1]
     name, ext = image_name.split(".")
     if number is not None:

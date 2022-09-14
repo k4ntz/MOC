@@ -134,7 +134,7 @@ class SpaceEval:
         os.makedirs(checkpointer.checkpointdir, exist_ok=True)
         efp_save = self.eval_file_path
         rohp_save = self.relevant_object_hover_path
-        self.eval_file_path = f'../final_test_results/{cfg.exp_name}_seed{cfg.seed}_metrics.csv'
+        self.eval_file_path = f'../final_test_results/{cfg.exp_name}_{model.module.arch_type}_seed{cfg.seed}_metrics.csv'
         self.relevant_object_hover_path = f'../final_test_results/{cfg.exp_name}/hover'
         if os.path.exists(self.eval_file_path):
             os.remove(self.eval_file_path)
@@ -169,6 +169,7 @@ class SpaceEval:
                     print("AP Result:")
                     pp.pprint({k: v for k, v in results.items() if "iou" not in k})
             self.eval_file.write("\n")
+        print(f"Saved results in {self.eval_file_path}")
         self.eval_file_path = efp_save
         self.relevant_object_hover_path = rohp_save
         checkpointer.checkpointdir = chpt_dir_save

@@ -1,6 +1,8 @@
 from NicePrinter import *
 from pprint import pformat
 from argparse import Namespace
+import os
+
 
 def box(string):
     nb_line = string.count("\n")
@@ -43,3 +45,10 @@ def pprint(*args):
             print(*args)
     except TypeError:
         print(args)
+
+
+def makedirs(*args, **kwargs):
+    path_to_create = os.path.join(*args)
+    if not os.path.exists(path_to_create):
+        pprint("purple", "center", "box", f"Created path {path_to_create}")
+    os.makedirs(path_to_create, exist_ok=True)
