@@ -28,7 +28,7 @@ class SpaceEval:
         self.eval_file_path = None
         self.first_eval = True
 
-    @torch.no_grad()
+    # @torch.no_grad()
     # def test_eval(self, model, testset, bb_path, device, evaldir, info, global_step, cfg):
     #     losses, logs = self.apply_model(testset, device, model, global_step)
     #     result_dict = self.eval_ap_and_acc(logs, testset, bb_path)

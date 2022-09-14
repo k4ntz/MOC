@@ -39,7 +39,7 @@ def augment_dict(obs, info, game):
         return _augment_dict_pong(obs, info)
     elif game == "Boxing":
         return _augment_dict_boxing(obs, info)
-    elif game == "AirRaid":
+    elif game == "Airraid":
         return _augment_dict_air_raid(obs, info)
     elif game == "Riverraid":
         return _augment_dict_riverraid(obs, info)

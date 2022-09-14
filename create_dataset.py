@@ -219,12 +219,15 @@ def main():
     pbar = tqdm(total=limit)
     while True:
         state, reward, done, info, obs = draw_action(agent, state)
+        if (obs==0).all(): # black screen
+            continue
+        if args.render:
+            env.render()
         if (not args.random) or np.random.rand() < 0.01:
             augment_dict(obs, info, args.game)
             if args.stacks:
                 consecutive_images += [obs]
                 consecutive_images_info.append(put_lives(info))
-
                 if len(consecutive_images) == REQ_CONSECUTIVE_IMAGE:
                     space_stack = []
                     for frame in consecutive_images[:-4]:
@@ -237,8 +240,11 @@ def main():
                         frame_space.save(f'{bgr_folder}/{image_count:05}_{i}.png')
                         img = Image.fromarray(frame, 'RGB')
                         img.save(f'{rgb_folder}/{image_count:05}_{i}.png')
-                        bb.save(args, frame_space, img_info, f'{bb_folder}/{image_count:05}_{i}.csv',
-                                visualizations_bb)
+                        try:
+                            bb.save(args, frame_space, img_info, f'{bb_folder}/{image_count:05}_{i}.csv',
+                                    visualizations_bb)
+                        except RuntimeError:
+                            import ipdb; ipdb.set_trace()
                     # for i, fr in enumerate(space_stack):
                     #     Image.fromarray(fr, 'RGB').save(f'{vis_folder}/Mode/Stack_{image_count:05}_{i:03}.png')
                     resize_stack = np.stack(resize_stack)

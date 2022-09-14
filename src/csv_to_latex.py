@@ -428,7 +428,6 @@ table_tex = """
 
 
 def table(experiment_groups, columns, joined_df, at=None, caption=None):
-    import ipdb; ipdb.set_trace()
     if at is None:
         at = [int(joined_df.loc[len(joined_df) - 1]["global_step"].item())]
     if caption is None:
@@ -533,8 +532,11 @@ def add_contrived_columns(df):
     for style in ['relevant', 'all', 'moving']:
         aps = df.filter(regex=f'{style}_ap')
         df[f'{style}_ap_avg'] = aps.mean(axis=1)
-        df[f'{style}_f_score'] = 2 * df[f'{style}_precision'] * df[f'{style}_recall'] / (
-                df[f'{style}_precision'] + df[f'{style}_recall'] + 1e-8)
+        if not df[f'{style}_precision'].empty:
+            df[f'{style}_f_score'] = 2 * df[f'{style}_precision'] * df[f'{style}_recall'] / (
+                    df[f'{style}_precision'] + df[f'{style}_recall'] + 1e-8)
+        else:
+            df[f'{style}_f_score'] = np.nan
     return df
 
 
@@ -715,8 +717,9 @@ def main():
     os.makedirs(os.path.join(result_path, "img"), exist_ok=True)
     files = os.listdir(data_path)
     experiments = group_by(files,
-                           lambda f: f.split("_seed")[0] + ("_" if f.split("_seed")[1][2:] else "") + f.split("_seed")[
-                                                                                                          1][2:])
+                           lambda f: f.split("_seed")[0] +
+                           ("_" if f.split("_seed")[1][2:] else "") +
+                           f.split("_seed")[1][2:])
     joined_df = prepare_mean_std(experiments)
     experiment_groups = sub_group_by(experiments, select_game)
     # mutual_info_columns = ["relevant_accuracy", "relevant_ap_avg", "relevant_f_score",
@@ -726,22 +729,25 @@ def main():
     #                        "relevant_few_shot_accuracy_cluster_nn"]
     #
     # mutual_info_columns += [column.replace("relevant", "all") for column in mutual_info_columns]
-    mutual_info_columns = ["relevant_bayes_accuracy", "all_f_score", "relevant_f_score", "relevant_few_shot_accuracy_with_64"]
+    mutual_info_columns = ["relevant_adjusted_mutual_info_score", "relevant_bayes_accuracy", "all_f_score", "relevant_f_score",
+                           "relevant_few_shot_accuracy_with_4", "relevant_few_shot_accuracy_with_16", "relevant_few_shot_accuracy_with_64"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
+    desired_experiment_order = ['boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders']
     # desired_experiment_order = ['riverraid', 'space_invaders']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
     table_by_metric(experiment_groups, mutual_info_columns, joined_df)
     # line_plot(experiments, "relevant_ap_avg", joined_df)
-    line_plot(experiment_groups, "relevant_f_score", joined_df)
-    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
-    line_plot_samples(experiment_groups, "relevant_few_shot_accuracy_with_", joined_df)
-    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
-    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_16", joined_df)
-    # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_64", joined_df)
-    # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
-    # line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
-    pr_plot(experiment_groups, joined_df)
+    if not args.final_test:
+        line_plot(experiment_groups, "relevant_f_score", joined_df)
+        # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_1", joined_df)
+        line_plot_samples(experiment_groups, "relevant_few_shot_accuracy_with_", joined_df)
+        # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
+        # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_16", joined_df)
+        # line_plot(experiment_groups, "relevant_few_shot_accuracy_with_64", joined_df)
+        # line_plot(experiment_groups, "relevant_few_shot_accuracy_cluster_nn", joined_df)
+        line_plot(experiment_groups, "relevant_adjusted_mutual_info_score", joined_df)
+        pr_plot(experiment_groups, joined_df)
     # generate_object_tables(desired_experiment_order)
     # qualitative_appendix(files)
     # accuracy_plot(experiment_groups, joined_df)
