@@ -38,7 +38,7 @@ def filter_relevant_boxes(game, boxes_batch, boxes_gt):
         return [box_bat[box_bat[:, 1] > 21 / 128] for box_bat in boxes_batch]
     elif "Boxing" in game:
         return [box_bat[(box_bat[:, 0] > 19 / 128) * (box_bat[:, 1] < 110 / 128)] for box_bat in boxes_batch]
-    elif "AirRaid" in game:
+    elif "Airraid" in game:
         return [box_bat[box_bat[:, 0] > 8 / 128] for box_bat in boxes_batch]
     elif "Riverraid" in game:
         return [box_bat[box_bat[:, 0] < 98 / 128] for box_bat in boxes_batch]  # Does not cover Fuel Gauge
@@ -74,7 +74,7 @@ def label_list_for(game):
         return label_list_boxing
     elif "Tennis" in game:
         return label_list_tennis
-    elif "AirRaid" in game:
+    elif "Airraid" in game:
         return label_list_air_raid
     elif "Riverraid" in game:
         return label_list_riverraid

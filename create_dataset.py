@@ -209,7 +209,7 @@ def main():
             # Those would be no issue with FlowNet
             if "Pong" in args.game:
                 set_special_color_weight(15406316, 8)
-            if "AirRaid" in args.game:
+            if "Airraid" in args.game:
                 set_special_color_weight(0, 20000)
             if "Riverraid" in args.game:
                 set_special_color_weight(3497752, 20000)

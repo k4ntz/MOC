@@ -688,7 +688,7 @@ def accuracy_plot(experiment_groups, joined_df):
     ax1.set_zticks([0.0, 0.25, 0.5, 0.75, 1.0], size='small')
     ax1.set_yticks([0, 1, 2, 3], ["1", "4", "16", "64"], size='small')
     ax1.set_xticks([1, 5, 9, 13, 17, 21, 25, 29],
-                   ["AirRaid", "Boxing", "Carnival", "MsPacman", "Pong", "Riverraid", "SpaceInvaders", "Tennis"],
+                   ["Airraid", "Boxing", "Carnival", "MsPacman", "Pong", "Riverraid", "SpaceInvaders", "Tennis"],
                    size='small', rotation=60, ha="right")
     ax1.tick_params(pad=0)
     scale = np.diag([4.0, 1.0, 1.0, 1.0])

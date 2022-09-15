@@ -73,5 +73,5 @@ arch:
   bg_sigma: 0.10
 
 gamelist: [
-    'AirRaid-v0',
+    'Airraid-v0',
     ]

@@ -50,7 +50,7 @@ def get_label_list(cfg):
         return label_list_tennis
     elif "Riverraid" in game:
         return label_list_riverraid
-    elif "AirRaid" in game:
+    elif "Airraid" in game:
         return label_list_air_raid
     else:
         raise ValueError(f"get_label_list failed for game {game}")
