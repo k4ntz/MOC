@@ -179,6 +179,7 @@ def main():
     if "Tennis" in args.game:
         image_offset(f"offsets/tennis.png")
     if "Riverraid" in args.game:
+        import ipdb; ipdb.set_trace()
         image_offset(f"offsets/riverraid.png")
     if args.random:
         np.random.shuffle(index)
