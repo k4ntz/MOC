@@ -135,7 +135,7 @@ def _augment_dict_air_raid(obs, info):
     labels['bbs'] = []
     objects_colors = {
         "black": (0, 0, 0),
-        "background1": (112, 0, 92),
+        "background1": (0, 0, 148),
         "background2": (44, 44, 44),
         "player": (0, 255, 255),
         "enemy": (255, 255, 0),

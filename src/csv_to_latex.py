@@ -500,7 +500,10 @@ def table_by_metric(experiment_groups, columns, joined_df, at=None, caption=None
                     [bf(translate(game))] + [
                         table_entry(joined_df, idx, game, c, metric, experiment_groups[group_key])
                         for c in experiment_groups[group_key] for idx in at]))
-            complete_path = os.path.join(result_path, f"{metric}.tex")
+            if args.final_test:
+                complete_path = os.path.join(result_path, f"final_{metric}.tex")
+            else:
+                complete_path = os.path.join(result_path, f"{metric}.tex")
             with open(complete_path, "w") as tex:
                 tex.write(table_metric_tex.format(header, " \\\\ \n".join(content), caption, ";".join([metric]),
                                                   ("c".join(["|"] * (len(experiment_groups) + 2)).replace('|', '||',
@@ -732,7 +735,7 @@ def main():
     mutual_info_columns = ["relevant_adjusted_mutual_info_score", "relevant_bayes_accuracy", "all_f_score", "relevant_f_score",
                            "relevant_few_shot_accuracy_with_4", "relevant_few_shot_accuracy_with_16", "relevant_few_shot_accuracy_with_64"]
     desired_experiment_order = ['air_raid', 'boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders', 'tennis']
-    desired_experiment_order = ['boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders']
+    # desired_experiment_order = ['boxing', 'carnival', 'mspacman', 'pong', 'riverraid', 'space_invaders']
     # desired_experiment_order = ['riverraid', 'space_invaders']
     experiment_groups = {k: experiment_groups[k] for k in desired_experiment_order if k in experiment_groups}
     # bar_plot(experiment_groups, "relevant_few_shot_accuracy_with_4", joined_df)
