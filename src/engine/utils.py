@@ -31,7 +31,7 @@ def get_config():
         '--arch-type',
         help='architecture type',
         choices=['baseline', '+m', '+moc'],
-        default=None
+        required=True
     )
 
     parser.add_argument(

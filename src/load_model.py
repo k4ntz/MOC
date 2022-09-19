@@ -82,7 +82,7 @@ z_classifier = joblib.load(z_classifier_path)
 # only_z_what control if only the z_what latent should be used (see docstring)
 
 transformation = transforms.ToTensor()
-# import matplotlib; matplotlib.use("Tkagg")
+import matplotlib; matplotlib.use("Tkagg")
 
 env_name = cfg.gamelist[0]
 sc = SceneCleaner(cfg.exp_name)
@@ -98,12 +98,12 @@ for i in range(5000):
     scene = space.scene_description(x, z_classifier=z_classifier,
                                     only_z_what=True)  # class:[(w, h, x, y)]
     scene_list = sc.clean_scene(scene)
-    env.render()
+    # env.render()
     if i % 100 == 0:
         pprint(scene)
         sprint(scene_list)
         for el in scene_list:
-            place_point(x, *el)
+            place_point(x, *el, size=1)
         show_scene(x, scene)
     if done:
         print("Done")
