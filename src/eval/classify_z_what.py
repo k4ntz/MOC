@@ -35,7 +35,6 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         path: to pca
         accuracy: few shot accuracy
     """
-
     c = Counter(labels.tolist() if labels is not None else [])
     if cfg.train.log:
         print("Distribution of matched labels:", c)
@@ -73,8 +72,10 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         filename = f'{cfg.logdir}/{cfg.exp_name}/z_what-classifier_with_{training_objects_per_class}.joblib.pkl'
         joblib.dump(clf, filename)
         few_shot_accuracy[f'few_shot_accuracy_with_{training_objects_per_class}'] = acc
-    joblib.dump(clf, f"classifiers/{cfg.exp_name}_z_what_classifier.joblib.pkl")
-    print(f"Saved classifiers in {cfg.logdir}/{cfg.exp_name}")
+    model_name = cfg.resume_ckpt.split("/")[-1].replace(".pth", "")
+    save_path = f"classifiers/{model_name}_z_what_classifier.joblib.pkl"
+    joblib.dump(clf, save_path)
+    print(f"Saved classifiers in {save_path}")
 
     clf = KMeans(n_clusters=len(relevant_labels))
     y = clf.fit_predict(z_what)
