@@ -142,7 +142,8 @@ class SpaceEval:
         os.makedirs(f'../final_test_results/{cfg.exp_name}/hover', exist_ok=True)
         os.makedirs(os.path.join(self.relevant_object_hover_path, "img"), exist_ok=True)
         self.write_header()
-        losses, logs = self.apply_model(testset, device, model, global_step)
+        # losses, logs = self.apply_model(testset, device, model, global_step)
+        losses, logs = [], []
         with open(self.eval_file_path, "a") as self.eval_file:
             self.write_metric(None, None, global_step, global_step, use_writer=False)
             if 'cluster' in eval_cfg.train.metrics:
