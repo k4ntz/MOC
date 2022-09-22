@@ -1,40 +1,26 @@
-from cv2 import FlannBasedMatcher
-import joblib
-import os.path as osp
 import numpy as np
-import matplotlib.pyplot as plt
 import gym
 import os
 import math
 import random
 import pickle
 import bz2
-import os
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+import rl_utils
 
 from atariari.benchmark.wrapper import AtariARIWrapper
-from torch.distributions import Categorical
 from rtpt import RTPT
 from engine.utils import get_config
-from model import get_model
-from utils import Checkpointer
-from solver import get_optimizers
-from PIL import Image
-from torchvision import transforms
 
 # load config
 cfg, task = get_config()
+use_cuda = 'cuda' in cfg.device
 
 USE_ATARIARI = (cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
 relevant_atariari_labels = {"pong": ["player", "enemy", "ball"], "boxing": ["enemy", "player"]}
 
 # lambda for loading and saving qtable
-PATH_TO_OUTPUTS = os.getcwd() + "/ql_checkpoints/"
+PATH_TO_OUTPUTS = os.getcwd() + "/rl_checkpoints/"
 model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + ".pbz2"
 
 # init env stuff
@@ -50,56 +36,9 @@ n_actions = env.action_space.n
 print("Action Space {}".format(env.action_space))
 print("State {}".format(info))
 
-# get models
-spacetime_model = get_model(cfg)
-spacetime_model.eval()
-# move to cuda when possible
-use_cuda = 'cuda' in cfg.device
-if use_cuda:
-    spacetime_model = spacetime_model.to('cuda:0')
-checkpointer = Checkpointer(osp.join(cfg.checkpointdir, cfg.exp_name), max_num=cfg.train.max_ckpt,
-                            load_time_consistency=cfg.load_time_consistency, add_flow=cfg.add_flow)
-optimizer_fg, optimizer_bg = get_optimizers(cfg, spacetime_model)
-if cfg.resume:
-    checkpoint = checkpointer.load_last(cfg.resume_ckpt, spacetime_model, optimizer_fg, optimizer_bg, cfg.device)
-    if checkpoint:
-        start_epoch = checkpoint['epoch']
-        global_step = checkpoint['global_step'] + 1
+print("Loading space...")
+space, transformation, sc, z_classifier = rl_utils.load_space(cfg)
 
-space = spacetime_model.space
-z_classifier_path = f"classifiers/{cfg.exp_name}_z_what_classifier.joblib.pkl"
-z_classifier = joblib.load(z_classifier_path)
-# x is the image on device as a Tensor, z_classifier accepts the latents,
-# only_z_what control if only the z_what latent should be used (see docstring)
-transformation = transforms.ToTensor()
-
-
-relevant_labels_per_game = {"pong": [1, 2, 3], "boxing": [1, 4]}
-
-
-# helper class to clean scene from space scene representation
-class SceneCleaner():
-    def __init__(self, game):
-        self.game = game
-        self.relevant_labels = relevant_labels_per_game[game]
-        self.last_known = [[0, 0] for _ in self.relevant_labels]
-
-    def clean_scene(self, scene):
-        empty_keys = []
-        for key, val in scene.items():
-            for i, z_where in reversed(list(enumerate(val))):
-                if z_where[3] < -0.75:
-                    scene[key].pop(i)
-            if len(val) == 0:
-                empty_keys.append(key)
-        for key in empty_keys:
-            scene.pop(key)
-        for i, el in enumerate(self.relevant_labels):
-            if el in scene: #object found
-                self.last_known[i] = scene[el][0][2:]
-        return self.last_known
-
-sc = SceneCleaner(cfg.exp_name)
 DISCRETIZE_FACTOR = 10
 print("Discretization Factor:", DISCRETIZE_FACTOR)
 
@@ -110,51 +49,6 @@ def discretize(state):
     return intstate
 
 
-# helper function to convert spacetime normnalized output to coordinates
-def convert_spacetime_values(image_array, x, y):
-    if x < 1:
-        x = int((x + 1)/2*image_array.shape[1])
-        y = int((y + 1)/2*image_array.shape[2])
-    if cfg.exp_name == "pong":
-        # pong formula
-        x, y = int(1.238 * x + 48.1), int(1.5625 * y + 14.125)
-    elif cfg.exp_name == "boxing":
-        # boxing formula
-        x, y = int(1.36 * x - (50/3)), int(1.692 * y - 63.54)
-    #print("Placing point at ", x, y)
-    return x, y
-
-
-# helper function to get scene
-def get_scene(observation, space):
-    img = Image.fromarray(observation[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
-    #x = torch.moveaxis(torch.tensor(np.array(img)), 2, 0)
-    t_img = transformation(img)
-    if use_cuda:
-        t_img = t_img.cuda()
-    scene = space.scene_description(t_img, z_classifier=z_classifier,
-                                    only_z_what=True)  # class:[(w, h, x, y)]
-    scene_list = sc.clean_scene(scene)
-    converted_scene_list = []
-    for el in scene_list:
-        x, y = convert_spacetime_values(t_img, *el)
-        converted_scene_list.append(x)
-        converted_scene_list.append(y)
-    return scene_list, converted_scene_list
-
-
-# helper function to convert env info into custom list
-# only used for atariari
-# currently only for boxing
-def convert_to_state(env_info):
-    labels = env_info["labels"]
-    scene_list = []
-    for label_desc in relevant_atariari_labels[cfg.exp_name]:
-        scene_list.append(labels[label_desc + "_x"])
-        scene_list.append(labels[label_desc + "_y"])
-    return scene_list
-
-
 #Initializing the Q-table as dictionary and parameters
 Q = {}
 gamma =  0.97
@@ -162,11 +56,6 @@ eps_start = 1.0
 eps_end = 0.01
 eps_decay = 10000
 learning_rate = 0.005
-# calc len of all possible states = all possible position combinations
-# TODO: Really needed??
-#state_len = env.observation_space.shape[0] * 2 \
-#        + env.observation_space.shape[1] \
-#        + env.observation_space.shape[0]
 
 
 # function to save qtable
@@ -249,11 +138,11 @@ if i_episode < max_episode:
             next_state = None
             # when atariari
             if USE_ATARIARI:
-                next_state = convert_to_state(info)
+                next_state = rl_utils.convert_to_state(cfg, info)
             # when spacetime
             else:
                 # use spacetime to get scene_list
-                _, next_state = get_scene(observation, space)
+                _, next_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
                 # flatten scene list and discretize
             # update qtable
             next_state = str(discretize(next_state))
@@ -293,11 +182,11 @@ else:
         ep_reward += reward
         # when atariari
         if USE_ATARIARI:
-            state = convert_to_state(info)
+            state = rl_utils.convert_to_state(cfg, info)
         # when spacetime
         else:
             # use spacetime to get scene_list
-            _, state = get_scene(observation, space)
+            _, state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
         # finish step
         state = str(discretize(state))
         print('Episode: {}\tLast reward: {:.2f}\tEps Treshold: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(

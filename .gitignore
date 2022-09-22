@@ -153,4 +153,4 @@ static
 # add folder from training files
 aiml_*/
 trained_models/
-src/ql_checkpoints/
+src/rl_checkpoints/
