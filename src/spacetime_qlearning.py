@@ -1,3 +1,4 @@
+from cv2 import FlannBasedMatcher
 import joblib
 import os.path as osp
 import numpy as np
@@ -30,6 +31,7 @@ cfg, task = get_config()
 
 USE_ATARIARI = (cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
+relevant_atariari_labels = {"pong": ["player", "enemy", "ball"], "boxing": ["enemy", "player"]}
 
 # lambda for loading and saving qtable
 PATH_TO_OUTPUTS = os.getcwd() + "/ql_checkpoints/"
@@ -113,10 +115,12 @@ def convert_spacetime_values(image_array, x, y):
     if x < 1:
         x = int((x + 1)/2*image_array.shape[1])
         y = int((y + 1)/2*image_array.shape[2])
-    # pong formula
-    #int(1.238 * y + 48.1), int(1.5625 * x + 14.125)
-    # boxing formula
-    x, y = int(1.36 * x - (50/3)), int(1.692 * y - 63.54)
+    if cfg.exp_name == "pong":
+        # pong formula
+        x, y = int(1.238 * x + 48.1), int(1.5625 * y + 14.125)
+    elif cfg.exp_name == "boxing":
+        # boxing formula
+        x, y = int(1.36 * x - (50/3)), int(1.692 * y - 63.54)
     #print("Placing point at ", x, y)
     return x, y
 
@@ -143,10 +147,11 @@ def get_scene(observation, space):
 # only used for atariari
 # currently only for boxing
 def convert_to_state(env_info):
-    state = []
     labels = env_info["labels"]
-    # TODO: dynamic for games
-    scene_list = [labels["enemy_x"], labels["enemy_y"], labels["player_x"], labels["player_y"]]
+    scene_list = []
+    for label_desc in relevant_atariari_labels[cfg.exp_name]:
+        scene_list.append(labels[label_desc + "_x"])
+        scene_list.append(labels[label_desc + "_y"])
     return scene_list
 
 
@@ -156,7 +161,7 @@ gamma =  0.97
 eps_start = 1.0
 eps_end = 0.01
 eps_decay = 10000
-learning_rate = 0.001
+learning_rate = 0.005
 # calc len of all possible states = all possible position combinations
 # TODO: Really needed??
 #state_len = env.observation_space.shape[0] * 2 \
@@ -204,7 +209,7 @@ def select_action(state, episode):
     eps_threshold = eps_start
     eps_threshold = eps_end + (eps_start - eps_end) * \
         math.exp(-1. * episode / eps_decay)
-    if state is not None:
+    if state is not None and state in Q.keys():
         sample = random.random()
         if sample > eps_threshold:
             return np.argmax(Q[state]), eps_threshold
@@ -219,7 +224,7 @@ if tmp_Q is not None:
     Q = tmp_Q
     i_episode = tmp_i_episode
 
-max_episode = 50000
+max_episode = 100000
 # episode loop
 running_reward = -999
 if i_episode < max_episode:
