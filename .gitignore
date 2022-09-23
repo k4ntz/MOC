@@ -154,3 +154,4 @@ static
 aiml_*/
 trained_models/
 src/rl_checkpoints/
+src/rl_logs/

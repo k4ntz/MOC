@@ -10,6 +10,7 @@ import rl_utils
 from atariari.benchmark.wrapper import AtariARIWrapper
 from rtpt import RTPT
 from engine.utils import get_config
+from tqdm import tqdm
 
 # load config
 cfg, task = get_config()
@@ -169,28 +170,30 @@ if i_episode < max_episode:
             save_qtable(exp_name, Q, i_episode)
         rtpt.step()
 else:
+    runs = 15
     print("Eval mode")
-    state, ep_reward = env.reset(), 0
-    action = np.random.randint(n_actions)
-    state = str([0,0,0,0,0,0])
-    # env step loop
-    for t in range(1, 10000):  # Don't infinite loop while learning
-        # select action
-        action, eps_t = select_action(state, i_episode)
-        # do action and observe
-        observation, reward, done, info = env.step(action)
-        ep_reward += reward
-        # when atariari
-        if USE_ATARIARI:
-            state = rl_utils.convert_to_state(cfg, info)
-        # when spacetime
-        else:
-            # use spacetime to get scene_list
-            _, state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
-        # finish step
-        state = str(discretize(state))
-        print('Episode: {}\tLast reward: {:.2f}\tEps Treshold: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(
-            i_episode, ep_reward, eps_t, len(Q), t), end="\r")
-        if done:
-            break
-    print("Final Reward:", ep_reward)
+    for run in tqdm(range(runs)):
+        state, ep_reward = env.reset(), 0
+        action = np.random.randint(n_actions)
+        state = str([0,0,0,0,0,0])
+        # env step loop
+        for t in range(1, 10000):  # Don't infinite loop while learning
+            # select action
+            action, eps_t = select_action(state, i_episode)
+            # do action and observe
+            observation, reward, done, info = env.step(action)
+            ep_reward += reward
+            # when atariari
+            if False:
+                state = rl_utils.convert_to_state(cfg, info)
+            # when spacetime
+            else:
+                # use spacetime to get scene_list
+                _, state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
+            # finish step
+            state = str(discretize(state))
+            print('Episode: {}\tLast reward: {:.2f}\tEps Treshold: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(
+                i_episode, ep_reward, eps_t, len(Q), t), end="\r")
+            if done:
+                break
+        print("Final Reward:", ep_reward)

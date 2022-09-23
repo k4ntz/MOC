@@ -7,7 +7,7 @@ import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 
-from utils import draw_bounding_boxes
+#from utils import draw_bounding_boxes
 
 FOLDER_TO_VIDEO = "/dqn/video/"
 PATH_TO_VIDEO = os.getcwd() + FOLDER_TO_VIDEO
