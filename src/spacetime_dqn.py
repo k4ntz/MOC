@@ -260,6 +260,7 @@ if i_episode < max_episode:
 else:
     runs = 15
     print("Eval mode")
+    rewards = []
     rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name + "_EVAL",
                 max_iterations=runs)
     rtpt.start()
@@ -296,5 +297,7 @@ else:
             if done:
                 break
         print("Final Reward:", ep_reward)
+        rewards.append(ep_reward)
         rtpt.step()
+    print("Mean of Rewards:", sum(rewards) / len(rewards))
 
