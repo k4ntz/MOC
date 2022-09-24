@@ -143,7 +143,7 @@ if i_episode < max_episode:
             # when spacetime
             else:
                 # use spacetime to get scene_list
-                _, next_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
+                _, next_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
                 # flatten scene list and discretize
             # update qtable
             next_state = str(discretize(next_state))
@@ -189,7 +189,7 @@ else:
             # when spacetime
             else:
                 # use spacetime to get scene_list
-                _, state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation)
+                _, state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
             # finish step
             state = str(discretize(state))
             print('Episode: {}\tLast reward: {:.2f}\tEps Treshold: {:.2f}\tTable-Len: {}\tSteps: {}       '.format(

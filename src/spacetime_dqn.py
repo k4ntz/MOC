@@ -26,6 +26,7 @@ from PIL import Image
 
 # load config
 cfg, task = get_config()
+use_cuda = 'cuda' in cfg.device
 torch.manual_seed(cfg.seed)
 print('Seed:', torch.initial_seed())
 
