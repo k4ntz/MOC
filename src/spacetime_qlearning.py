@@ -172,6 +172,9 @@ if i_episode < max_episode:
 else:
     runs = 15
     print("Eval mode")
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name + "_EVAL",
+                max_iterations=runs)
+    rtpt.start()
     for run in tqdm(range(runs)):
         state, ep_reward = env.reset(), 0
         action = np.random.randint(n_actions)
@@ -186,6 +189,8 @@ else:
             # when atariari
             if False:
                 state = rl_utils.convert_to_state(cfg, info)
+                #_, state2 = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+                #print(state, state2)
             # when spacetime
             else:
                 # use spacetime to get scene_list
@@ -197,3 +202,4 @@ else:
             if done:
                 break
         print("Final Reward:", ep_reward)
+        rtpt.step()
