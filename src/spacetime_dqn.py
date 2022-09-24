@@ -22,6 +22,7 @@ from atariari.benchmark.wrapper import AtariARIWrapper
 from rtpt import RTPT
 from engine.utils import get_config
 from PIL import Image
+from tqdm import tqdm
 
 
 # load config
@@ -44,13 +45,15 @@ print("Env Name:", env_name)
 env = gym.make(env_name)
 if USE_ATARIARI:
     env = AtariARIWrapper(env)
-obs = env.reset()
-obs, reward, done, info = env.step(1)
+observation = env.reset()
+observation, reward, done, info = env.step(1)
 n_actions = env.action_space.n
 #Getting the state space
 print("Action Space {}".format(env.action_space))
 print("State {}".format(info))
 
+print("Loading space...")
+space, transformation, sc, z_classifier = rl_utils.load_space(cfg)
 
 # replay memory of dqn
 Transition = namedtuple('Transition',
@@ -199,7 +202,7 @@ def optimize_model():
     optimizer.step()
 
 
-max_episode = 50000
+max_episode = 1000
 # episode loop
 running_reward = -999
 # training loop
@@ -255,6 +258,42 @@ if i_episode < max_episode:
         i_episode += 1
         rtpt.step()
 else:
+    runs = 15
     print("Eval mode")
-    print("NOT IMPLEMENTED!")
+    rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name + "_EVAL",
+                max_iterations=runs)
+    rtpt.start()
+    for run in tqdm(range(runs)):
+        _, ep_reward = env.reset(), 0
+        action = np.random.randint(n_actions)
+        _, s_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+        s_state = torch.tensor(s_state, dtype=torch.float) 
+        # state stacking to have current and previous state at once
+        state = torch.cat((s_state, s_state), 0)
+        # env step loop
+        for t in range(1, 10000):  # Don't infinite loop while learning
+            # select action
+            action = select_action(state)
+            # do action and observe
+            observation, reward, done, info = env.step(action)
+            ep_reward += reward
+            # when atariari
+            if False:
+                state = rl_utils.convert_to_state(cfg, info)
+            # when spacetime
+            else:
+                # use spacetime to get scene_list
+                _, s_next_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+                # convert next state to torch
+                s_next_state = torch.tensor(s_next_state, dtype=torch.float)
+                # concat to stacking tensor
+                state = torch.cat((s_state, s_next_state), 0)
+                s_state = s_next_state
+            # finish step
+            print('Episode: {}\tLast reward: {:.2f}\tSteps: {}       '.format(
+                i_episode, ep_reward, t), end="\r")
+            if done:
+                break
+        print("Final Reward:", ep_reward)
+        rtpt.step()
 
