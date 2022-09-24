@@ -31,7 +31,7 @@ use_cuda = 'cuda' in cfg.device
 torch.manual_seed(cfg.seed)
 print('Seed:', torch.initial_seed())
 
-USE_ATARIARI = (cfg.device == "cpu")
+USE_ATARIARI = True #(cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
 
 # lambda for loading and saving qtable
