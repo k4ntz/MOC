@@ -76,9 +76,11 @@ def get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cud
     for el in scene_list:
         x, y = convert_spacetime_values(cfg, t_img, *el)
         converted_scene_list.append(x)
-        converted_scene_list.append(y)
+        converted_scene_list.append(y) 
+    if cfg.exp_name == "pong":
+        converted_scene_list = converted_scene_list[4:] + converted_scene_list[2:4] + converted_scene_list[:2]
     if cfg.exp_name == "boxing":
-        converted_scene_list = converted_scene_list[2:]+converted_scene_list[:2]
+        converted_scene_list = converted_scene_list[2:] + converted_scene_list[:2]
     return scene_list, converted_scene_list
 
 
