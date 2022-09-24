@@ -279,16 +279,17 @@ else:
             ep_reward += reward
             # when atariari
             if False:
-                state = rl_utils.convert_to_state(cfg, info)
+                s_next_state = rl_utils.convert_to_state(cfg, info)
+                #_, tmp = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
             # when spacetime
             else:
                 # use spacetime to get scene_list
                 _, s_next_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
-                # convert next state to torch
-                s_next_state = torch.tensor(s_next_state, dtype=torch.float)
-                # concat to stacking tensor
-                state = torch.cat((s_state, s_next_state), 0)
-                s_state = s_next_state
+            # convert next state to torch
+            s_next_state = torch.tensor(s_next_state, dtype=torch.float)
+            # concat to stacking tensor
+            state = torch.cat((s_state, s_next_state), 0)
+            s_state = s_next_state
             # finish step
             print('Episode: {}\tLast reward: {:.2f}\tSteps: {}       '.format(
                 i_episode, ep_reward, t), end="\r")
