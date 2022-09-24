@@ -83,14 +83,14 @@ class DQN(nn.Module):
 
 
 BATCH_SIZE = 128
-LEARNING_RATE = 0.0001
-GAMMA = 0.99
+LEARNING_RATE = 0.0002
+GAMMA = 0.97
 EPS_START = 0.9
 EPS_END = 0.02
 EPS_DECAY = 1000000
 TARGET_UPDATE = 1
-MEM_MIN_SIZE = 5000
-MEM_MAX_SIZE = 10000
+MEM_MIN_SIZE = 40000
+MEM_MAX_SIZE = 50000
 
 i_episode = 0
 features = rl_utils.convert_to_state(cfg, info)
