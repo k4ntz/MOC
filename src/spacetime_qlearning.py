@@ -16,7 +16,7 @@ from tqdm import tqdm
 cfg, task = get_config()
 use_cuda = 'cuda' in cfg.device
 
-USE_ATARIARI = (cfg.device == "cpu")
+USE_ATARIARI = True#(cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
 relevant_atariari_labels = {"pong": ["player", "enemy", "ball"], "boxing": ["enemy", "player"]}
 
