@@ -266,7 +266,7 @@ else:
     for run in tqdm(range(runs)):
         _, ep_reward = env.reset(), 0
         action = np.random.randint(n_actions)
-        _, s_state = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+        s_state = rl_utils.convert_to_state(cfg, info)
         s_state = torch.tensor(s_state, dtype=torch.float) 
         # state stacking to have current and previous state at once
         state = torch.cat((s_state, s_state), 0)
