@@ -16,7 +16,7 @@ from tqdm import tqdm
 cfg, task = get_config()
 use_cuda = 'cuda' in cfg.device
 
-USE_ATARIARI = True#(cfg.device == "cpu")
+USE_ATARIARI = (cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
 relevant_atariari_labels = {"pong": ["player", "enemy", "ball"], "boxing": ["enemy", "player"]}
 
@@ -28,8 +28,7 @@ model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + ".pbz2"
 cfg.device_ids = [0]
 env_name = cfg.gamelist[0]
 env = gym.make(env_name)
-if USE_ATARIARI:
-    env = AtariARIWrapper(env)
+env = AtariARIWrapper(env)
 obs = env.reset()
 obs, reward, done, info = env.step(1)
 n_actions = env.action_space.n
@@ -188,10 +187,11 @@ else:
             observation, reward, done, info = env.step(action)
             ep_reward += reward
             # when atariari
-            if False:
+            if USE_ATARIARI:
                 state = rl_utils.convert_to_state(cfg, info)
-                #_, state2 = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
-                #print(state, state2)
+                #if t > 50:
+                #    _, state2 = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+                #    print(state, state2)
             # when spacetime
             else:
                 # use spacetime to get scene_list

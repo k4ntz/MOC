@@ -31,7 +31,7 @@ use_cuda = 'cuda' in cfg.device
 torch.manual_seed(cfg.seed)
 print('Seed:', torch.initial_seed())
 
-USE_ATARIARI = True #(cfg.device == "cpu")
+USE_ATARIARI = (cfg.device == "cpu")
 print("Using AtariAri:", USE_ATARIARI)
 
 # lambda for loading and saving qtable
@@ -43,8 +43,7 @@ cfg.device_ids = [0]
 env_name = cfg.gamelist[0]
 print("Env Name:", env_name)
 env = gym.make(env_name)
-if USE_ATARIARI:
-    env = AtariARIWrapper(env)
+env = AtariARIWrapper(env)
 observation = env.reset()
 observation, reward, done, info = env.step(1)
 n_actions = env.action_space.n
@@ -279,7 +278,7 @@ else:
             observation, reward, done, info = env.step(action)
             ep_reward += reward
             # when atariari
-            if False:
+            if USE_ATARIARI:
                 s_next_state = rl_utils.convert_to_state(cfg, info)
                 #_, tmp = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
             # when spacetime
