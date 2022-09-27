@@ -54,9 +54,12 @@ def get_config():
             cfg.exp_name = os.path.splitext(os.path.basename(args.config_file))[0]
         else:
             raise ValueError('exp_name cannot be empty without specifying a config file')
+    # add desc of arch type for eval
+    cfg.arch_type_desc = args.arch_type
     if args.arch_type is None or args.arch_type == 'baseline':
         cfg.model = 'TcSpace'
         cfg.arch.area_object_weight = 0.0
+        cfg.arch_type_desc = ""
     elif args.arch_type == "m": #
         cfg.model = 'TcSpace'
         cfg.arch.area_object_weight = 0.0

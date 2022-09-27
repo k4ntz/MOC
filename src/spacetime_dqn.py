@@ -280,7 +280,9 @@ else:
             # when atariari
             if USE_ATARIARI:
                 s_next_state = rl_utils.convert_to_state(cfg, info)
-                #_, tmp = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+                #if t % 50 == 0:
+                #    _, state2 = rl_utils.get_scene(cfg, observation, space, z_classifier, sc, transformation, use_cuda)
+                #    print(s_next_state, state2)
             # when spacetime
             else:
                 # use spacetime to get scene_list
