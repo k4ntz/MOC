@@ -20,6 +20,7 @@ import rl_utils
 
 from atariari.benchmark.wrapper import AtariARIWrapper
 from rtpt import RTPT
+from tqdm import tqdm
 from engine.utils import get_config
 from PIL import Image
 from tqdm import tqdm
@@ -36,7 +37,7 @@ print("Using AtariAri:", USE_ATARIARI)
 
 # lambda for loading and saving qtable
 PATH_TO_OUTPUTS = os.getcwd() + "/rl_checkpoints/"
-model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_dqn_model.pth"
+model_name = lambda training_name : PATH_TO_OUTPUTS + training_name + "_seed" + str(cfg.seed) + "_dqn_model.pth"
 
 # init env stuff
 cfg.device_ids = [0]
@@ -53,6 +54,15 @@ print("State {}".format(info))
 
 print("Loading space...")
 space, transformation, sc, z_classifier = rl_utils.load_space(cfg)
+
+device = "cpu"
+if 'cuda' in cfg.device:
+    device = "cuda:0"
+#elif (torch.backends.mps.is_available() & torch.backends.mps.is_built()):
+#    device = "mps"
+device = "cpu"
+print("Device:", device)
+
 
 # replay memory of dqn
 Transition = namedtuple('Transition',
@@ -72,33 +82,36 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-# model
+# model: dueling dqn
 class DQN(nn.Module):
     def __init__(self, n_inputs, n_actions):
         super(DQN, self).__init__()
-        self.affine1 = nn.Linear(n_inputs, 128)
-        self.affine2 = nn.Linear(128, n_actions)
+        self.affine1 = nn.Linear(n_inputs, 512)
+        self.affine2 = nn.Linear(512, 128)
+        self.affine3 = nn.Linear(128, 32)
+        self.affine4 = nn.Linear(32, n_actions)
 
     def forward(self, x):
-        x = self.affine1(x)
-        x = F.relu(x)
-        return self.affine2(x)
+        x = F.relu(self.affine1(x))
+        x = F.relu(self.affine2(x))
+        x = F.relu(self.affine3(x))
+        return self.affine4(x)
 
 
 BATCH_SIZE = 128
-LEARNING_RATE = 0.0002
-GAMMA = 0.97
+LEARNING_RATE = 0.0001
+GAMMA = 0.99
 EPS_START = 0.9
-EPS_END = 0.02
-EPS_DECAY = 1000000
+EPS_END = 0.01
+EPS_DECAY = 100000
 TARGET_UPDATE = 1
-MEM_MIN_SIZE = 40000
+MEM_MIN_SIZE = 10000
 MEM_MAX_SIZE = 50000
 
 i_episode = 0
 features = rl_utils.convert_to_state(cfg, info)
-policy_net = DQN(len(features) * 2, n_actions)
-target_net = DQN(len(features) * 2, n_actions)
+policy_net = DQN(len(features) * 2, n_actions).to(device)
+target_net = DQN(len(features) * 2, n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
@@ -144,22 +157,23 @@ model_path = model_name(cfg.exp_name)
 if os.path.isfile(model_path):
     policy_net, optimizer, target_net, steps_done, i_episode = load_model(model_path, policy_net, target_net, optimizer)
 print("Current steps done:", steps_done)
+print("Current episode:", i_episode)
 
 eps_threshold = EPS_START
 
-def select_action(state):
+def select_action(state, eval = False):
     global steps_done
     global eps_threshold
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * steps_done / EPS_DECAY)
     steps_done += 1
-    if sample > eps_threshold:
+    if sample > eps_threshold or eval:
         with torch.no_grad():
             selected_action = torch.argmax(policy_net(state)).unsqueeze(0)
             return selected_action
     else:
-        selected_action = torch.tensor([random.randrange(n_actions)], dtype=torch.long)
+        selected_action = torch.tensor([random.randrange(n_actions)], dtype=torch.long, device=device)
         return selected_action
 
 
@@ -176,7 +190,7 @@ def optimize_model():
     next_state_batch = torch.stack(batch.next_state)
     action_batch = torch.stack(batch.action)
     reward_batch = torch.stack(batch.reward)
-    done_batch = torch.tensor(batch.done).float()
+    done_batch = torch.tensor(batch.done, device=device).float()
 
     # Make predictions
     state_q_values = policy_net(state_batch)
@@ -209,6 +223,7 @@ rtpt = RTPT(name_initials='DV', experiment_name=cfg.exp_name,
                 max_iterations=max_episode)
 rtpt.start()
 if i_episode < max_episode:
+    pbar = tqdm(initial = i_episode, total = max_episode)
     while i_episode < max_episode:
         # Initialize the environment and state
         env.reset()
@@ -222,7 +237,7 @@ if i_episode < max_episode:
             action = select_action(state)
             observation, reward, done, info = env.step(action.item())
             ep_reward += reward
-            reward = torch.tensor([reward])
+            reward = torch.tensor([reward], device=device)
             # Observe new state
             s_next_state = rl_utils.convert_to_state(cfg, info)
             # convert next state to torch
@@ -236,8 +251,10 @@ if i_episode < max_episode:
             s_state = s_next_state
             # Perform one step of the optimization (on the policy network)
             optimize_model()
-            print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\t Eps: {:.2f}\tSteps: {}       '.format(
-                    i_episode, ep_reward, running_reward, eps_threshold, t), end="\r")
+            pbar.set_description('Episode {} | Last reward: {:.2f} | Running Reward: {:.2f} | Eps: {:.2f} | Steps: {}             '.format(
+                    i_episode, ep_reward, running_reward, eps_threshold, t))
+            #print('Episode {}\tLast reward: {:.2f}\tRunning reward: {:.2f}\t Eps: {:.2f}\tSteps: {}       '.format(
+            #        i_episode, ep_reward, running_reward, eps_threshold, t), end="\r")
             if done:
                 logger.log_episode(t, ep_reward, 0, i_episode, steps_done)
                 logger.log_eps(eps_threshold, steps_done)
@@ -255,6 +272,7 @@ if i_episode < max_episode:
             save_model(cfg.exp_name, policy_net, target_net, steps_done, i_episode + 1, optimizer)
         # finish episode
         i_episode += 1
+        pbar.update(1)
         rtpt.step()
 else:
     runs = 15
@@ -273,7 +291,7 @@ else:
         # env step loop
         for t in range(1, 10000):  # Don't infinite loop while learning
             # select action
-            action = select_action(state)
+            action = select_action(state, eval=True)
             # do action and observe
             observation, reward, done, info = env.step(action)
             ep_reward += reward
@@ -293,11 +311,11 @@ else:
             state = torch.cat((s_state, s_next_state), 0)
             s_state = s_next_state
             # finish step
-            print('Episode: {}\tLast reward: {:.2f}\tSteps: {}       '.format(
-                i_episode, ep_reward, t), end="\r")
+            #print('Episode: {}\tLast reward: {:.2f}\tSteps: {}       '.format(
+            #    i_episode, ep_reward, t), end="\r")
             if done:
                 break
-        print("Final Reward:", ep_reward)
+        #print("Final Reward:", ep_reward)
         rewards.append(ep_reward)
         rtpt.step()
     print("Mean of Rewards:", sum(rewards) / len(rewards))
