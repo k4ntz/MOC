@@ -318,5 +318,7 @@ else:
         #print("Final Reward:", ep_reward)
         rewards.append(ep_reward)
         rtpt.step()
-    print("Mean of Rewards:", sum(rewards) / len(rewards))
+    print("Rerwards:", rewards)
+    print("Std of rewards:", np.std(rewards))
+    print("Mean of rewards:", np.mean(rewards))
 
