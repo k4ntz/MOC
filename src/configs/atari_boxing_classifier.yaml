@@ -78,7 +78,7 @@ gamelist: [
     # 'DoubleDunk-v0',
     # 'Kangaroo-v0',
     # 'MontezumaRevenge-v0',
-    'Boxing-v0',
+    'BoxingDeterministic-v4',
     # 'Pooyan-v0',
     # 'Qbert-v0',
     # 'SpaceInvaders-v0',

@@ -55,7 +55,9 @@ class SceneCleaner():
 
 
 model = get_model(cfg)
-model = model.to('cuda:0')
+use_cuda = 'cuda' in cfg.device
+if use_cuda:
+    model = model.to('cuda:0')
 model.eval()
 # state_dicts = torch.load(cfg.resume_ckpt, map_location="cuda:0")
 #
@@ -76,7 +78,7 @@ if cfg.resume:
 
 
 space = model.space
-z_classifier_path = f"classifiers/{cfg.exp_name}_z_what_classifier.joblib.pkl"
+z_classifier_path = f"classifiers/{cfg.exp_name}_space{cfg.arch_type_desc}_seed{cfg.seed}_z_what_classifier.joblib.pkl"
 z_classifier = joblib.load(z_classifier_path)
 # x is the image on device as a Tensor, z_classifier accepts the latents,
 # only_z_what control if only the z_what latent should be used (see docstring)
@@ -92,14 +94,16 @@ env.reset()
 nb_action = env.action_space.n
 for i in range(5000):
     observation, reward, done, info = env.step(np.random.randint(nb_action))
-    img = Image.fromarray(observation[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
-    x = torch.moveaxis(torch.tensor(np.array(img)).cuda(), 2, 0)
-    x = transformation(img).cuda()
-    scene = space.scene_description(x, z_classifier=z_classifier,
-                                    only_z_what=True)  # class:[(w, h, x, y)]
-    scene_list = sc.clean_scene(scene)
-    # env.render()
-    if i % 100 == 0:
+    if i % 50 == 0:
+        img = Image.fromarray(observation[:, :, ::-1], 'RGB').resize((128, 128), Image.ANTIALIAS)
+        #x = torch.moveaxis(torch.tensor(np.array(img)), 2, 0)
+        x = transformation(img)
+        if use_cuda:
+            x = x.cuda()
+        scene = space.scene_description(x, z_classifier=z_classifier,
+                                        only_z_what=True)  # class:[(w, h, x, y)]
+        scene_list = sc.clean_scene(scene)
+        # env.render()
         pprint(scene)
         sprint(scene_list)
         for el in scene_list:

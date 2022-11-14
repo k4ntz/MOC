@@ -72,5 +72,5 @@ arch:
   bg_sigma: 0.10
 
 gamelist: [
-    'Pong-v0',
+    'PongDeterministic-v4',
     ]

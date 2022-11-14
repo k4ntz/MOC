@@ -153,8 +153,13 @@ static
 # add folder from training files
 aiml_*/
 trained_models/
+<<<<<<< HEAD
 src/ql_checkpoints/
 
 # dumps
 *.joblib.pkl
 *.pdf
+
+
+src/rl_checkpoints/
+src/rl_logs/
