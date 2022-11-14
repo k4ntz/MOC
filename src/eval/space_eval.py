@@ -142,8 +142,7 @@ class SpaceEval:
         os.makedirs(f'../final_test_results/{cfg.exp_name}/hover', exist_ok=True)
         os.makedirs(os.path.join(self.relevant_object_hover_path, "img"), exist_ok=True)
         self.write_header()
-        # losses, logs = self.apply_model(testset, device, model, global_step)
-        losses, logs = [], []
+        losses, logs = self.apply_model(testset, device, model, global_step)
         with open(self.eval_file_path, "a") as self.eval_file:
             self.write_metric(None, None, global_step, global_step, use_writer=False)
             if 'cluster' in eval_cfg.train.metrics:
@@ -183,6 +182,7 @@ class SpaceEval:
             num_samples = max(eval_cfg.train.num_samples.values())
         else:
             num_samples = len(dataset)
+        eval_cfg.train.batch_size = 4
         batch_size = eval_cfg.train.batch_size
         num_workers = eval_cfg.train.num_workers
         data_subset = Subset(dataset, indices=range(num_samples))
@@ -267,7 +267,6 @@ class SpaceEval:
         """
         print('Computing clustering and few-shot linear classifiers...')
         results = self.eval_clustering(logs, valset, global_step, cfg)
-
         for name, (result_dict, img_path, few_shot_accuracy) in results.items():
             try:
                 writer.add_image(f'Clustering PCA {name.title()}', np.array(Image.open(img_path)), global_step,
@@ -312,12 +311,13 @@ class SpaceEval:
             z_where, z_pres_prob, z_what = img['z_where'], img['z_pres_prob'], img['z_what']
             z_pres_prob = z_pres_prob.squeeze()
             z_pres = z_pres_prob > 0.5
-            print(f'{z_pres.sum() / batch_size}')
-            if not (0.05 <= z_pres.sum() / batch_size <= 50 * 4):
-                z_whats = None
-                break
+            # print(f'{z_pres.sum() / batch_size}')
+            if not (0.05 <= z_pres.sum() / batch_size <= 60 * 4):
+                continue
+                # z_whats = None
+                # break
             if cfg.save_relevant_objects:
-                for idx, (sel, bbs) in enumerate(zip(z_pres, z_where)):
+                for idx, (sel, bbs) in enumerate(tqdm(zip(z_pres, z_where), total=len(z_pres))):
                     for obj_idx, bb in enumerate(bbs[sel]):
                         image = Image.open(os.path.join(img_path, f'{i * batch_size + idx // 4:05}_{idx % 4}.png'))
                         width, height, center_x, center_y = bb.tolist()

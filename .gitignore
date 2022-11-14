@@ -154,3 +154,7 @@ static
 aiml_*/
 trained_models/
 src/ql_checkpoints/
+
+# dumps
+*.joblib.pkl
+*.pdf

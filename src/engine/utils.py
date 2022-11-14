@@ -65,6 +65,7 @@ def get_config():
         cfg.arch.area_object_weight = 10.0
     cfg.resume_ckpt = args.resume_ckpt
     arch_type = '' if args.arch_type == "baseline" else args.arch_type
+    cfg.arch_type = args.arch_type
 
     if args.resume_ckpt == '':
         cfg.resume_ckpt = f"../trained_models/{cfg.exp_name}_space{arch_type}_seed{cfg.seed}.pth"

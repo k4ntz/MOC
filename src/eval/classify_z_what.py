@@ -17,12 +17,14 @@ from dataset import get_label_list
 from collections import Counter
 import numpy as np
 import joblib
+from termcolor import colored
+
 
 N_NEIGHBORS = 24
 DISPLAY_CENTROIDS = True
 
 
-def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
+def evaluate_z_what(arguments, z_what, labels, n, cfg, title="", method="pca"):
     """
     :param arguments: dict of properties
     :param z_what: (#objects, encoding_dim)
@@ -30,6 +32,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     # :param z_where: (#objects, 4)
     :param cfg:
     :param title:
+    :param method: either pca or tsne
     :return:
         result: metrics
         path: to pca
@@ -40,8 +43,9 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         print("Distribution of matched labels:", c)
     relevant_labels = [int(part) for part in arguments['indices'].split(',')] if arguments['indices'] else list(c.keys())
     folder = f'{cfg.logdir}/{cfg.exp_name}' if cfg else f'{arguments["folder"]}'
-    pca_path = f"{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}.png"
+    pca_path = f"{folder}/{method}{arguments['indices'] if arguments['indices'] else ''}_{title}_{cfg.arch_type}_s{cfg.seed}"
     if len(c) < 2:
+        no_z_whats_plots(arguments, z_what, labels, n, cfg, title, method)
         return Counter(), pca_path, Counter()
     label_list = get_label_list(cfg)
     relevant = torch.zeros(labels.shape, dtype=torch.bool)
@@ -56,6 +60,7 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
     train_x = z_what[:nb_sample]
     train_y = labels[:nb_sample]
     if len(torch.unique(train_y)) < 2:
+        no_z_whats_plots(arguments, z_what, labels, n, cfg, title, method)
         return Counter(), pca_path, Counter()
     few_shot_accuracy = {}
     z_what_by_game = {rl: train_x[train_y == rl] for rl in relevant_labels}
@@ -115,11 +120,25 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
         mask = train_all.T[-1] == i
         indices = torch.nonzero(mask)
         sorted.append(indices)
-    pca = PCA(n_components=arguments['dim'])
-    z_what_emb = pca.fit_transform(z_what.numpy())
+    if method.lower() == "pca":
+        pca = PCA(n_components=arguments['dim'])
+        z_what_emb = pca.fit_transform(z_what.numpy())
+        centroid_emb = pca.transform(centroids)
+        dim_name = "PCA"
+    else:
+        try:
+            from MulticoreTSNE import MulticoreTSNE as TSNE
+        except ImportError:
+            print("Install cuml if GPU available to improve speed (requires conda)")
+            from sklearn.manifold import TSNE
+        print("Running t-SNE...")
+        tsne = TSNE(n_jobs=4, n_components=2, verbose=True)
+        z_what_emb = tsne.fit_transform(z_what.numpy())
+        centroid_emb = tsne.fit_transform(centroids)
+        dim_name = "t-SNE"
     if arguments['edgecolors']:
         fig, ax = plt.subplots(1, 1)
-        fig.set_size_inches(20, 12)
+        fig.set_size_inches(20, 8)
         ax.set_facecolor((0.3, 0.3, 0.3))
         plt.suptitle("Labeled PCA of z_whats", y=0.96, fontsize=28)
         plt.title("Inner Color is GT, Outer is greedy Centroid-based label", fontsize=18, pad=20)
@@ -138,7 +157,6 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
                        z_what_emb[:, 1][idx].squeeze()[:n],
                        c=colr,
                        alpha=0.7, edgecolors=edge_colors, s=100, linewidths=2)
-        centroid_emb = pca.transform(centroids)
 
         if DISPLAY_CENTROIDS:
             for c_emb, cl in zip(centroid_emb, centroid_label):
@@ -146,42 +164,52 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
                     colr = [np.array(base_objects_colors[label_list[cl]]) / 255]
                 else:
                     colr = colors[cl]
-                ax.scatter([c_emb[0]],
-                               [c_emb[1]],
-                               c=colr,
-                               edgecolors='black', s=100, linewidths=2)
+                ax.scatter([c_emb[0]], [c_emb[1]],  c=colr, edgecolors='black', s=100, linewidths=2)
         plt.legend(prop={'size': 6})
         directory = f"{folder}"
         if not os.path.exists(directory):
             print(f"Writing PCA to {directory}")
             os.makedirs(directory)
-        plt.savefig(pca_path)
+        plt.savefig(f"{pca_path}.svg")
+        plt.savefig(f"{pca_path}.png")
     else:
-        fig, axs = plt.subplots(1, 2)
-        fig.set_size_inches(30, 12)
-        axs[0].set_facecolor((0.3, 0.3, 0.3))
-        axs[1].set_facecolor((0.3, 0.3, 0.3))
-        axs[0].set_title("Ground Truth Labels")
-        axs[1].set_title("Labels Following Clustering")
+        fig, axs = plt.subplots(2, 1)
+        fig.set_size_inches(8, 15)
+        if cfg.arch_type == "baseline":
+            arch = "SPACE"
+        elif cfg.arch_type == "+m":
+            arch = "SPACE+M"
+        elif cfg.arch_type == "+moc":
+            arch = "SPACE+MOC"
+        axs[0].set_title("Ground Truth Labels", fontsize=20)
+        axs[1].set_title("Labels Following Clustering", fontsize=20)
+        for ax in axs:
+            ax.set_facecolor((81/255, 89/255, 99/255, 0.4))
+            ax.set_xlabel(f"{dim_name} 1", fontsize=20)
+            ax.set_ylabel(f"{dim_name} 2", fontsize=20)
+        all_colors = []
+        all_edge_colors = []
         for i, idx in enumerate(sorted):
             # dimension issue only if there is exactly one object of one kind
             if torch.numel(idx) == 0:
                 continue
             y_idx = y[idx] if torch.numel(idx) > 1 else [[y[idx]]]
-            colr = colors[relevant_labels[i]]
+            obj_name = relevant_labels[i]
+            colr = colors[obj_name]
             edge_colors = [colors[centroid_label[assign[0]]] for assign in y_idx]
+            all_edge_colors.extend(edge_colors)
+            all_colors.append(colr)
             axs[0].scatter(z_what_emb[:, 0][idx].squeeze(),
                            z_what_emb[:, 1][idx].squeeze(),
                            c=colr,
-                           label=label_list[relevant_labels[i]],
+                           label=label_list[obj_name],
                            alpha=0.7)
             axs[1].scatter(z_what_emb[:, 0][idx].squeeze(),
                            z_what_emb[:, 1][idx].squeeze(),
                            c=edge_colors,
-                           label=label_list[relevant_labels[i]],
                            alpha=0.7)
-        centroid_emb = pca.transform(centroids)
-
+        print(all_colors)
+        print(set(all_edge_colors))
         for c_emb, cl in zip(centroid_emb, centroid_label):
             colr = colors[cl]
             axs[0].scatter([c_emb[0]],
@@ -193,15 +221,40 @@ def evaluate_z_what(arguments, z_what, labels, n, cfg, title=""):
                            c=colr,
                            edgecolors='black', s=100, linewidths=2)
 
-        axs[0].legend(prop={'size': 6})
-        axs[1].legend(prop={'size': 6})
+        axs[0].legend(prop={'size': 20})
+        # axs[1].legend(prop={'size': 17})
         if not os.path.exists(f"{folder}"):
             os.makedirs(f"{folder}")
+        # fig.suptitle(f"Embeddings of {arch}", fontsize=20)
         plt.tight_layout()
-        plt.savefig(pca_path)
+        # plt.subplots_adjust(top=0.65)
+        plt.savefig(f"{pca_path}.svg")
+        plt.savefig(f"{pca_path}.png")
+        print(colored(f"Saved PCA images in {pca_path}", "blue"))
         plt.close(fig)
     return results, pca_path, few_shot_accuracy
 
+
+def no_z_whats_plots(arguments, z_what, labels, n, cfg, title, method):
+    folder = f'{cfg.logdir}/{cfg.exp_name}' if cfg else f'{arguments["folder"]}'
+    fig, axs = plt.subplots(2, 1)
+    fig.set_size_inches(8, 15)
+    axs[0].set_title("Ground Truth Labels", fontsize=20)
+    axs[1].set_title("Labels Following Clustering", fontsize=20)
+    s = "No z_what extracted\n      by the model"
+    dim_name = "PCA" if method == "pca" else "t-SNE"
+    for ax in axs:
+        ax.set_xlabel(f"{dim_name} 1", fontsize=20)
+        ax.set_ylabel(f"{dim_name} 2", fontsize=20)
+        ax.text(0.03, 0.1, s, rotation=45, fontsize=45)
+    if not os.path.exists(f"{folder}"):
+        os.makedirs(f"{folder}")
+    pca_path = f"{folder}/pca{arguments['indices'] if arguments['indices'] else ''}_{title}_{cfg.arch_type}_s{cfg.seed}"
+    plt.tight_layout()
+    plt.savefig(f"{pca_path}.svg")
+    plt.savefig(f"{pca_path}.png")
+    print(colored(f"Saved empty PCA images in {pca_path}", "red"))
+    plt.close(fig)
 
 # all_train_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/train_labels.csv")
 # all_validation_labels = pd.read_csv(f"../aiml_atari_data/rgb/MsPacman-v0/validation_labels.csv")
