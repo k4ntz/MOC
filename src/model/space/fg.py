@@ -163,7 +163,7 @@ class SpaceFg(nn.Module):
         alpha_map_pure = (alpha_map_pure * importance_map_full_res_norm).sum(dim=1)
         motion_cooling = max(0, 1 - (global_step - arch.motion_cooling_start_step) / arch.motion_cooling_end_step)
         # (B, 1, H, W)
-        alpha_map = (1 - motion_cooling) * alpha_map_pure + motion_cooling * motion
+        alpha_map = (1 - motion_cooling) * alpha_map_pure + motion_cooling * motion  # run eval on this one
 
         # Everything is computed. Now let's compute loss
         # Compute KL divergences

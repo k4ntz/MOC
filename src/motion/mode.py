@@ -29,6 +29,17 @@ def save_coinrun(trail, output_path, visualizations=None, space_frame=None):
     for i, (frame, frame_mode) in enumerate(zip(trail[-4:], frame_modes)):
         save_frame(frame, frame_mode, output_path.format(i), visualizations=visualizations, space_frame=space_frame[i])
 
+import matplotlib.pyplot as plt
+def show_image(im):
+    plt.imshow(im)
+    plt.show()
+
+def show_images(ims):
+    _, axes = plt.subplots(5, 5)
+    for ax, im in zip(axes.flatten(), ims):
+        ax.imshow(im)
+    plt.show()
+
 def save_frame(frame, mode, output_path, visualizations=None, space_frame=None):
     """
     Computes the flow from frame2 to frame1
@@ -45,6 +56,8 @@ def save_frame(frame, mode, output_path, visualizations=None, space_frame=None):
     # print("Warning:temporary mode modification not yet removed!")
     # mode_delta = np.maximum(np.zeros_like(mode_delta), mode_delta - 60).astype(np.uint8)
     delta_max = mode_delta.max()
+    # mode_delta[mode_delta == 131] = 0
+    # mode_delta[mode_delta == 142] = 0
     mode_delta = mode_delta / delta_max if delta_max > 0 else mode_delta
     save_motion(frame, mode_delta, output_path)
     for vis in visualizations:

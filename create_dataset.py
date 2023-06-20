@@ -39,7 +39,7 @@ stochasticity.
 
 
 def some_steps(agent, state):
-    env.reset()
+    env.env.reset()
     action = None
     for _ in range(10):
         state, reward, done, info, obs = draw_action(agent, state)
@@ -189,7 +189,7 @@ def main():
 
     series = []
     print("Init steps...")
-    for _ in range(200):
+    for _ in range(50):
         state, reward, done, info, obs = draw_action(agent, state)
 
     mode_path = f"{mode_base_folder}/{args.game}-v0/background/"
@@ -218,8 +218,14 @@ def main():
         print("Ensuring that trail median or mode is used.")
         root_median, root_mode = None, None
     pbar = tqdm(total=limit)
+    enemy_scored = False
     while True:
         state, reward, done, info, obs = draw_action(agent, state)
+        if enemy_scored and info["labels"]["enemy_score"] == 0:
+            some_steps(agent, state)
+            enemy_scored = False
+        elif not enemy_scored and info["labels"]["enemy_score"]:
+            enemy_scored = True
         if (obs==0).all(): # black screen
             continue
         if args.render:
@@ -264,6 +270,7 @@ def main():
                                       mode=root_mode, space_frame=resize_stack)
                     while done:
                         state, reward, done, info, obs = some_steps(agent, state)
+                        step = 0
                     consecutive_images, consecutive_images_info = [], []
                     pbar.update(1)
                     image_count += 1
@@ -319,7 +326,7 @@ def configure(args):
         state = None
     else:
         env = Atari(config.game_name, config.width, config.height, ends_at_life=True,
-                    history_length=config.history_length, max_no_op_actions=30)
+                    history_length=config.history_length, max_no_op_actions=3)
         env.augmented = True
         state = env.reset()
         make_deterministic(0 if args.folder == "train" else 1 if args.folder == "validation" else 2, env)

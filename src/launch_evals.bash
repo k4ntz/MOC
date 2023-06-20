@@ -25,12 +25,12 @@
 # done
 i=0
 dev=0
-# for game in air_raid boxing carnival pong mspacman spaceinvaders riverraid
-for game in pong mspacman tennis
+for game in air_raid boxing carnival pong mspacman spaceinvaders riverraid
+# for game in pong mspacman tennis
 do
-  for seed in 0
+  for seed in 0 1 2 3 4
   do
-    for at in baseline # +m +moc
+    for at in baseline +m +moc
     do
       echo "CUDA_VISIBLE_DEVICES=$dev python3 main.py --task eval --config configs/atari_$game.yaml --arch-type $at seed $seed"
       python3 main.py --task eval --config configs/atari_$game.yaml --arch-type $at seed $seed
