@@ -1,6 +1,10 @@
-# SPACE-Time
+# MOC: Motion and Object-Continuity
+This repository contains the code for MOC. Here you can train discovery models to detect object in different Atari 2600 environments.
 
-:exclamation: :boom: Due to VPN issues I could not prepare the files & test the instructions mentioned below. So if anything is not working yet, let me know or maybe fix it directly. :boom: :exclamation:
+![moc](figures/moc.svg)
+
+
+If you are interested in an Object-Centric Atari environments, to train your models or to train object-centric RL agents, please check [our OC_Atari github repo](https://github.com/k4ntz/OC_Atari)
 
 **Dataset Creation**
 
@@ -266,4 +270,15 @@ That said, we are pleased to offer discussions and pointers if you need help (es
 
 ## Acknowledgements
 
-Please refer to [the original model](https://github.com/zhixuan-lin/SPACE) for this.
+Please refer to [the original model](https://github.com/zhixuan-lin/SPACE) for the SPACE base model.
+
+## Cite us
+```bibtex
+@article{Delfosse2022BoostingOR,
+  title={Boosting Object Representation Learning via Motion and Object Continuity},
+  author={Quentin Delfosse and Wolfgang Stammer and Thomas Rothenbacher and Dwarak Vittal and Kristian Kersting},
+  journal={ArXiv},
+  year={2022},
+  volume={abs/2211.09771}
+}
+```
